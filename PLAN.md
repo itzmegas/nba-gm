@@ -4,27 +4,34 @@
 Crear un simulador de gestión de la NBA donde el usuario toma el rol de General Manager (GM) con enfoque en realismo de datos, lógica de Salary Cap y una interfaz profesional.
 
 ## 🏗️ Stack Tecnológico
+- **Runtime/Package Manager:** Bun (All-in-one).
 - **Frontend:** Next.js 15 (App Router) + TypeScript.
 - **UI:** shadcn/ui + Tailwind CSS.
+- **State Management:** Zustand (ligero y potente).
+- **Validations:** Zod 4.
+- **Fetching/Cache:** TanStack Query.
+- **Linting/Formatting:** Biome.
 - **Backend/DB:** Supabase (PostgreSQL + Auth).
-- **Data Ingestion:** Python (nba_api) para el scrapeo inicial.
+- **Data Ingestion:** Python (nba_api + requests) para el scrapeo inicial.
 - **Arquitectura:** Hexagonal / Clean Architecture (Separación clara de lógica de negocio).
 
 ## 🗺️ Roadmap de Implementación
 
 ### Fase 1: Cimientos y Datos (Semana 1)
 - [x] **Setup Inicial:** Configurar repo, carpetas y conexión a Supabase.
-- [ ] **Esquema SQL:** Definir tablas de `teams`, `players`, `contracts` y `stats`.
-- [ ] **ETL Script:** Script en Python para traer rosters y contratos actuales.
-- [ ] **Capa de Dominio:** Definir las entidades básicas en TypeScript (`Player`, `Team`, `Contract`).
+- [x] **Esquema SQL:** Definir tablas de `teams`, `players`, `contracts`.
+- [x] **ETL Script:** Script en Python para traer rosters actuales.
+- [x] **Capa de Dominio:** Definir las entidades básicas en TypeScript (`Player`, `Team`, `Contract`).
+- [x] **Tooling:** Configurar Biome, Bun, Zustand, Zod.
 
 ### Fase 2: El Motor de la NBA (Semana 2)
+- [ ] **Data Layer:** Crear repositorios en `infrastructure` para conectar con Supabase.
+- [ ] **State Store:** Crear stores de Zustand para manejar equipos y jugadores.
 - [ ] **Calculadora de Cap:** Implementar lógica de salarios (Luxury Tax, Hard Cap).
 - [ ] **Trade Machine Core:** Lógica de validación de traspasos (reglas CBA simplificadas).
-- [ ] **Simulador de Partidos:** Algoritmo basado en ratings (PER/WS) + varianza.
 
 ### Fase 3: Dashboard del GM (Semana 3)
-- [ ] **Roster View:** Tabla interactiva con stats y contratos.
+- [ ] **Roster View:** Tabla interactiva con stats y contratos (usando TanStack Query).
 - [ ] **Trade Interface:** Selector de jugadores para "armar el paquete" del traspaso.
 - [ ] **Simulador de Calendario:** Botón para avanzar el tiempo y procesar resultados.
 
