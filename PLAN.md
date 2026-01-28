@@ -15,6 +15,41 @@ Crear un simulador de gestión de la NBA donde el usuario toma el rol de General
 - **Data Ingestion:** Python (nba_api + requests) para el scrapeo inicial.
 - **Arquitectura:** Hexagonal / Clean Architecture (Separación clara de lógica de negocio).
 
+## 📂 Estructura de Carpetas & Arquitectura
+Este proyecto sigue **Clean Architecture**. La regla de oro es: **"La dependencia fluye hacia adentro"**. El Dominio no sabe nada de React ni de Supabase.
+
+```text
+.
+├── app/                         # 🌐 PRESENTATION: Rutas de Next.js (Pages, Layouts)
+│   ├── (dashboard)/             # Grupo de rutas protegidas
+│   └── api/                     # Route Handlers
+│
+├── components/                  # 🎨 UI: Componentes visuales
+│   ├── ui/                      # Primitivos de shadcn (Button, Card, Input)
+│   └── teams/                   # Componentes de negocio (TeamCard, RosterTable)
+│
+├── src/
+│   ├── domain/                  # 🧠 CORE: Reglas de Negocio (Puro TS)
+│   │   ├── entities/            # Modelos puros (ej: Team.ts, Player.ts)
+│   │   └── repositories/        # Contratos/Interfaces (ej: TeamRepository.ts)
+│   │
+│   ├── application/             # 🤝 ORQUESTACIÓN: Casos de uso y Estado
+│   │   ├── stores/              # Zustand Stores (ej: useTeamStore.ts)
+│   │   └── use-cases/           # Lógica compleja (ej: ValidateTrade.ts)
+│   │
+│   └── infrastructure/          # 🔌 IMPLEMENTACIÓN: El mundo real
+│       ├── supabase/            # Configuración de clientes (client.ts, server.ts)
+│       └── repositories/        # Implementación real (ej: SupabaseTeamRepository.ts)
+│
+└── scripts/                     # 🐍 ETL: Scripts de Python para datos
+```
+
+### 📌 Ejemplo de Flujo: "Mostrar Lista de Equipos"
+1.  **Domain:** Definimos qué es un `Team` (Entity) y creamos la interfaz `TeamRepository` que dice *"necesito una forma de buscar equipos"*.
+2.  **Infrastructure:** Creamos `SupabaseTeamRepository` que implementa esa interfaz usando el cliente de Supabase.
+3.  **Application:** Un store de Zustand (`useTeamStore`) o un hook de TanStack Query usa el repositorio para pedir los datos.
+4.  **Presentation (App/Components):** La página `app/teams/page.tsx` usa el hook y le pasa la data a `<TeamGrid />`.
+
 ## 🗺️ Roadmap de Implementación
 
 ### Fase 1: Cimientos y Datos (Semana 1)
