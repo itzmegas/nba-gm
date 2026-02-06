@@ -17,11 +17,7 @@ export class SupabaseTeamRepository implements TeamRepository {
   }
 
   async getById(id: string): Promise<Team | null> {
-    const { data, error } = await this.client
-      .from("teams")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const { data, error } = await this.client.from("teams").select("*").eq("id", id).single();
 
     if (error) return null;
 

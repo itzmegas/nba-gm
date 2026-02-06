@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/infrastructure/supabase/client";
 import { SupabaseTeamRepository } from "@/infrastructure/repositories/SupabaseTeamRepository";
+import { createClient } from "@/infrastructure/supabase/client";
 
 // Factory para instanciar el repositorio
 // En una app más grande, esto iría en un contenedor de inyección de dependencias
