@@ -18,3 +18,14 @@ export function useTeams() {
     },
   });
 }
+
+export function useTeam(id: string) {
+  return useQuery({
+    queryKey: ["teams", id],
+    queryFn: async () => {
+      const repository = getTeamRepository();
+      return await repository.getById(id);
+    },
+    enabled: !!id,
+  });
+}
