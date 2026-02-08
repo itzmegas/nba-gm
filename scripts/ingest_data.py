@@ -2,8 +2,12 @@ import os
 import time
 import requests
 import pandas as pd
+from dotenv import load_dotenv
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import commonteamroster
+
+# Load environment variables from .env.local
+load_dotenv(".env.local")
 
 # Configuration
 SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
@@ -11,9 +15,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("❌ Error: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set.")
-    # Placeholders for illustration
-    SUPABASE_URL = "https://your-project.supabase.co"
-    SUPABASE_KEY = "your-key"
+    print("   Make sure you have a .env.local file with these variables.")
+    exit(1)
 
 # REST Headers
 HEADERS = {
@@ -103,9 +106,12 @@ def ingest_players(teams_in_db):
             print(f"  ❌ Error fetching roster for team {nba_id}: {e}")
 
 if __name__ == "__main__":
-    if SUPABASE_KEY == "your-key":
-        print("⚠️ Please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.")
+    print("🚀 Starting NBA data ingestion...")
+    print(f"   Target: {SUPABASE_URL}")
+    
+    teams = ingest_teams()
+    if teams:
+        ingest_players(teams)
+        print("\n✅ Data ingestion completed!")
     else:
-        teams = ingest_teams()
-        if teams:
-            ingest_players(teams)
+        print("\n⚠️ No teams found in DB to fetch players for.")
