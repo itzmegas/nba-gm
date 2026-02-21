@@ -1,11 +1,5 @@
-import { ComponentExample } from "@/components/component-example";
-import { createClient } from "@/infrastructure/supabase/server";
+import { redirect } from "next/navigation";
 
-export default async function Page() {
-  const supabase = await createClient();
-
-  const { data: todos } = await supabase.from("todos").select();
-  console.log(todos);
-
-  return <ComponentExample />;
+export default function Page() {
+  redirect("/select-team");
 }
