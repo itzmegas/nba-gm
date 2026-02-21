@@ -38,7 +38,9 @@ export function TeamSelector() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        <p className="text-muted-foreground animate-pulse">Cargando franquicias NBA...</p>
+        <p className="text-muted-foreground animate-pulse">
+          Cargando franquicias NBA...
+        </p>
       </div>
     );
   }
@@ -66,7 +68,8 @@ export function TeamSelector() {
 
       // Por conferencia
       const matchesConference =
-        conferenceFilter === "all" || team.conference?.toLowerCase() === conferenceFilter;
+        conferenceFilter === "all" ||
+        team.conference?.toLowerCase() === conferenceFilter;
 
       return matchesSearch && matchesConference;
     }) ?? [];
@@ -167,7 +170,9 @@ export function TeamSelector() {
                     </div>
 
                     <div>
-                      <h3 className="font-bold text-lg leading-none">{team.name}</h3>
+                      <h3 className="font-bold text-lg leading-none">
+                        {team.name}
+                      </h3>
                       <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mt-1">
                         <MapPin className="h-3 w-3" />
                         <span>{team.city}</span>
@@ -176,12 +181,18 @@ export function TeamSelector() {
 
                     <div className="flex gap-2">
                       {team.conference && (
-                        <Badge variant="secondary" className="text-xs font-normal">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-normal"
+                        >
                           {team.conference}
                         </Badge>
                       )}
                       {team.division && (
-                        <Badge variant="outline" className="text-xs font-normal opacity-70">
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-normal opacity-70"
+                        >
                           {team.division}
                         </Badge>
                       )}
@@ -202,7 +213,9 @@ export function TeamSelector() {
       >
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
-            <p className="text-sm text-muted-foreground">Franquicia seleccionada</p>
+            <p className="text-sm text-muted-foreground">
+              Franquicia seleccionada
+            </p>
             <p className="font-bold">
               {teams?.find((t) => t.id === selectedTeamId)?.city}{" "}
               {teams?.find((t) => t.id === selectedTeamId)?.name}
