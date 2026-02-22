@@ -18,21 +18,12 @@ export function TeamSelector() {
   const { data: teams, isLoading, error } = useTeams();
 
   // CLIENT STATE
-  const {
-    selectedTeamId,
-    searchQuery,
-    conferenceFilter,
-    selectTeam,
-    setSearchQuery,
-    setConferenceFilter,
-  } = useTeamStore((state) => ({
-    selectedTeamId: state.selectedTeamId,
-    searchQuery: state.searchQuery,
-    conferenceFilter: state.conferenceFilter,
-    selectTeam: state.selectTeam,
-    setSearchQuery: state.setSearchQuery,
-    setConferenceFilter: state.setConferenceFilter,
-  }));
+  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
+  const searchQuery = useTeamStore((state) => state.searchQuery);
+  const conferenceFilter = useTeamStore((state) => state.conferenceFilter);
+  const selectTeam = useTeamStore((state) => state.selectTeam);
+  const setSearchQuery = useTeamStore((state) => state.setSearchQuery);
+  const setConferenceFilter = useTeamStore((state) => state.setConferenceFilter);
 
   if (isLoading) {
     return (
