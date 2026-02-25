@@ -81,10 +81,10 @@ export function RosterTable({ players }: RosterTableProps) {
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-20 hidden md:table-cell">
               Alt
             </th>
-            <th className="py-3 px-4 text-right font-medium text-muted-foreground w-28">
+            <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28">
               Salario 25-26
             </th>
-            <th className="py-3 px-4 text-right font-medium text-muted-foreground w-28 hidden lg:table-cell">
+            <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28 hidden lg:table-cell">
               Salario 26-27
             </th>
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-28 hidden md:table-cell">
@@ -113,13 +113,12 @@ export function RosterTable({ players }: RosterTableProps) {
                 {/* Nombre y Foto */}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
                       {player.headshotUrl ? (
                         // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
                         <img
                           src={player.headshotUrl}
                           alt={player.fullName}
-                          className="h-full w-full object-cover object-top"
                           loading="lazy"
                         />
                       ) : (
@@ -134,7 +133,7 @@ export function RosterTable({ players }: RosterTableProps) {
                 </td>
 
                 {/* Posición */}
-                <td className="py-3 px-4 text-center">
+                <td className="py-3 px-2 text-center">
                   <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
                     {player.position ?? "—"}
                   </span>

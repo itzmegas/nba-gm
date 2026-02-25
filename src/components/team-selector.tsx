@@ -67,8 +67,6 @@ export function TeamSelector() {
       return matchesSearch && matchesConference;
     }) ?? [];
 
-  console.log("🚀 ~ TeamSelector ~ filteredTeams:", filteredTeams);
-
   const handleConfirm = () => {
     if (!selectedTeamId) return;
     setIsConfirming(true);
@@ -134,11 +132,10 @@ export function TeamSelector() {
             return (
               <Card
                 key={team.id}
-                className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 group ${
-                  isSelected
-                    ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-                    : "border-border"
-                }`}
+                className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 group ${isSelected
+                  ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                  : "border-border"
+                  }`}
                 onClick={() => selectTeam(team.id)}
               >
                 <CardContent className="p-6 relative">
@@ -150,7 +147,7 @@ export function TeamSelector() {
 
                   <div className="flex flex-col items-center text-center space-y-4">
                     {/* Placeholder para logo - reemplazaremos src con team.logoUrl cuando exista */}
-                    <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-background shadow-sm group-hover:scale-105 transition-transform">
+                    <div className="h-40 w-40 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-background shadow-sm group-hover:scale-105 transition-transform">
                       {team.logoUrl ? (
                         <img
                           src={team.logoUrl}
@@ -202,9 +199,8 @@ export function TeamSelector() {
 
       {/* FLOATING ACTION BAR (Sólo visible si hay un equipo seleccionado) */}
       <div
-        className={`fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t shadow-lg transition-transform duration-300 z-50 flex justify-center ${
-          selectedTeamId ? "translate-y-0" : "translate-y-full"
-        }`}
+        className={`fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t shadow-lg transition-transform duration-300 z-50 flex justify-center ${selectedTeamId ? "translate-y-0" : "translate-y-full"
+          }`}
       >
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
