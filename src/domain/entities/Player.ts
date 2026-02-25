@@ -19,6 +19,7 @@ export interface Player {
   height?: string;
   weight?: string;
   jerseyNumber?: string;
+  headshotUrl?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

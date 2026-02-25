@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { Badge } from "@/components/ui/badge";
 
@@ -61,6 +62,8 @@ interface RosterTableProps {
 }
 
 export function RosterTable({ players }: RosterTableProps) {
+  const router = useRouter();
+
   const sorted = [...players].sort((a, b) => {
     const sa = a.contract?.salaryY1 ?? 0;
     const sb = b.contract?.salaryY1 ?? 0;
@@ -99,16 +102,35 @@ export function RosterTable({ players }: RosterTableProps) {
             return (
               <tr
                 key={player.id}
-                className={`border-b border-border/30 transition-colors hover:bg-muted/20 ${isEven ? "" : "bg-muted/10"}`}
+                onClick={() => router.push(`/dashboard/player/${player.id}`)}
+                className={`border-b border-border/30 transition-colors hover:bg-muted/40 cursor-pointer ${isEven ? "" : "bg-muted/10"}`}
               >
                 {/* Número camiseta */}
                 <td className="py-3 px-4 text-muted-foreground font-mono text-xs">
                   {player.jerseyNumber ? `${player.jerseyNumber}` : "—"}
                 </td>
 
-                {/* Nombre */}
+                {/* Nombre y Foto */}
                 <td className="py-3 px-4">
-                  <span className="font-semibold">{player.fullName}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                      {player.headshotUrl ? (
+                        // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
+                        <img
+                          src={player.headshotUrl}
+                          alt={player.fullName}
+                          className="h-full w-full object-cover object-top"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {player.firstName[0]}
+                          {player.lastName[0]}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-semibold whitespace-nowrap">{player.fullName}</span>
+                  </div>
                 </td>
 
                 {/* Posición */}
