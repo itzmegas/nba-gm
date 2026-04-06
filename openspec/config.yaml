@@ -1,20 +1,42 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: Next.js 16 + React 19 + TypeScript strict + Tailwind 4 + Zustand 5 + TanStack Query 5 + Zod 4
+  Database: Supabase (SSR via @supabase/ssr), RLS enforced on all tables
+  Architecture: Clean/Hexagonal — Domain → Application → Infrastructure → Presentation
+  Layers: src/domain (entities, repo interfaces), src/application (hooks, stores), src/infrastructure (Supabase), src/app + src/components (UI)
+  Runtime: bun (never npm/yarn)
+  Linting: Biome only (no ESLint/Prettier), strict TS, no `any`
+  Testing: Vitest/Playwright (planned), Biome check required before task completion
+  Imports: Always @/ alias, never relative paths
+  Domain: NBA GM Simulator — "The Association"
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected layers (domain, application, infrastructure, presentation)
+    - Reference PLAN.md phases when applicable
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Validate Supabase RLS implications for data access scenarios
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+    - Respect Clean/Hexagonal layer boundaries — dependencies flow inward
+  tasks:
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
+    - Specify which layer each task targets
+  apply:
+    - Follow existing code patterns and conventions from AGENTS.md
+    - Load relevant coding skills (react-19, nextjs-15, typescript, tailwind-4, zustand-5, zod-4)
+    - Run `bun biome check` after implementation
+    - snake_case for Supabase tables/columns, camelCase in TypeScript
+  verify:
+    - Run `bun biome check` as minimum verification
+    - Compare implementation against every spec scenario
+    - Verify layer boundaries are not violated
+  archive:
+    - Warn before merging destructive deltas (large removals)

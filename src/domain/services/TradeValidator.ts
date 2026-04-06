@@ -1,16 +1,11 @@
+import { NBA_RULES } from "../constants/nba-rules";
 import type { Contract } from "../entities/Contract";
 import type { TeamTradeDetails, TradePackage, TradeValidationResult } from "../entities/Trade";
+import { type DomainError, HardCapError, RosterSizeError, SalaryMatchingError } from "../errors";
 import { SalaryCapCalculator } from "./SalaryCapCalculator";
 
 export class TradeValidator {
   private salaryCapCalc = new SalaryCapCalculator();
-
-  // Constantes de la CBA (simplificadas)
-  private static readonly MIN_ROSTER_SIZE = 12;
-  private static readonly MAX_ROSTER_SIZE = 15;
-  private static readonly HARD_CAP = 189_000_000; // Second Apron / Hard Cap
-  private static readonly SALARY_MATCH_MARGIN_TAX = 1.25; // 125%
-  private static readonly SALARY_MATCH_MARGIN_NON_TAX = 1.25; // También 125% post-2023
 
   validateTrade(
     teamAContracts: Contract[],
@@ -19,38 +14,51 @@ export class TradeValidator {
     packageB: TradePackage,
     currentYear: number = new Date().getFullYear()
   ): TradeValidationResult {
-    const errors: string[] = [];
+    const errors: DomainError[] = [];
     const warnings: string[] = [];
 
-    // 1. Calcular salarios salientes/entrantes
     const detailsA = this.calculateTradeDetails(teamAContracts, packageA, packageB, currentYear);
     const detailsB = this.calculateTradeDetails(teamBContracts, packageB, packageA, currentYear);
 
     // 2. Validar Salary Matching
-    const salaryMatchErrors = this.validateSalaryMatching(detailsA, detailsB);
-    errors.push(...salaryMatchErrors);
+    const salaryMatchErrorsA = this.validateSalaryMatching(detailsA);
+    const salaryMatchErrorsB = this.validateSalaryMatching(detailsB);
+    errors.push(...salaryMatchErrorsA, ...salaryMatchErrorsB);
 
     // 3. Validar Roster Size
-    const rosterErrorsA = this.validateRosterSize(detailsA.rosterSizeAfter);
-    const rosterErrorsB = this.validateRosterSize(detailsB.rosterSizeAfter);
-    errors.push(...rosterErrorsA.map((e) => `Team A: ${e}`));
-    errors.push(...rosterErrorsB.map((e) => `Team B: ${e}`));
+    const rosterErrorsA = this.validateRosterSize(detailsA.teamId, detailsA.rosterSizeAfter);
+    const rosterErrorsB = this.validateRosterSize(detailsB.teamId, detailsB.rosterSizeAfter);
+    errors.push(...rosterErrorsA, ...rosterErrorsB);
 
     // 4. Validar Hard Cap
     if (detailsA.isOverHardCapAfter) {
-      errors.push(`${packageA.teamName} would exceed the Hard Cap ($189M) after this trade`);
+      errors.push(
+        new HardCapError(
+          `${packageA.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+        )
+      );
     }
     if (detailsB.isOverHardCapAfter) {
-      errors.push(`${packageB.teamName} would exceed the Hard Cap ($189M) after this trade`);
+      errors.push(
+        new HardCapError(
+          `${packageB.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+        )
+      );
     }
 
     // 5. Warnings (no bloqueantes)
-    if (detailsA.rosterSizeAfter > 13 && detailsA.rosterSizeAfter <= 15) {
+    if (
+      detailsA.rosterSizeAfter > 13 &&
+      detailsA.rosterSizeAfter <= NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX
+    ) {
       warnings.push(
         `${packageA.teamName} roster will be at ${detailsA.rosterSizeAfter} players (close to limit)`
       );
     }
-    if (detailsB.rosterSizeAfter > 13 && detailsB.rosterSizeAfter <= 15) {
+    if (
+      detailsB.rosterSizeAfter > 13 &&
+      detailsB.rosterSizeAfter <= NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX
+    ) {
       warnings.push(
         `${packageB.teamName} roster will be at ${detailsB.rosterSizeAfter} players (close to limit)`
       );
@@ -71,27 +79,21 @@ export class TradeValidator {
     currentContracts: Contract[],
     outgoingPackage: TradePackage,
     incomingPackage: TradePackage,
-    currentYear: number
+    _currentYear: number
   ): TeamTradeDetails {
     const teamId = outgoingPackage.teamId;
-
-    // Salarios actuales
     const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(currentContracts);
 
-    // Salarios salientes (jugadores que damos)
     const outgoingSalary = outgoingPackage.outgoingAssets
       .filter((asset) => asset.type === "player" && asset.contract)
       .reduce((sum, asset) => sum + (asset.contract?.salaryY1 || 0), 0);
 
-    // Salarios entrantes (jugadores que recibimos)
     const incomingSalary = incomingPackage.outgoingAssets
       .filter((asset) => asset.type === "player" && asset.contract)
       .reduce((sum, asset) => sum + (asset.contract?.salaryY1 || 0), 0);
 
-    // Nuevo total salarial
     const newTotalSalary = currentTotalSalary - outgoingSalary + incomingSalary;
 
-    // Calcular roster size después del trade
     const currentRosterSize = currentContracts.length;
     const outgoingPlayers = outgoingPackage.outgoingAssets.filter(
       (a) => a.type === "player"
@@ -107,59 +109,86 @@ export class TradeValidator {
       incomingSalary,
       salaryDelta: incomingSalary - outgoingSalary,
       rosterSizeAfter,
-      isOverCapAfter: newTotalSalary > 140_000_000,
-      isOverHardCapAfter: newTotalSalary > TradeValidator.HARD_CAP,
-    };
+      isOverCapAfter: newTotalSalary > NBA_RULES.SALARY_CAP,
+      isOverHardCapAfter: newTotalSalary > NBA_RULES.SECOND_APRON,
+      newTotalSalary, // I'll add this to details to be able to know apron statuses
+    } as TeamTradeDetails & { newTotalSalary: number };
   }
 
-  private validateSalaryMatching(detailsA: TeamTradeDetails, detailsB: TeamTradeDetails): string[] {
-    const errors: string[] = [];
+  private validateSalaryMatching(
+    details: TeamTradeDetails & { newTotalSalary?: number }
+  ): DomainError[] {
+    const errors: DomainError[] = [];
 
-    // Regla simplificada: El equipo que recibe más salario debe cumplir el margen
-    // Si el equipo A recibe más plata que la que da, debe poder "absorber" la diferencia
+    // Only care if we are taking in more salary than sending out
+    if (details.incomingSalary <= details.outgoingSalary) {
+      return errors; // We are always allowed to take less
+    }
 
-    // Escenario 1: Team A recibe más salario del que envía
-    if (detailsA.incomingSalary > detailsA.outgoingSalary) {
-      const maxIncoming = detailsA.outgoingSalary * TradeValidator.SALARY_MATCH_MARGIN_TAX;
-      if (detailsA.incomingSalary > maxIncoming) {
-        errors.push(
-          `${detailsA.teamId}: Incoming salary ($${detailsA.incomingSalary.toLocaleString()}) exceeds ` +
-            `125% of outgoing salary ($${maxIncoming.toLocaleString()})`
-        );
+    // Determine the max incoming based on team's post-trade salary
+    const postTradeSalary = details.newTotalSalary || 0;
+    const outgoing = details.outgoingSalary;
+    let maxIncoming = 0;
+
+    // Check aprons
+    if (postTradeSalary > NBA_RULES.SECOND_APRON) {
+      // Second Apron: Dollar for dollar (incoming <= outgoing)
+      maxIncoming =
+        outgoing * NBA_RULES.MATCHING_TIERS.SECOND_APRON.incomingMultiplier +
+        NBA_RULES.MATCHING_TIERS.SECOND_APRON.flatBonus;
+    } else if (postTradeSalary > NBA_RULES.FIRST_APRON) {
+      // First Apron
+      maxIncoming =
+        outgoing * NBA_RULES.MATCHING_TIERS.TAXPAYER.incomingMultiplier +
+        NBA_RULES.MATCHING_TIERS.TAXPAYER.flatBonus;
+    } else {
+      // Non-Taxpayer
+      if (outgoing <= NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_LOW.maxOutgoing) {
+        maxIncoming =
+          outgoing * NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_LOW.incomingMultiplier +
+          NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_LOW.flatBonus;
+      } else if (outgoing <= NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_MID.maxOutgoing) {
+        maxIncoming = outgoing + NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_MID.flatBonus; // 100% + $5M
+      } else {
+        maxIncoming =
+          outgoing * NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_HIGH.incomingMultiplier +
+          NBA_RULES.MATCHING_TIERS.NON_TAXPAYER_HIGH.flatBonus;
       }
     }
 
-    // Escenario 2: Team B recibe más salario del que envía
-    if (detailsB.incomingSalary > detailsB.outgoingSalary) {
-      const maxIncoming = detailsB.outgoingSalary * TradeValidator.SALARY_MATCH_MARGIN_TAX;
-      if (detailsB.incomingSalary > maxIncoming) {
-        errors.push(
-          `${detailsB.teamId}: Incoming salary ($${detailsB.incomingSalary.toLocaleString()}) exceeds ` +
-            `125% of outgoing salary ($${maxIncoming.toLocaleString()})`
-        );
-      }
-    }
-
-    return errors;
-  }
-
-  private validateRosterSize(rosterSize: number): string[] {
-    const errors: string[] = [];
-
-    if (rosterSize < TradeValidator.MIN_ROSTER_SIZE) {
-      errors.push(`Roster size (${rosterSize}) below minimum (${TradeValidator.MIN_ROSTER_SIZE})`);
-    }
-
-    if (rosterSize > TradeValidator.MAX_ROSTER_SIZE) {
+    if (details.incomingSalary > maxIncoming) {
       errors.push(
-        `Roster size (${rosterSize}) exceeds maximum (${TradeValidator.MAX_ROSTER_SIZE})`
+        new SalaryMatchingError(
+          `${details.teamId}: Incoming salary ($${details.incomingSalary.toLocaleString()}) exceeds allowed maximum ($${maxIncoming.toLocaleString()}) based on their tax bracket`
+        )
       );
     }
 
     return errors;
   }
 
-  // Helper para chequear si un trade es válido rápidamente
+  private validateRosterSize(teamId: string, rosterSize: number): DomainError[] {
+    const errors: DomainError[] = [];
+
+    if (rosterSize < NBA_RULES.ROSTER_LIMITS.IN_SEASON_MIN) {
+      errors.push(
+        new RosterSizeError(
+          `${teamId}: Roster size (${rosterSize}) below minimum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MIN})`
+        )
+      );
+    }
+
+    if (rosterSize > NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX) {
+      errors.push(
+        new RosterSizeError(
+          `${teamId}: Roster size (${rosterSize}) exceeds maximum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX})`
+        )
+      );
+    }
+
+    return errors;
+  }
+
   canExecuteTrade(
     teamAContracts: Contract[],
     teamBContracts: Contract[],

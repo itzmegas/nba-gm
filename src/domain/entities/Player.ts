@@ -20,6 +20,7 @@ export interface Player {
   weight?: string;
   jerseyNumber?: string;
   headshotUrl?: string;
+  yearsOfExperience: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

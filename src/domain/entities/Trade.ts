@@ -1,3 +1,4 @@
+import type { DomainError } from "../errors";
 import type { Contract } from "./Contract";
 import type { Player } from "./Player";
 
@@ -22,7 +23,7 @@ export interface TradePackage {
 
 export interface TradeValidationResult {
   isValid: boolean;
-  errors: string[];
+  errors: DomainError[];
   warnings: string[];
   details: {
     teamA: TeamTradeDetails;
