@@ -1,5 +1,10 @@
 export type { Contract } from "./Contract";
+export { contractSchema } from "./Contract";
+export type { Game, GameStatus } from "./Game";
+export { GAME_STATUS, gameSchema } from "./Game";
 export type { Player, Position } from "./Player";
 export { POSITION } from "./Player";
+export type { PlayerState } from "./PlayerState";
+export { playerStateSchema } from "./PlayerState";
 export type { Team } from "./Team";
 export type { TeamTradeDetails, TradeAsset, TradePackage, TradeValidationResult } from "./Trade";

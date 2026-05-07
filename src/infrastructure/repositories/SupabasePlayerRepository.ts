@@ -17,7 +17,11 @@ export class SupabasePlayerRepository implements PlayerRepository {
   }
 
   async getById(id: string): Promise<Player | null> {
-    const { data, error } = await this.client.from("players").select("*").eq("id", id).single();
+    const { data, error } = await this.client
+      .from("players")
+      .select("*")
+      .eq("id", id)
+      .single();
 
     if (error) return null;
 
@@ -74,6 +78,7 @@ export class SupabasePlayerRepository implements PlayerRepository {
       weight: row.weight as string | undefined,
       jerseyNumber: row.jersey_number as string | undefined,
       headshotUrl: `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaId}.png`,
+      yearsOfExperience: row.years_of_experience as number,
       isActive: row.is_active as boolean,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),

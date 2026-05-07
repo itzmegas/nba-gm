@@ -1,13 +1,13 @@
-import type { Contract } from "../entities/Contract";
+import type { Contract } from "@/domain/entities";
 
 export interface ContractRepository {
-  getAll(): Promise<Contract[]>;
-  getById(id: string): Promise<Contract | null>;
-  getByPlayerId(playerId: string): Promise<Contract | null>;
-  getByTeamId(teamId: string): Promise<Contract[]>;
-  getActiveContracts(): Promise<Contract[]>;
-  getExpiringContracts(seasonYear: number): Promise<Contract[]>;
+  getAll(gameId: string): Promise<Contract[]>;
+  getById(gameId: string, id: string): Promise<Contract | null>;
+  getByPlayerId(gameId: string, playerId: string): Promise<Contract | null>;
+  getByTeamId(gameId: string, teamId: string): Promise<Contract[]>;
+  getActiveContracts(gameId: string): Promise<Contract[]>;
+  getExpiringContracts(gameId: string, seasonYear: number): Promise<Contract[]>;
   create(contract: Omit<Contract, "id" | "createdAt" | "updatedAt">): Promise<Contract>;
-  update(id: string, contract: Partial<Contract>): Promise<Contract>;
-  delete(id: string): Promise<void>;
+  update(gameId: string, id: string, contract: Partial<Contract>): Promise<Contract>;
+  delete(gameId: string, id: string): Promise<void>;
 }
