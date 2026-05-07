@@ -24,6 +24,14 @@
       "sessions": 5,
       "memories": 5,
       "prompts": 0
+    },
+    {
+      "id": "d13f04f5",
+      "created_by": "emmanuel",
+      "created_at": "2026-05-07T10:20:38Z",
+      "sessions": 12,
+      "memories": 10,
+      "prompts": 11
     }
   ]
 }
