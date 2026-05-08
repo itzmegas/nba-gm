@@ -3,6 +3,7 @@ import type { Contract } from "@/domain/entities/Contract";
 import type { Player } from "@/domain/entities/Player";
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
 import { SupabasePlayerRepository } from "@/infrastructure/repositories/SupabasePlayerRepository";
+import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
 import { createClient } from "@/infrastructure/supabase/client";
 
 export interface RosterPlayer {
@@ -10,20 +11,24 @@ export interface RosterPlayer {
   contract: Contract | null;
 }
 
-export function useRoster(teamId: string | null) {
+export function useRoster(gameId: string | null, teamId: string | null) {
   return useQuery({
-    queryKey: ["roster", teamId],
+    queryKey: ["games", gameId, "roster", teamId],
     queryFn: async (): Promise<RosterPlayer[]> => {
-      if (!teamId) return [];
+      if (!gameId || !teamId) return [];
 
       const supabase = createClient();
       const playerRepo = new SupabasePlayerRepository(supabase);
+      const playerStateRepo = new SupabasePlayerStateRepository(supabase);
       const contractRepo = new SupabaseContractRepository(supabase);
 
-      const [players, contracts] = await Promise.all([
-        playerRepo.getByTeamId(teamId),
-        contractRepo.getByTeamId(teamId),
+      const [playerStates, contracts, allPlayers] = await Promise.all([
+        playerStateRepo.getByGameAndTeam(gameId, teamId),
+        contractRepo.getByTeamId(gameId, teamId),
+        playerRepo.getAll(),
       ]);
+
+      const playerById = new Map<string, Player>(allPlayers.map((player) => [player.id, player]));
 
       const contractByPlayerId = new Map<string, Contract>();
       for (const contract of contracts) {
@@ -34,12 +39,24 @@ export function useRoster(teamId: string | null) {
         }
       }
 
-      return players.map((player) => ({
-        player,
-        contract: contractByPlayerId.get(player.id) ?? null,
-      }));
+      const rosterPlayers: RosterPlayer[] = [];
+
+      for (const playerState of playerStates) {
+        const player = playerById.get(playerState.playerId);
+
+        if (!player) {
+          continue;
+        }
+
+        rosterPlayers.push({
+          player,
+          contract: contractByPlayerId.get(player.id) ?? null,
+        });
+      }
+
+      return rosterPlayers;
     },
-    enabled: !!teamId,
+    enabled: !!gameId && !!teamId,
     staleTime: 2 * 60 * 1000,
   });
 }

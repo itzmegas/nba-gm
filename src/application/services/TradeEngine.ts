@@ -16,6 +16,7 @@ export class TradeEngine {
   constructor(private contractRepository: ContractRepository) {}
 
   async executeTrade(
+    gameId: string,
     teamAContracts: Contract[],
     teamBContracts: Contract[],
     packageA: TradePackage,
@@ -50,7 +51,7 @@ export class TradeEngine {
       // Transferir jugadores de A a B
       for (const asset of packageA.outgoingAssets) {
         if (asset.type === "player" && asset.contract) {
-          await this.contractRepository.update(asset.contract.id, {
+          await this.contractRepository.update(gameId, asset.contract.id, {
             teamId: packageB.teamId,
           });
         }
@@ -59,7 +60,7 @@ export class TradeEngine {
       // Transferir jugadores de B a A
       for (const asset of packageB.outgoingAssets) {
         if (asset.type === "player" && asset.contract) {
-          await this.contractRepository.update(asset.contract.id, {
+          await this.contractRepository.update(gameId, asset.contract.id, {
             teamId: packageA.teamId,
           });
         }
@@ -81,6 +82,7 @@ export class TradeEngine {
 
   // Método para simular un trade sin ejecutarlo (útil para la UI)
   simulateTrade(
+    _gameId: string,
     teamAContracts: Contract[],
     teamBContracts: Contract[],
     packageA: TradePackage,

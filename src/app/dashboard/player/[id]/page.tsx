@@ -12,6 +12,7 @@ import Link from "next/link";
 import { use } from "react";
 import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts";
 import { usePlayer } from "@/application/hooks/players/usePlayers";
+import { useGameStore } from "@/application/stores/useGameStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,9 +32,10 @@ export default function PlayerDetailPage({ params }: { params: Promise<{ id: str
   // Desempaquetamos la promesa de `params` (React 19 pattern para Next.js 15)
   const resolvedParams = use(params);
   const playerId = resolvedParams.id;
+  const gameId = useGameStore((state) => state.lastSelectedGameId);
 
   const { data: player, isLoading: isLoadingPlayer } = usePlayer(playerId);
-  const { data: contract, isLoading: isLoadingContract } = useContractsByPlayer(playerId);
+  const { data: contract, isLoading: isLoadingContract } = useContractsByPlayer(gameId, playerId);
 
   if (isLoadingPlayer || isLoadingContract) {
     return (

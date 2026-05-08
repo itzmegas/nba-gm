@@ -7,13 +7,14 @@ const getContractRepository = () => {
   return new SupabaseContractRepository(supabase);
 };
 
-export function useTeamContracts(teamId: string) {
+export function useTeamContracts(gameId: string | null, teamId: string | null) {
   return useQuery({
-    queryKey: ["contracts", teamId],
+    queryKey: ["games", gameId, "contracts", "team", teamId],
     queryFn: async () => {
+      if (!gameId || !teamId) return [];
       const repository = getContractRepository();
-      return await repository.getByTeamId(teamId);
+      return await repository.getByTeamId(gameId, teamId);
     },
-    enabled: !!teamId, // Solo corre si hay un teamId
+    enabled: !!gameId && !!teamId,
   });
 }

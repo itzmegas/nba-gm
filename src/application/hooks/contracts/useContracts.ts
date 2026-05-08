@@ -7,59 +7,64 @@ const getContractRepository = () => {
   return new SupabaseContractRepository(supabase);
 };
 
-export function useContracts() {
+export function useContracts(gameId: string | null) {
   return useQuery({
-    queryKey: ["contracts"],
+    queryKey: ["games", gameId, "contracts"],
     queryFn: async () => {
+      if (!gameId) return [];
       const repository = getContractRepository();
-      return await repository.getAll();
+      return await repository.getAll(gameId);
     },
+    enabled: !!gameId,
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useContract(id: string) {
+export function useContract(gameId: string | null, id: string | null) {
   return useQuery({
-    queryKey: ["contracts", id],
+    queryKey: ["games", gameId, "contracts", id],
     queryFn: async () => {
+      if (!gameId || !id) return null;
       const repository = getContractRepository();
-      return await repository.getById(id);
+      return await repository.getById(gameId, id);
     },
-    enabled: !!id,
+    enabled: !!gameId && !!id,
   });
 }
 
-export function useContractsByTeam(teamId: string | null) {
+export function useContractsByTeam(gameId: string | null, teamId: string | null) {
   return useQuery({
-    queryKey: ["contracts", "team", teamId],
+    queryKey: ["games", gameId, "contracts", "team", teamId],
     queryFn: async () => {
-      if (!teamId) return [];
+      if (!gameId || !teamId) return [];
       const repository = getContractRepository();
-      return await repository.getByTeamId(teamId);
+      return await repository.getByTeamId(gameId, teamId);
     },
-    enabled: !!teamId,
+    enabled: !!gameId && !!teamId,
   });
 }
 
-export function useContractsByPlayer(playerId: string | null) {
+export function useContractsByPlayer(gameId: string | null, playerId: string | null) {
   return useQuery({
-    queryKey: ["contracts", "player", playerId],
+    queryKey: ["games", gameId, "contracts", "player", playerId],
     queryFn: async () => {
-      if (!playerId) return null;
+      if (!gameId || !playerId) return null;
       const repository = getContractRepository();
-      return await repository.getByPlayerId(playerId);
+      return await repository.getByPlayerId(gameId, playerId);
     },
-    enabled: !!playerId,
+    enabled: !!gameId && !!playerId,
   });
 }
 
-export function useActiveContracts() {
+export function useActiveContracts(gameId: string | null) {
   return useQuery({
-    queryKey: ["contracts", "active"],
+    queryKey: ["games", gameId, "contracts", "active"],
     queryFn: async () => {
+      if (!gameId) return [];
       const repository = getContractRepository();
-      return await repository.getActiveContracts();
+      return await repository.getActiveContracts(gameId);
     },
+    enabled: !!gameId,
     staleTime: 5 * 60 * 1000,
   });
 }

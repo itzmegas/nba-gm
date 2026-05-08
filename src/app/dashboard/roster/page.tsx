@@ -3,6 +3,7 @@
 import { Users } from "lucide-react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useRoster } from "@/application/hooks/roster/useRoster";
+import { useGameStore } from "@/application/stores/useGameStore";
 import { useTeam } from "@/application/hooks/teams/useTeams";
 import { useTeamStore } from "@/application/stores/useTeamStore";
 import { RosterTable } from "@/components/roster/roster-table";
@@ -17,9 +18,10 @@ function formatSalary(amount: number): string {
 
 export default function RosterPage() {
   const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
+  const gameId = useGameStore((state) => state.lastSelectedGameId);
   const { data: team } = useTeam(selectedTeamId ?? "");
-  const { data: rosterPlayers, isLoading } = useRoster(selectedTeamId);
-  const { data: contracts } = useTeamContracts(selectedTeamId ?? "");
+  const { data: rosterPlayers, isLoading } = useRoster(gameId, selectedTeamId);
+  const { data: contracts } = useTeamContracts(gameId, selectedTeamId);
 
   const calculator = new SalaryCapCalculator();
   const financials = contracts ? calculator.getFinancialStatus(contracts) : null;

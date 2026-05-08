@@ -3,6 +3,7 @@ import { devtools } from "zustand/middleware";
 
 interface TeamState {
   // State
+  /** Selected team for UI flows (team picker, filters). Gameplay team context comes from Game.selectedTeamId via URL. */
   selectedTeamId: string | null;
   searchQuery: string;
   conferenceFilter: "all" | "east" | "west";

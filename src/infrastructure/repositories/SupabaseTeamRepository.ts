@@ -2,10 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Team } from "@/domain/entities/Team";
 import type { TeamRepository } from "@/domain/repositories/TeamRepository";
 
-const TEAM_CONFERENCES: Record<
-  string,
-  { conference: string; division: string }
-> = {
+const TEAM_CONFERENCES: Record<string, { conference: string; division: string }> = {
   ATL: { conference: "East", division: "Southeast" },
   BOS: { conference: "East", division: "Atlantic" },
   BKN: { conference: "East", division: "Atlantic" },
@@ -53,11 +50,7 @@ export class SupabaseTeamRepository implements TeamRepository {
   }
 
   async getById(id: string): Promise<Team | null> {
-    const { data, error } = await this.client
-      .from("teams")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const { data, error } = await this.client.from("teams").select("*").eq("id", id).single();
 
     if (error) return null;
 

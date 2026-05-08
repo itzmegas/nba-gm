@@ -3,6 +3,7 @@
 import { AlertTriangle, DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
+import { useGameStore } from "@/application/stores/useGameStore";
 import { useTeamStore } from "@/application/stores/useTeamStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
@@ -17,7 +18,8 @@ const formatCurrency = (amount: number) => {
 
 export function CapSpaceWidget() {
   const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
-  const { data: contracts, isLoading } = useTeamContracts(selectedTeamId ?? "");
+  const gameId = useGameStore((state) => state.lastSelectedGameId);
+  const { data: contracts, isLoading } = useTeamContracts(gameId, selectedTeamId);
 
   const calculator = useMemo(() => new SalaryCapCalculator(), []);
 

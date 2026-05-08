@@ -17,11 +17,7 @@ export class SupabasePlayerRepository implements PlayerRepository {
   }
 
   async getById(id: string): Promise<Player | null> {
-    const { data, error } = await this.client
-      .from("players")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const { data, error } = await this.client.from("players").select("*").eq("id", id).single();
 
     if (error) return null;
 
@@ -29,6 +25,8 @@ export class SupabasePlayerRepository implements PlayerRepository {
   }
 
   async getByTeamId(teamId: string): Promise<Player[]> {
+    // Deprecated for gameplay roster reads: use PlayerStateRepository (game-scoped source of truth).
+    // Kept for static/ETL flows where players.team_id remains useful.
     const { data, error } = await this.client
       .from("players")
       .select("*")
