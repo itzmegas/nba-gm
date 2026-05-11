@@ -3,32 +3,97 @@
 import { CheckCircle2, ChevronRight, MapPin, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useCreateGame } from "@/application/hooks/games/useCreateGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
-import { useTeamStore } from "@/application/stores/useTeamStore";
+import {
+  selectCreateError,
+  selectIsCreating,
+  selectPendingGameName,
+  selectPendingSelectedTeamId,
+  useGameStore,
+} from "@/application/stores/useGameStore";
+import {
+  selectConferenceFilter,
+  selectSearchQuery,
+  useTeamStore,
+} from "@/application/stores/useTeamStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-export function TeamSelector() {
+const DEFAULT_SEASON_YEAR = 2025;
+
+export function CreateGameForm() {
   const router = useRouter();
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  // SERVER STATE
-  const { data: teams, isLoading, error } = useTeams();
+  const pendingSelectedTeamId = useGameStore(selectPendingSelectedTeamId);
+  const pendingGameName = useGameStore(selectPendingGameName);
+  const createError = useGameStore(selectCreateError);
+  const isCreating = useGameStore(selectIsCreating);
 
-  // CLIENT STATE
-  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
-  const searchQuery = useTeamStore((state) => state.searchQuery);
-  const conferenceFilter = useTeamStore((state) => state.conferenceFilter);
-  const selectTeam = useTeamStore((state) => state.selectTeam);
+  const setPendingSelectedTeamId = useGameStore((state) => state.setPendingSelectedTeamId);
+  const setPendingGameName = useGameStore((state) => state.setPendingGameName);
+  const startCreate = useGameStore((state) => state.startCreate);
+  const finishCreate = useGameStore((state) => state.finishCreate);
+  const failCreate = useGameStore((state) => state.failCreate);
+  const resetCreateFlow = useGameStore((state) => state.resetCreateFlow);
+
+  const searchQuery = useTeamStore(selectSearchQuery);
+  const conferenceFilter = useTeamStore(selectConferenceFilter);
   const setSearchQuery = useTeamStore((state) => state.setSearchQuery);
   const setConferenceFilter = useTeamStore((state) => state.setConferenceFilter);
+
+  const { data: teams, isLoading, error } = useTeams();
+  const createGameMutation = useCreateGame();
+
+  const filteredTeams =
+    teams?.filter((team) => {
+      const matchesSearch =
+        team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        team.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        team.abbreviation.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesConference =
+        conferenceFilter === "all" || team.conference?.toLowerCase() === conferenceFilter;
+
+      return matchesSearch && matchesConference;
+    }) ?? [];
+
+  const selectedTeam = teams?.find((team) => team.id === pendingSelectedTeamId);
+
+  const handleCreateGame = async () => {
+    if (!pendingSelectedTeamId) {
+      setLocalError("Seleccioná una franquicia para crear una partida.");
+      return;
+    }
+
+    setLocalError(null);
+    startCreate();
+
+    try {
+      const createdGame = await createGameMutation.mutateAsync({
+        name: pendingGameName.trim() || `${selectedTeam?.name ?? "Franchise"} Franchise Save`,
+        selectedTeamId: pendingSelectedTeamId,
+        seasonYear: DEFAULT_SEASON_YEAR,
+        currentDate: new Date(`${DEFAULT_SEASON_YEAR}-10-22T00:00:00.000Z`),
+      });
+
+      finishCreate(createdGame.id);
+      router.push(`/games/${createdGame.id}/dashboard`);
+      router.refresh();
+    } catch (mutationError) {
+      const message =
+        mutationError instanceof Error ? mutationError.message : "No se pudo crear la partida.";
+      failCreate(message);
+    }
+  };
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-100 space-y-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
         <p className="text-muted-foreground animate-pulse">Cargando franquicias NBA...</p>
       </div>
     );
@@ -39,41 +104,37 @@ export function TeamSelector() {
       <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-center">
         <h3 className="font-bold mb-2">Error de Conexión</h3>
         <p>{error.message}</p>
-        <p className="text-sm mt-2 opacity-80">
-          Chequeá que Supabase esté configurado y corriendo con data.
-        </p>
       </div>
     );
   }
 
-  // Derived state (Filtrado local)
-  const filteredTeams =
-    teams?.filter((team) => {
-      // Por nombre/ciudad
-      const matchesSearch =
-        team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        team.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        team.abbreviation.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Por conferencia
-      const matchesConference =
-        conferenceFilter === "all" || team.conference?.toLowerCase() === conferenceFilter;
-
-      return matchesSearch && matchesConference;
-    }) ?? [];
-
-  const handleConfirm = () => {
-    if (!selectedTeamId) return;
-    setIsConfirming(true);
-    // Acá simulamos una pequeña carga antes de ir al dashboard
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 500);
-  };
-
   return (
-    <div className="space-y-8 w-full max-w-6xl mx-auto animate-in fade-in duration-500">
-      {/* HEADER & FILTERS */}
+    <div className="space-y-8 w-full max-w-6xl mx-auto animate-in fade-in duration-500 pb-28">
+      <Card className="border-border/50 bg-card/50">
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold tracking-tight">Configuración de Partida</h2>
+            <p className="text-sm text-muted-foreground">
+              Elegí un nombre opcional para identificar este universo de simulación.
+            </p>
+          </div>
+
+          <Input
+            type="text"
+            value={pendingGameName}
+            onChange={(event) => setPendingGameName(event.target.value)}
+            placeholder={selectedTeam ? `${selectedTeam.name} Dynasty Save` : "Mi partida NBA"}
+            maxLength={80}
+          />
+
+          {(localError || createError) && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {localError || createError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border shadow-sm">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -81,7 +142,7 @@ export function TeamSelector() {
             type="text"
             placeholder="Buscar franquicia (ej. Lakers, NYK)..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="pl-9 bg-background"
           />
         </div>
@@ -114,7 +175,6 @@ export function TeamSelector() {
         </div>
       </div>
 
-      {/* TEAMS GRID */}
       {filteredTeams.length === 0 ? (
         <div className="text-center py-24 text-muted-foreground">
           No se encontraron franquicias con esos filtros.
@@ -122,17 +182,13 @@ export function TeamSelector() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredTeams.map((team) => {
-            const isSelected = selectedTeamId === team.id;
+            const isSelected = pendingSelectedTeamId === team.id;
 
             return (
               <Card
                 key={team.id}
-                className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 group ${
-                  isSelected
-                    ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-                    : "border-border"
-                }`}
-                onClick={() => selectTeam(team.id)}
+                className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 group ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border"}`}
+                onClick={() => setPendingSelectedTeamId(team.id)}
               >
                 <CardContent className="p-6 relative">
                   {isSelected && (
@@ -142,9 +198,9 @@ export function TeamSelector() {
                   )}
 
                   <div className="flex flex-col items-center text-center space-y-4">
-                    {/* Placeholder para logo - reemplazaremos src con team.logoUrl cuando exista */}
                     <div className="h-40 w-40 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-background shadow-sm group-hover:scale-105 transition-transform">
                       {team.logoUrl ? (
+                        // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
                         <img
                           src={team.logoUrl}
                           alt={`Logo ${team.name}`}
@@ -185,41 +241,48 @@ export function TeamSelector() {
         </div>
       )}
 
-      {/* FLOATING ACTION BAR (Sólo visible si hay un equipo seleccionado) */}
       <div
-        className={`fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t shadow-lg transition-transform duration-300 z-50 flex justify-center ${
-          selectedTeamId ? "translate-y-0" : "translate-y-full"
-        }`}
+        className={`fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t shadow-lg transition-transform duration-300 z-50 flex justify-center ${pendingSelectedTeamId ? "translate-y-0" : "translate-y-full"}`}
       >
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
             <p className="text-sm text-muted-foreground">Franquicia seleccionada</p>
             <p className="font-bold">
-              {teams?.find((t) => t.id === selectedTeamId)?.city}{" "}
-              {teams?.find((t) => t.id === selectedTeamId)?.name}
+              {selectedTeam?.city} {selectedTeam?.name}
             </p>
           </div>
 
           <Button
             size="lg"
-            onClick={handleConfirm}
-            disabled={isConfirming || !selectedTeamId}
+            onClick={handleCreateGame}
+            disabled={isCreating || !pendingSelectedTeamId}
             className="w-full sm:w-auto px-8"
           >
-            {isConfirming ? (
+            {isCreating ? (
               <span className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-background"></span>
-                Iniciando...
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-background" />
+                Creando partida...
               </span>
             ) : (
               <span className="flex items-center gap-2">
-                Asumir como GM
+                Crear Partida
                 <ChevronRight className="h-4 w-4" />
               </span>
             )}
           </Button>
         </div>
       </div>
+
+      <Button
+        variant="ghost"
+        className="mx-auto"
+        onClick={() => {
+          resetCreateFlow();
+          router.push("/");
+        }}
+      >
+        Volver al menú
+      </Button>
     </div>
   );
 }

@@ -1,20 +1,18 @@
 "use client";
 
-import { AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { usePlayersByTeam } from "@/application/hooks/players/usePlayers";
-import { useGameStore } from "@/application/stores/useGameStore";
-import { useTeamStore } from "@/application/stores/useTeamStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function AlertsWidget() {
-  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
-  const gameId = useGameStore((state) => state.lastSelectedGameId);
-  const { data: contracts, isLoading: isLoadingContracts } = useTeamContracts(
-    gameId,
-    selectedTeamId
-  );
-  const { data: players, isLoading: isLoadingPlayers } = usePlayersByTeam(selectedTeamId ?? "");
+interface AlertsWidgetProps {
+  gameId: string;
+  teamId: string;
+}
+
+export function AlertsWidget({ gameId, teamId }: AlertsWidgetProps) {
+  const { data: contracts, isLoading: isLoadingContracts } = useTeamContracts(gameId, teamId);
+  const { data: players, isLoading: isLoadingPlayers } = usePlayersByTeam(teamId);
 
   const currentYear = new Date().getFullYear();
 

@@ -1,11 +1,14 @@
 "use client";
 
 import { AlertTriangle, DollarSign } from "lucide-react";
-import { useMemo } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
-import { useGameStore } from "@/application/stores/useGameStore";
-import { useTeamStore } from "@/application/stores/useTeamStore";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 const formatCurrency = (amount: number) => {
@@ -16,17 +19,17 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-export function CapSpaceWidget() {
-  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
-  const gameId = useGameStore((state) => state.lastSelectedGameId);
-  const { data: contracts, isLoading } = useTeamContracts(gameId, selectedTeamId);
+interface CapSpaceWidgetProps {
+  gameId: string;
+  teamId: string;
+}
 
-  const calculator = useMemo(() => new SalaryCapCalculator(), []);
+export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
+  const { data: contracts, isLoading } = useTeamContracts(gameId, teamId);
 
-  const status = useMemo(() => {
-    if (!contracts) return null;
-    return calculator.getFinancialStatus(contracts);
-  }, [contracts, calculator]);
+  const calculator = new SalaryCapCalculator();
+
+  const status = contracts ? calculator.getFinancialStatus(contracts) : null;
 
   if (isLoading || !status) {
     return (
@@ -78,13 +81,17 @@ export function CapSpaceWidget() {
               <span className="text-3xl font-black tracking-tighter">
                 {formatCurrency(status.totalSalary)}
               </span>
-              <span className="text-sm font-medium text-muted-foreground">Gasto Total</span>
+              <span className="text-sm font-medium text-muted-foreground">
+                Gasto Total
+              </span>
             </div>
 
             <div className="flex justify-between text-sm">
               <span
                 className={
-                  status.isOverCap ? "text-destructive font-medium" : "text-green-500 font-medium"
+                  status.isOverCap
+                    ? "text-destructive font-medium"
+                    : "text-green-500 font-medium"
                 }
               >
                 {status.isOverCap
@@ -116,7 +123,9 @@ export function CapSpaceWidget() {
 
           <div className="grid grid-cols-2 gap-2 pt-4 border-t text-sm">
             <div className="flex flex-col">
-              <span className="text-muted-foreground text-xs">Luxury Tax Limit</span>
+              <span className="text-muted-foreground text-xs">
+                Luxury Tax Limit
+              </span>
               <span className="font-medium">{formatCurrency(LUXURY_TAX)}</span>
             </div>
             <div className="flex flex-col items-end">

@@ -58,10 +58,11 @@ function ContractYearsBar({ endYear }: { endYear: number }) {
 }
 
 interface RosterTableProps {
+  gameId: string;
   players: RosterPlayer[];
 }
 
-export function RosterTable({ players }: RosterTableProps) {
+export function RosterTable({ gameId, players }: RosterTableProps) {
   const router = useRouter();
 
   const sorted = [...players].sort((a, b) => {
@@ -102,7 +103,7 @@ export function RosterTable({ players }: RosterTableProps) {
             return (
               <tr
                 key={player.id}
-                onClick={() => router.push(`/dashboard/player/${player.id}`)}
+                onClick={() => router.push(`/games/${gameId}/dashboard/player/${player.id}`)}
                 className={`border-b border-border/30 transition-colors hover:bg-muted/40 cursor-pointer ${isEven ? "" : "bg-muted/10"}`}
               >
                 {/* Número camiseta */}
@@ -116,11 +117,7 @@ export function RosterTable({ players }: RosterTableProps) {
                     <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
                       {player.headshotUrl ? (
                         // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
-                        <img
-                          src={player.headshotUrl}
-                          alt={player.fullName}
-                          loading="lazy"
-                        />
+                        <img src={player.headshotUrl} alt={player.fullName} loading="lazy" />
                       ) : (
                         <span className="text-xs font-medium text-muted-foreground">
                           {player.firstName[0]}

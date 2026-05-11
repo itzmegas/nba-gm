@@ -13,25 +13,39 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ComponentType } from "react";
 import { useState } from "react";
 import { useTeams } from "@/application/hooks/teams/useTeams";
-import { useTeamStore } from "@/application/stores/useTeamStore";
 import { Button } from "@/components/ui/button";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Roster", href: "/dashboard/roster", icon: Users },
-  { label: "Traspasos", href: "/dashboard/trades", icon: ArrowLeftRight },
-  { label: "Agencia Libre", href: "/dashboard/free-agency", icon: DollarSign },
-  { label: "Calendario", href: "/dashboard/schedule", icon: Calendar },
-  { label: "Ajustes", href: "/dashboard/settings", icon: Settings },
+interface DashboardNavItem {
+  label: string;
+  path: string;
+  icon: ComponentType<{ className?: string }>;
+}
+
+const NAV_ITEMS: DashboardNavItem[] = [
+  { label: "Dashboard", path: "", icon: LayoutDashboard },
+  { label: "Roster", path: "/roster", icon: Users },
+  { label: "Traspasos", path: "/trades", icon: ArrowLeftRight },
+  { label: "Agencia Libre", path: "/free-agency", icon: DollarSign },
+  { label: "Calendario", path: "/schedule", icon: Calendar },
+  { label: "Ajustes", path: "/settings", icon: Settings },
 ];
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  gameId: string;
+  selectedTeamId: string;
+}
+
+export function DashboardSidebar({
+  gameId,
+  selectedTeamId,
+}: DashboardSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
   const { data: teams } = useTeams();
+  const dashboardBasePath = `/games/${gameId}/dashboard`;
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
 
@@ -76,12 +90,12 @@ export function DashboardSidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
         {NAV_ITEMS.map((item) => {
-          const isActive =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const href = `${dashboardBasePath}${item.path}`;
+          const isActive = pathname === href || pathname.startsWith(`${href}/`);
           const Icon = item.icon;
 
           return (
-            <Link key={item.href} href={item.href}>
+            <Link key={href} href={href}>
               <div
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                   isActive
@@ -114,8 +128,11 @@ export function DashboardSidebar() {
   );
 }
 
-export function DashboardHeader() {
-  const selectedTeamId = useTeamStore((state) => state.selectedTeamId);
+interface DashboardHeaderProps {
+  selectedTeamId: string;
+}
+
+export function DashboardHeader({ selectedTeamId }: DashboardHeaderProps) {
   const { data: teams } = useTeams();
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
