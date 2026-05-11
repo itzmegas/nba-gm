@@ -38,10 +38,7 @@ interface DashboardSidebarProps {
   selectedTeamId: string;
 }
 
-export function DashboardSidebar({
-  gameId,
-  selectedTeamId,
-}: DashboardSidebarProps) {
+export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { data: teams } = useTeams();
@@ -58,19 +55,13 @@ export function DashboardSidebar({
         {!isCollapsed && (
           <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
             {selectedTeam?.logoUrl ? (
-              <img
-                src={selectedTeam.logoUrl}
-                alt="Logo"
-                className="w-8 h-8 object-contain"
-              />
+              <img src={selectedTeam.logoUrl} alt="Logo" className="w-8 h-8 object-contain" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs">
                 {selectedTeam?.abbreviation || "NBA"}
               </div>
             )}
-            <span className="font-bold truncate">
-              {selectedTeam?.name || "The Association"}
-            </span>
+            <span className="font-bold truncate">{selectedTeam?.name || "The Association"}</span>
           </div>
         )}
         <Button
@@ -79,11 +70,7 @@ export function DashboardSidebar({
           onClick={() => setIsCollapsed(!isCollapsed)}
           className={isCollapsed ? "mx-auto" : ""}
         >
-          {isCollapsed ? (
-            <Menu className="h-5 w-5" />
-          ) : (
-            <ChevronLeft className="h-5 w-5" />
-          )}
+          {isCollapsed ? <Menu className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </Button>
       </div>
 
@@ -118,9 +105,7 @@ export function DashboardSidebar({
           {isCollapsed ? (
             <Calendar className="h-4 w-4" />
           ) : (
-            <span className="flex items-center justify-center w-full">
-              Simular Día ▶
-            </span>
+            <span className="flex items-center justify-center w-full">Simular Día ▶</span>
           )}
         </Button>
       </div>
