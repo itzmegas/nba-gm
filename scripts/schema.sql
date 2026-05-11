@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS games (
     name TEXT NOT NULL CHECK (char_length(trim(name)) BETWEEN 1 AND 80),
     selected_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
     season_year INTEGER NOT NULL,
-    current_date DATE NOT NULL,
+    simulation_date DATE NOT NULL,
     status game_status NOT NULL DEFAULT 'initializing',
     deleted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),

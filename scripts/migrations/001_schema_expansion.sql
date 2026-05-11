@@ -1,0 +1,25 @@
+-- Migration 001: Schema expansion (document-only)
+--
+-- Purpose:
+--   This migration records that the game-model schema expansion was already
+--   applied in the baseline `scripts/schema.sql`.
+--
+-- Status:
+--   ✅ ALREADY COMPLETE as part of the initial idempotent schema setup.
+--
+-- Included in `scripts/schema.sql`:
+--   - `game_status` enum
+--   - `games` table
+--   - `game_player_states` table (+ UNIQUE(game_id, player_id))
+--   - `contracts.game_id` nullable column + FK to `games(id)`
+--   - RLS policies for games, game_player_states, contracts, teams, players
+--   - Supporting indexes
+--
+-- Notes:
+--   - `schema.sql` uses idempotent guards (`IF NOT EXISTS`,
+--     `DROP POLICY IF EXISTS`, etc.).
+--   - No additional DDL is required in this migration file.
+--
+-- Rollback:
+--   Not applicable here because this file is documentation-only.
+--   To revert schema objects, use explicit DDL in a dedicated rollback migration.
