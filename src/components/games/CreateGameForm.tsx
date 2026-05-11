@@ -77,7 +77,7 @@ export function CreateGameForm() {
         name: pendingGameName.trim() || `${selectedTeam?.name ?? "Franchise"} Franchise Save`,
         selectedTeamId: pendingSelectedTeamId,
         seasonYear: DEFAULT_SEASON_YEAR,
-        currentDate: new Date(`${DEFAULT_SEASON_YEAR}-10-22T00:00:00.000Z`),
+        simulationDate: new Date(`${DEFAULT_SEASON_YEAR}-10-22T00:00:00.000Z`),
       });
 
       finishCreate(createdGame.id);

@@ -73,7 +73,7 @@ export class SupabaseGameRepository implements GameRepository {
       name: row.name as string,
       selectedTeamId: row.selected_team_id as string,
       seasonYear: row.season_year as number,
-      currentDate: new Date(row.current_date as string),
+      simulationDate: new Date(row.simulation_date as string),
       status: row.status as Game["status"],
       deletedAt: row.deleted_at ? new Date(row.deleted_at as string) : undefined,
       createdAt: new Date(row.created_at as string),
@@ -88,7 +88,7 @@ export class SupabaseGameRepository implements GameRepository {
     if (entity.name !== undefined) row.name = entity.name;
     if (entity.selectedTeamId !== undefined) row.selected_team_id = entity.selectedTeamId;
     if (entity.seasonYear !== undefined) row.season_year = entity.seasonYear;
-    if (entity.currentDate !== undefined) row.current_date = entity.currentDate;
+    if (entity.simulationDate !== undefined) row.simulation_date = entity.simulationDate;
     if (entity.status !== undefined) row.status = entity.status;
     if (entity.deletedAt !== undefined) row.deleted_at = entity.deletedAt;
 

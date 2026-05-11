@@ -8,7 +8,7 @@ interface CreateGameInput {
   name: string;
   selectedTeamId: string;
   seasonYear: number;
-  currentDate: Date;
+  simulationDate: Date;
 }
 
 export function useCreateGame() {
@@ -27,14 +27,34 @@ export function useCreateGame() {
 
       const repository = new SupabaseGameRepository(supabase);
 
-      return repository.create({
+      // 1. Create game with initializing status
+      const game = await repository.create({
         userId: user.id,
         name: input.name,
         selectedTeamId: input.selectedTeamId,
         seasonYear: input.seasonYear,
-        currentDate: input.currentDate,
+        simulationDate: input.simulationDate,
         status: GAME_STATUS.INITIALIZING,
       });
+
+      // 2. Seed game data (player states + contracts) via SQL function
+      const { error: seedError } = await supabase.rpc("seed_game_data", {
+        p_game_id: game.id,
+        p_team_id: input.selectedTeamId,
+      });
+
+      if (seedError) {
+        // If seeding fails, soft-delete the game to avoid orphaned records
+        await repository.softDelete(game.id);
+        throw new Error(`Failed to seed game data: ${seedError.message}`);
+      }
+
+      // 3. Activate the game after successful seeding
+      const activatedGame = await repository.update(game.id, {
+        status: GAME_STATUS.ACTIVE,
+      });
+
+      return activatedGame;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["games"] });

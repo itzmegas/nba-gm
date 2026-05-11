@@ -15,7 +15,7 @@ export interface Game {
   name: string;
   selectedTeamId: string;
   seasonYear: number;
-  currentDate: Date;
+  simulationDate: Date;
   status: GameStatus;
   deletedAt?: Date;
   createdAt: Date;
@@ -31,7 +31,7 @@ export const gameSchema = z
     name: z.string({ error: "Game name is required" }).min(1).max(80),
     selectedTeamId: z.uuid(),
     seasonYear: z.number().int(),
-    currentDate: z.date(),
+    simulationDate: z.date(),
     status: z.enum(gameStatusValues),
     deletedAt: z.date().optional(),
     createdAt: z.date(),
