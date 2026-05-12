@@ -4,6 +4,7 @@ import { use } from "react";
 import { GameIdProvider } from "@/application/context/GameContext";
 import { useGame } from "@/application/hooks/games/useGame";
 import { DashboardHeader, DashboardSidebar } from "@/components/dashboard/layout-components";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 interface GameDashboardLayoutProps {
   children: React.ReactNode;
@@ -24,17 +25,17 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
 
   return (
     <GameIdProvider gameId={gameId}>
-      <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <SidebarProvider>
         <DashboardSidebar gameId={gameId} selectedTeamId={game.selectedTeamId} />
 
-        <div className="flex flex-col flex-1 overflow-hidden relative">
-          <DashboardHeader selectedTeamId={game.selectedTeamId} />
+        <SidebarInset>
+          <DashboardHeader gameId={gameId} selectedTeamId={game.selectedTeamId} />
 
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto w-full">{children}</div>
-          </main>
-        </div>
-      </div>
+          <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-7xl">{children}</div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
     </GameIdProvider>
   );
 }

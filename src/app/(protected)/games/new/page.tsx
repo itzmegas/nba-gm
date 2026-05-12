@@ -13,13 +13,17 @@ export default function NewGamePage() {
               BETA
             </span>
           </div>
-          <div className="text-sm font-medium text-muted-foreground">Nueva Partida</div>
+          <div className="text-sm font-medium text-muted-foreground">
+            Nueva Partida
+          </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
         <div className="space-y-2 text-center md:text-left">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight">Crear nueva simulación</h1>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight">
+            Crear nueva simulación
+          </h1>
           <p className="text-muted-foreground">
             Seleccioná la franquicia y empezá tu carrera como General Manager.
           </p>
