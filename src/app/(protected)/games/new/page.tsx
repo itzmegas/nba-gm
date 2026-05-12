@@ -7,7 +7,7 @@ export default function NewGamePage() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl font-black tracking-tighter text-primary">
-              THE ASSOCIATION
+              GM
             </span>
             <span className="text-xs font-medium bg-muted px-2 py-1 rounded-full text-muted-foreground hidden sm:inline-block">
               BETA

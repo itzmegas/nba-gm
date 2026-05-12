@@ -57,7 +57,10 @@ interface DashboardSidebarProps {
   selectedTeamId: string;
 }
 
-export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarProps) {
+export function DashboardSidebar({
+  gameId,
+  selectedTeamId,
+}: DashboardSidebarProps) {
   const pathname = usePathname();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
@@ -109,7 +112,11 @@ export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarPro
 
             return (
               <SidebarMenuItem key={href}>
-                <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={item.label}
+                >
                   <Link href={href}>
                     <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
@@ -124,7 +131,9 @@ export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarPro
       <SidebarFooter>
         <Button className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0">
           <Calendar className="h-4 w-4" />
-          <span className="group-data-[collapsible=icon]:hidden">Simular Día ▶</span>
+          <span className="group-data-[collapsible=icon]:hidden">
+            Simular Día ▶
+          </span>
         </Button>
       </SidebarFooter>
       <SidebarRail />
@@ -137,7 +146,10 @@ interface DashboardHeaderProps {
   selectedTeamId: string;
 }
 
-export function DashboardHeader({ gameId, selectedTeamId }: DashboardHeaderProps) {
+export function DashboardHeader({
+  gameId,
+  selectedTeamId,
+}: DashboardHeaderProps) {
   const pathname = usePathname();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
@@ -160,12 +172,15 @@ export function DashboardHeader({ gameId, selectedTeamId }: DashboardHeaderProps
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <div className="flex flex-1 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4 data-[orientation=vertical]:h-4" />
+        <Separator
+          orientation="vertical"
+          className="mr-2 h-4 data-[orientation=vertical]:h-4"
+        />
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href={dashboardBasePath}>The Association</Link>
+                <Link href={dashboardBasePath}>GM</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {!isHome && activeItem && (

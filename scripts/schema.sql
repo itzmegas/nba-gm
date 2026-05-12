@@ -1,4 +1,4 @@
--- NBA GM Simulator: "The Association"
+-- NBA GM Simulator: "GM"
 -- Initial SQL Schema
 
 -- Extensions

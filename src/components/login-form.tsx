@@ -3,13 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/infrastructure/supabase/client";
 import { cn } from "@/utils/utils";
 
-export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
+export function LoginForm({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   const router = useRouter();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -38,7 +52,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           return;
         }
 
-        setSuccess("Cuenta creada. Revisá tu email para confirmar, o probá entrar directamente.");
+        setSuccess(
+          "Cuenta creada. Revisá tu email para confirmar, o probá entrar directamente.",
+        );
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
@@ -62,11 +78,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">{isSignUp ? "Crear cuenta" : "Iniciar sesión"}</CardTitle>
+          <CardTitle className="text-xl">
+            {isSignUp ? "Crear cuenta" : "Iniciar sesión"}
+          </CardTitle>
           <CardDescription>
             {isSignUp
               ? "Registrate para empezar a simular"
-              : "Entrá a tu cuenta de The Association"}
+              : "Entrá a tu cuenta de Basketball GM"}
           </CardDescription>
         </CardHeader>
         <CardContent>
