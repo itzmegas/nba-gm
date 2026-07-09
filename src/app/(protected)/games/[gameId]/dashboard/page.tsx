@@ -41,7 +41,7 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
         </div>
 
         <div>
-          <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} />
+          <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
         </div>
 
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">

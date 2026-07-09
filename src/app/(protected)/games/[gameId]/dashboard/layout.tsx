@@ -29,7 +29,11 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
         <DashboardSidebar gameId={gameId} selectedTeamId={game.selectedTeamId} />
 
         <SidebarInset>
-          <DashboardHeader gameId={gameId} selectedTeamId={game.selectedTeamId} />
+          <DashboardHeader
+            gameId={gameId}
+            selectedTeamId={game.selectedTeamId}
+            seasonYear={game.seasonYear}
+          />
 
           <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-7xl">{children}</div>

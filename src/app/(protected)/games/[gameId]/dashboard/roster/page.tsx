@@ -8,6 +8,7 @@ import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeam } from "@/application/hooks/teams/useTeams";
 import { RosterTable } from "@/components/roster/roster-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatSeasonLabel } from "@/domain/entities/Season";
 import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 const SALARY_CAP = 140_000_000;
@@ -49,8 +50,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
           Roster
         </h1>
         <p className="text-muted-foreground">
-          {team?.city} {team?.name} — Temporada {game.seasonYear}-
-          {String(game.seasonYear + 1).slice(-2)}
+          {team?.city} {team?.name} — Temporada {formatSeasonLabel(game.seasonYear)}
         </p>
       </div>
 
@@ -112,7 +112,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
         </CardHeader>
         <CardContent className="p-0 pb-4">
           {rosterPlayers && rosterPlayers.length > 0 ? (
-            <RosterTable gameId={gameId} players={rosterPlayers} />
+            <RosterTable gameId={gameId} players={rosterPlayers} seasonYear={game.seasonYear} />
           ) : (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               No hay jugadores en el roster.

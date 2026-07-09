@@ -11,12 +11,16 @@ import {
 import Link from "next/link";
 import { use } from "react";
 import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts";
+import { useGame } from "@/application/hooks/games/useGame";
 import { usePlayer } from "@/application/hooks/players/usePlayers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const CURRENT_SEASON_YEAR = 2025;
+import {
+  formatSalarySeasonLabel,
+  getYearsRemaining,
+  isCurrentSalarySeason,
+} from "@/domain/entities/Season";
 
 function formatSalary(amount: number | null | undefined): string {
   if (!amount) return "—";
@@ -36,10 +40,11 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
   const gameId = resolvedParams.gameId;
   const playerId = resolvedParams.id;
 
+  const { data: game, isLoading: isLoadingGame } = useGame(gameId);
   const { data: player, isLoading: isLoadingPlayer } = usePlayer(playerId);
   const { data: contract, isLoading: isLoadingContract } = useContractsByPlayer(gameId, playerId);
 
-  if (isLoadingPlayer || isLoadingContract) {
+  if (isLoadingGame || isLoadingPlayer || isLoadingContract) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="flex items-center gap-4">
@@ -52,7 +57,7 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
     );
   }
 
-  if (!player) {
+  if (!game || !player) {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
         <UserIcon className="h-16 w-16 text-muted-foreground opacity-50" />
@@ -64,7 +69,7 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
     );
   }
 
-  const yearsLeft = contract ? Math.max(0, contract.endYear - CURRENT_SEASON_YEAR + 1) : 0;
+  const yearsLeft = contract ? getYearsRemaining(game.seasonYear, contract.endYear) : 0;
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -180,24 +185,31 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
                             yearSalary.salary !== null &&
                             yearSalary.year <= contract.endYear
                         )
-                        .map((yearSalary) => (
-                          <tr
-                            key={yearSalary.year}
-                            className={
-                              yearSalary.year === CURRENT_SEASON_YEAR ? "bg-primary/5" : ""
-                            }
-                          >
-                            <td className="px-4 py-3 font-medium">
-                              {yearSalary.year}-{String(yearSalary.year + 1).slice(-2)}
-                              {yearSalary.year === CURRENT_SEASON_YEAR && (
-                                <span className="ml-2 text-xs font-sans text-primary">Actual</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {formatSalary(yearSalary.salary)}
-                            </td>
-                          </tr>
-                        ))}
+                        .map((yearSalary) => {
+                          const isCurrentSeason = isCurrentSalarySeason(
+                            game.seasonYear,
+                            yearSalary.year
+                          );
+
+                          return (
+                            <tr
+                              key={yearSalary.year}
+                              className={isCurrentSeason ? "bg-primary/5" : ""}
+                            >
+                              <td className="px-4 py-3 font-medium">
+                                {formatSalarySeasonLabel(yearSalary.year)}
+                                {isCurrentSeason && (
+                                  <span className="ml-2 text-xs font-sans text-primary">
+                                    Actual
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatSalary(yearSalary.salary)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

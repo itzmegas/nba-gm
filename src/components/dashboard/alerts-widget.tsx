@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface AlertsWidgetProps {
   gameId: string;
   teamId: string;
+  seasonYear: number;
 }
 
-export function AlertsWidget({ gameId, teamId }: AlertsWidgetProps) {
+export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) {
   const { data: contracts, isLoading: isLoadingContracts } = useTeamContracts(gameId, teamId);
   const { data: players, isLoading: isLoadingPlayers } = usePlayersByTeam(teamId);
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = seasonYear;
 
   if (isLoadingContracts || isLoadingPlayers) {
     return (

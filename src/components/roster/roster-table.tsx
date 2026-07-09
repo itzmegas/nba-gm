@@ -4,8 +4,11 @@ import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { Badge } from "@/components/ui/badge";
-
-const CURRENT_SEASON_YEAR = 2025;
+import {
+  formatSalarySeasonLabel,
+  getSalarySeasonYears,
+  getYearsRemaining,
+} from "@/domain/entities/Season";
 
 function formatSalary(amount: number | null | undefined): string {
   if (!amount) return "—";
@@ -15,16 +18,16 @@ function formatSalary(amount: number | null | undefined): string {
   return `$${amount.toLocaleString()}`;
 }
 
-function getContractYearsLeft(endYear: number): number {
-  return Math.max(0, endYear - CURRENT_SEASON_YEAR + 1);
+function getContractYearsLeft(baseSeasonYear: number, endYear: number): number {
+  return getYearsRemaining(baseSeasonYear, endYear);
 }
 
-function getContractStatus(rosterPlayer: RosterPlayer) {
+function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number) {
   const { contract } = rosterPlayer;
   if (!contract)
     return { label: "Sin Contrato", variant: "destructive" as const, icon: AlertTriangle };
 
-  const yearsLeft = getContractYearsLeft(contract.endYear);
+  const yearsLeft = getContractYearsLeft(baseSeasonYear, contract.endYear);
 
   if (contract.isPlayerOption)
     return { label: "Player Option", variant: "secondary" as const, icon: Clock };
@@ -38,8 +41,14 @@ function getContractStatus(rosterPlayer: RosterPlayer) {
   return { label: "Guaranteed", variant: "default" as const, icon: CheckCircle2 };
 }
 
-function ContractYearsBar({ endYear }: { endYear: number }) {
-  const yearsLeft = getContractYearsLeft(endYear);
+function ContractYearsBar({
+  baseSeasonYear,
+  endYear,
+}: {
+  baseSeasonYear: number;
+  endYear: number;
+}) {
+  const yearsLeft = getContractYearsLeft(baseSeasonYear, endYear);
   const maxYears = 5;
   const pct = Math.min((yearsLeft / maxYears) * 100, 100);
 
@@ -60,10 +69,13 @@ function ContractYearsBar({ endYear }: { endYear: number }) {
 interface RosterTableProps {
   gameId: string;
   players: RosterPlayer[];
+  seasonYear: number;
 }
 
-export function RosterTable({ gameId, players }: RosterTableProps) {
+export function RosterTable({ gameId, players, seasonYear }: RosterTableProps) {
   const router = useRouter();
+
+  const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
 
   const sorted = [...players].sort((a, b) => {
     const sa = a.contract?.salaryY1 ?? 0;
@@ -83,10 +95,10 @@ export function RosterTable({ gameId, players }: RosterTableProps) {
               Alt
             </th>
             <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28">
-              Salario 25-26
+              Salario {formatSalarySeasonLabel(salarySeasonYears[0])}
             </th>
             <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28 hidden lg:table-cell">
-              Salario 26-27
+              Salario {formatSalarySeasonLabel(salarySeasonYears[1])}
             </th>
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-28 hidden md:table-cell">
               Duración
@@ -96,7 +108,7 @@ export function RosterTable({ gameId, players }: RosterTableProps) {
         </thead>
         <tbody>
           {sorted.map(({ player, contract }, idx) => {
-            const status = getContractStatus({ player, contract });
+            const status = getContractStatus({ player, contract }, seasonYear);
             const StatusIcon = status.icon;
             const isEven = idx % 2 === 0;
 
@@ -155,7 +167,7 @@ export function RosterTable({ gameId, players }: RosterTableProps) {
                 <td className="py-3 px-4 hidden md:table-cell">
                   {contract ? (
                     <div className="flex justify-center">
-                      <ContractYearsBar endYear={contract.endYear} />
+                      <ContractYearsBar baseSeasonYear={seasonYear} endYear={contract.endYear} />
                     </div>
                   ) : (
                     <span className="text-muted-foreground text-center block">—</span>
