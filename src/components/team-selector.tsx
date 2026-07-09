@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, ChevronRight, MapPin, Search } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTeams } from "@/application/hooks/teams/useTeams";
@@ -145,10 +146,12 @@ export function TeamSelector() {
                     {/* Placeholder para logo - reemplazaremos src con team.logoUrl cuando exista */}
                     <div className="h-40 w-40 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-background shadow-sm group-hover:scale-105 transition-transform">
                       {team.logoUrl ? (
-                        <img
+                        <Image
                           src={team.logoUrl}
                           alt={`Logo ${team.name}`}
-                          className="w-full h-full object-contain p-2"
+                          width={160}
+                          height={160}
+                          className="h-full w-full object-contain p-2"
                         />
                       ) : (
                         <span className="text-2xl font-black text-muted-foreground opacity-50">

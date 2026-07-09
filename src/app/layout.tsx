@@ -18,8 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "NBA GM Simulator",
-  description:
-    "Advanced NBA General Manager Simulator. Take control of your franchise.",
+  description: "Advanced NBA General Manager Simulator. Take control of your franchise.",
 };
 
 export default function RootLayout({
@@ -29,9 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ReactQueryProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </ReactQueryProvider>
