@@ -21,12 +21,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
-const DEFAULT_SEASON_YEAR = 2025;
+import {
+  DEFAULT_SEASON_ERA_ID,
+  getSeasonEraById,
+  SEASON_ERAS,
+  type SeasonEraId,
+} from "@/domain/entities/SeasonEra";
 
 export function CreateGameForm() {
   const router = useRouter();
   const [localError, setLocalError] = useState<string | null>(null);
+  const [selectedSeasonEraId, setSelectedSeasonEraId] =
+    useState<SeasonEraId>(DEFAULT_SEASON_ERA_ID);
 
   const pendingSelectedTeamId = useGameStore(selectPendingSelectedTeamId);
   const pendingGameName = useGameStore(selectPendingGameName);
@@ -62,6 +68,7 @@ export function CreateGameForm() {
     }) ?? [];
 
   const selectedTeam = teams?.find((team) => team.id === pendingSelectedTeamId);
+  const selectedSeasonEra = getSeasonEraById(selectedSeasonEraId);
 
   const handleCreateGame = async () => {
     if (!pendingSelectedTeamId) {
@@ -76,8 +83,8 @@ export function CreateGameForm() {
       const createdGame = await createGameMutation.mutateAsync({
         name: pendingGameName.trim() || `${selectedTeam?.name ?? "Franchise"} Franchise Save`,
         selectedTeamId: pendingSelectedTeamId,
-        seasonYear: DEFAULT_SEASON_YEAR,
-        simulationDate: new Date(`${DEFAULT_SEASON_YEAR}-10-22T00:00:00.000Z`),
+        seasonYear: selectedSeasonEra.seasonYear,
+        simulationDate: new Date(selectedSeasonEra.initialSimulationDate),
       });
 
       finishCreate(createdGame.id);
@@ -111,7 +118,7 @@ export function CreateGameForm() {
   return (
     <div className="space-y-8 w-full max-w-6xl mx-auto animate-in fade-in duration-500 pb-28">
       <Card className="border-border/50 bg-card/50">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6 space-y-6">
           <div className="space-y-1">
             <h2 className="text-xl font-bold tracking-tight">Configuración de Partida</h2>
             <p className="text-sm text-muted-foreground">
@@ -126,6 +133,40 @@ export function CreateGameForm() {
             placeholder={selectedTeam ? `${selectedTeam.name} Dynasty Save` : "Mi partida NBA"}
             maxLength={80}
           />
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Era de inicio</h3>
+              <p className="text-sm text-muted-foreground">
+                Elegí la fecha y temporada base para la partida.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {SEASON_ERAS.map((era) => {
+                const isSelected = selectedSeasonEraId === era.id;
+
+                return (
+                  <button
+                    key={era.id}
+                    type="button"
+                    onClick={() => setSelectedSeasonEraId(era.id)}
+                    className={`rounded-lg border p-4 text-left transition-all hover:border-primary/50 ${isSelected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border bg-background/50"}`}
+                  >
+                    <span className="block font-semibold">{era.name}</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {era.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-muted-foreground">
+              Las eras históricas usan el dataset canónico actual; todavía no incluyen rosters,
+              contratos, límite salarial ni reglas históricas precisas.
+            </p>
+          </div>
 
           {(localError || createError) && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

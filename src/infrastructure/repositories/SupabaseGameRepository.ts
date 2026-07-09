@@ -88,10 +88,16 @@ export class SupabaseGameRepository implements GameRepository {
     if (entity.name !== undefined) row.name = entity.name;
     if (entity.selectedTeamId !== undefined) row.selected_team_id = entity.selectedTeamId;
     if (entity.seasonYear !== undefined) row.season_year = entity.seasonYear;
-    if (entity.simulationDate !== undefined) row.simulation_date = entity.simulationDate;
+    if (entity.simulationDate !== undefined) {
+      row.simulation_date = formatDateOnly(entity.simulationDate);
+    }
     if (entity.status !== undefined) row.status = entity.status;
     if (entity.deletedAt !== undefined) row.deleted_at = entity.deletedAt;
 
     return row;
   }
+}
+
+function formatDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }

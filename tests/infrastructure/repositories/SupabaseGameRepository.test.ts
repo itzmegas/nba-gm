@@ -100,7 +100,7 @@ const baseGameRow = {
   name: "Asociación Test",
   selected_team_id: UUIDS.teamId,
   season_year: 2026,
-  simulation_date: "2026-10-01T00:00:00.000Z",
+  simulation_date: "2026-10-01",
   status: GAME_STATUS.ACTIVE,
   deleted_at: null,
   created_at: "2026-01-01T00:00:00.000Z",
@@ -132,8 +132,10 @@ describe("SupabaseGameRepository", () => {
     expect(result?.id).toBe(UUIDS.gameId);
     expect(result?.userId).toBe(UUIDS.userId);
     expect(result?.selectedTeamId).toBe(UUIDS.teamId);
+    expect(result?.seasonYear).toBe(2026);
     expect(result?.status).toBe(GAME_STATUS.ACTIVE);
     expect(result?.simulationDate).toBeInstanceOf(Date);
+    expect(result?.simulationDate.toISOString().slice(0, 10)).toBe(baseGameRow.simulation_date);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].filters).toContainEqual({ column: "id", value: UUIDS.gameId, operator: "eq" });
@@ -209,6 +211,7 @@ describe("SupabaseGameRepository", () => {
       name: "Nueva Asociación",
       selected_team_id: UUIDS.teamId,
       season_year: 2026,
+      simulation_date: "2026-10-01",
       status: GAME_STATUS.INITIALIZING,
     });
   });
