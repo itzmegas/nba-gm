@@ -57,12 +57,12 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getActiveContracts(gameId: string): Promise<Contract[]> {
-    const currentYear = new Date().getFullYear();
+    const seasonYear = await this.getGameSeasonYear(gameId);
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
       .eq("game_id", gameId)
-      .gte("end_year", currentYear)
+      .gte("end_year", seasonYear)
       .order("end_year", { ascending: true });
 
     if (error) throw new Error(error.message);
@@ -114,6 +114,18 @@ export class SupabaseContractRepository implements ContractRepository {
       .eq("id", id);
 
     if (error) throw new Error(error.message);
+  }
+
+  private async getGameSeasonYear(gameId: string): Promise<number> {
+    const { data, error } = await this.client
+      .from("games")
+      .select("season_year")
+      .eq("id", gameId)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return (data as Record<string, unknown>).season_year as number;
   }
 
   private mapToEntity(row: Record<string, unknown>): Contract {

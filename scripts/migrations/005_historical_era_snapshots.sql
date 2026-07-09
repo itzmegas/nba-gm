@@ -1,36 +1,79 @@
--- Migration 002: Backfill / seed data for new games
+-- Migration 005: Historical era snapshots
 --
 -- Purpose:
---   Define a reusable seeding function for Phase 2 of game-model migration.
---   In this project stage, "backfill" means seeding data when a user creates
---   their first game (fresh project, no legacy production data).
+--   Add immutable historical roster and contract template tables, then update
+--   seed_game_data so a new game can copy season-specific templates when they
+--   exist. The modern/default path remains a safe fallback based on current
+--   canonical player team assignments and unscoped contract seed rows.
 --
--- Prerequisites:
---   - `games`, `players`, `contracts`, and `game_player_states` tables exist.
---   - Phase 1 schema is already present in `scripts/schema.sql`.
---   - Historical template tables exist when historical snapshots are enabled.
---
--- Behavior:
---   seed_game_data(p_game_id, p_team_id)
---     1) Reads the created game's `season_year`.
---     2) Seeds from historical templates when that season has a snapshot.
---     3) Falls back to current canonical team assignments and unscoped seed
---        contracts when no historical snapshot exists.
---
--- IMPORTANT: These functions use SECURITY DEFINER so they execute with
--- the privilege of the function owner (postgres), bypassing RLS.
--- This is necessary because:
---   - The user creating a game needs to INSERT into game_player_states
---     and INSERT game-scoped contract copies.
---   - The integrity guard in seed_game_data verifies the game matches the
---     selected team before proceeding.
---
--- Rollback behavior (function included below):
---   rollback_seed_game_data(p_game_id)
---     - DELETE FROM contracts WHERE game_id = p_game_id;
---     - DELETE FROM game_player_states WHERE game_id = p_game_id;
+-- Rollback:
+--   DROP TABLE historical_contract_templates;
+--   DROP TABLE historical_roster_templates;
+--   Recreate the previous seed_game_data and rollback_seed_game_data definitions
+--   from scripts/migrations/002_backfill_game_data.sql before this migration.
 
 BEGIN;
+
+CREATE TABLE IF NOT EXISTS historical_roster_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    season_year INTEGER NOT NULL,
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE NOT NULL,
+    team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
+    position TEXT,
+    jersey_number TEXT,
+    roster_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT historical_roster_templates_season_player_unique UNIQUE (season_year, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS historical_contract_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    season_year INTEGER NOT NULL,
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE NOT NULL,
+    team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
+    start_year INTEGER NOT NULL,
+    end_year INTEGER NOT NULL,
+    salary_y1 BIGINT DEFAULT 0,
+    salary_y2 BIGINT DEFAULT 0,
+    salary_y3 BIGINT DEFAULT 0,
+    salary_y4 BIGINT DEFAULT 0,
+    salary_y5 BIGINT DEFAULT 0,
+    is_player_option BOOLEAN DEFAULT false,
+    is_team_option BOOLEAN DEFAULT false,
+    is_guaranteed BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT historical_contract_templates_year_check CHECK (end_year >= start_year),
+    CONSTRAINT historical_contract_templates_season_player_unique UNIQUE (season_year, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_season_year
+  ON historical_roster_templates(season_year);
+CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_team_id
+  ON historical_roster_templates(team_id);
+CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_season_year
+  ON historical_contract_templates(season_year);
+CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_team_id
+  ON historical_contract_templates(team_id);
+
+ALTER TABLE historical_roster_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historical_contract_templates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS historical_roster_templates_read_authenticated ON historical_roster_templates;
+CREATE POLICY historical_roster_templates_read_authenticated
+  ON historical_roster_templates
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS historical_contract_templates_read_authenticated ON historical_contract_templates;
+CREATE POLICY historical_contract_templates_read_authenticated
+  ON historical_contract_templates
+  FOR SELECT
+  TO authenticated
+  USING (true);
 
 CREATE OR REPLACE FUNCTION seed_game_data(p_game_id UUID, p_team_id UUID)
 RETURNS VOID

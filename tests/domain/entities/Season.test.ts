@@ -6,7 +6,12 @@ import {
   getYearsRemaining,
   isCurrentSalarySeason,
 } from "@/domain/entities/Season";
-import { DEFAULT_SEASON_ERA_ID, getSeasonEraById, SEASON_ERAS } from "@/domain/entities/SeasonEra";
+import {
+  DEFAULT_SEASON_ERA_ID,
+  getSeasonEraById,
+  SEASON_ERA_IDS,
+  SEASON_ERAS,
+} from "@/domain/entities/SeasonEra";
 
 describe("Season helpers", () => {
   describe("formatSeasonLabel", () => {
@@ -55,7 +60,11 @@ describe("Season era catalog", () => {
     expect(SEASON_ERAS).toContain(defaultEra);
   });
 
-  it("marks catalog entries as non-historical datasets", () => {
-    expect(SEASON_ERAS.every((era) => era.isHistoricalDatasetAvailable === false)).toBe(true);
+  it("marks the LeBron era as a historical dataset", () => {
+    expect(getSeasonEraById(SEASON_ERA_IDS.LEBRON).isHistoricalDatasetAvailable).toBe(true);
+  });
+
+  it("keeps the Jordan era visual-only", () => {
+    expect(getSeasonEraById(SEASON_ERA_IDS.JORDAN).isHistoricalDatasetAvailable).toBe(false);
   });
 });

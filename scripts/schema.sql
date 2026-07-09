@@ -109,6 +109,42 @@ CREATE TABLE IF NOT EXISTS game_player_states (
     CONSTRAINT game_player_states_game_player_unique UNIQUE (game_id, player_id)
 );
 
+-- 7. Historical template tables
+CREATE TABLE IF NOT EXISTS historical_roster_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    season_year INTEGER NOT NULL,
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE NOT NULL,
+    team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
+    position TEXT,
+    jersey_number TEXT,
+    roster_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT historical_roster_templates_season_player_unique UNIQUE (season_year, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS historical_contract_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    season_year INTEGER NOT NULL,
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE NOT NULL,
+    team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
+    start_year INTEGER NOT NULL,
+    end_year INTEGER NOT NULL,
+    salary_y1 BIGINT DEFAULT 0,
+    salary_y2 BIGINT DEFAULT 0,
+    salary_y3 BIGINT DEFAULT 0,
+    salary_y4 BIGINT DEFAULT 0,
+    salary_y5 BIGINT DEFAULT 0,
+    is_player_option BOOLEAN DEFAULT false,
+    is_team_option BOOLEAN DEFAULT false,
+    is_guaranteed BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT historical_contract_templates_year_check CHECK (end_year >= start_year),
+    CONSTRAINT historical_contract_templates_season_player_unique UNIQUE (season_year, player_id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_players_team_id ON players(team_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_player_id ON contracts(player_id);
@@ -122,11 +158,17 @@ CREATE INDEX IF NOT EXISTS idx_games_user_status ON games(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_game_player_states_game_id ON game_player_states(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_player_states_game_team_id ON game_player_states(game_id, team_id);
 CREATE INDEX IF NOT EXISTS idx_game_player_states_game_player_id ON game_player_states(game_id, player_id);
+CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_season_year ON historical_roster_templates(season_year);
+CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_team_id ON historical_roster_templates(team_id);
+CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_season_year ON historical_contract_templates(season_year);
+CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_team_id ON historical_contract_templates(team_id);
 
 -- RLS
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_player_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historical_roster_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historical_contract_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 
@@ -289,6 +331,20 @@ CREATE POLICY teams_read_authenticated
 DROP POLICY IF EXISTS players_read_authenticated ON players;
 CREATE POLICY players_read_authenticated
   ON players
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS historical_roster_templates_read_authenticated ON historical_roster_templates;
+CREATE POLICY historical_roster_templates_read_authenticated
+  ON historical_roster_templates
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS historical_contract_templates_read_authenticated ON historical_contract_templates;
+CREATE POLICY historical_contract_templates_read_authenticated
+  ON historical_contract_templates
   FOR SELECT
   TO authenticated
   USING (true);

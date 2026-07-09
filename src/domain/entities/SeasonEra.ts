@@ -31,15 +31,15 @@ export const SEASON_ERAS = [
   {
     id: SEASON_ERA_IDS.LEBRON,
     name: `Base era LeBron (${formatSeasonLabel(2010)})`,
-    description: "Usa una fecha pasada con el dataset canónico actual.",
+    description: "Usa rosters reales de 2010-11 con contratos aproximados generados.",
     seasonYear: 2010,
     initialSimulationDate: "2010-10-26T00:00:00.000Z",
-    isHistoricalDatasetAvailable: false,
+    isHistoricalDatasetAvailable: true,
   },
   {
     id: SEASON_ERA_IDS.JORDAN,
     name: `Base era Jordan (${formatSeasonLabel(1995)})`,
-    description: "Usa una fecha clásica con el dataset canónico actual.",
+    description: "Usa una fecha clásica visual con el dataset canónico actual.",
     seasonYear: 1995,
     initialSimulationDate: "1995-11-03T00:00:00.000Z",
     isHistoricalDatasetAvailable: false,
