@@ -44,3 +44,5 @@ next-env.d.ts
 .pi/
 .pi-subagents/
 .codegraph/
+__pycache__/
+*.pyc

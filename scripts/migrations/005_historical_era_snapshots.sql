@@ -79,6 +79,7 @@ CREATE OR REPLACE FUNCTION seed_game_data(p_game_id UUID, p_team_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_season_year INTEGER;
@@ -89,11 +90,12 @@ BEGIN
   INTO v_season_year
   FROM games g
   WHERE g.id = p_game_id
-    AND g.selected_team_id = p_team_id;
+    AND g.selected_team_id = p_team_id
+    AND g.user_id = auth.uid();
 
   IF v_season_year IS NULL THEN
     RAISE EXCEPTION
-      'seed_game_data aborted: game % does not exist or does not match selected_team_id %',
+      'seed_game_data aborted: game % does not exist, is not owned by the caller, or does not match selected_team_id %',
       p_game_id,
       p_team_id;
   END IF;
@@ -104,6 +106,12 @@ BEGIN
     WHERE hrt.season_year = v_season_year
   )
   INTO v_has_historical_templates;
+
+  IF v_season_year = 2010 AND NOT v_has_historical_templates THEN
+    RAISE EXCEPTION
+      'seed_game_data aborted: historical templates for season % are not loaded',
+      v_season_year;
+  END IF;
 
   IF v_has_historical_templates THEN
     -- 1) Seed one state row per player from the historical roster snapshot.
@@ -242,8 +250,18 @@ CREATE OR REPLACE FUNCTION rollback_seed_game_data(p_game_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM games g
+    WHERE g.id = p_game_id
+      AND g.user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'rollback_seed_game_data aborted: game % is not owned by the caller', p_game_id;
+  END IF;
+
   DELETE FROM contracts
   WHERE game_id = p_game_id;
 
@@ -251,6 +269,11 @@ BEGIN
   WHERE game_id = p_game_id;
 END;
 $$;
+
+REVOKE ALL ON FUNCTION seed_game_data(UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION seed_game_data(UUID, UUID) TO authenticated;
+REVOKE ALL ON FUNCTION rollback_seed_game_data(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION rollback_seed_game_data(UUID) TO authenticated;
 
 COMMIT;
 

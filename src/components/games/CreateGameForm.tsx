@@ -163,8 +163,9 @@ export function CreateGameForm() {
             </div>
 
             <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-muted-foreground">
-              Las eras históricas usan el dataset canónico actual; todavía no incluyen rosters,
-              contratos, límite salarial ni reglas históricas precisas.
+              {selectedSeasonEra.isHistoricalDatasetAvailable
+                ? "Esta era usa rosters históricos reales con contratos aproximados; el límite salarial y las reglas siguen siendo modernas."
+                : "Esta era usa el dataset canónico actual como referencia visual; todavía no incluye rosters, contratos, límite salarial ni reglas históricas precisas."}
             </p>
           </div>
 
