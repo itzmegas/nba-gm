@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     player_id UUID REFERENCES players(id) ON DELETE CASCADE NOT NULL,
     team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
-    game_id UUID,
+    game_id UUID NOT NULL,
     start_year INTEGER NOT NULL, -- e.g., 2024
     end_year INTEGER NOT NULL,   -- e.g., 2028
     salary_y1 BIGINT DEFAULT 0,

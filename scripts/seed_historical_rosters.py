@@ -197,7 +197,7 @@ def build_player_payload(row: RestRow) -> RestRow:
 def upsert_players(players: list[RestRow]) -> dict[int, str]:
     player_ids: dict[int, str] = {}
     query = urlencode({"on_conflict": "nba_id"})
-    headers = {"Prefer": "resolution=merge-duplicates,return=representation"}
+    headers = {"Prefer": "resolution=ignore-duplicates,return=representation"}
 
     for batch in chunks(players, BATCH_SIZE):
         rows = request_json("POST", f"players?{query}", batch, headers)
