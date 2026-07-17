@@ -63,14 +63,48 @@ Multiple games created from the same season templates MUST receive isolated stat
 
 ### Requirement: HIST-006 Era metadata
 
-`SeasonEra` metadata MUST mark 2010/LeBron as backed by historical data and 1995/Jordan as visual-only until templates are added. User-facing copy MUST distinguish real rosters from approximate contracts.
+`SeasonEra` metadata MUST mark 2010/LeBron and 1995/Jordan as backed by historical data once templates are loaded. User-facing copy MUST distinguish real rosters from approximate contracts.
 
-#### Scenario: Describe historical fidelity
+#### Scenario: Describe 2010 historical fidelity
 
 - GIVEN a user views or selects the 2010 era
 - THEN the UI MUST describe real 2010-11 rosters with approximate generated contracts
 - AND it MUST NOT promise exact historical salaries, contract terms, CBA rules, or cap rules.
 
+#### Scenario: Describe 1995 historical fidelity
+
+- GIVEN a user views or selects the 1995 era
+- THEN the UI MUST describe real 1995-96 rosters with approximate generated contracts
+- AND it MUST NOT promise exact historical salaries, contract terms, CBA rules, or cap rules.
+
 ### Requirement: HIST-007 Architecture boundaries
 
 The implementation MUST preserve Clean/Hexagonal boundaries: domain remains pure TypeScript; SQL and migrations own persistence; scripts own NBA ingestion and contract generation; and presentation MUST NOT learn SQL details.
+
+### Requirement: HIST-008 Fail-closed guard for historical seasons
+
+`seed_game_data` MUST fail closed for every season declared historical in `SeasonEra` when roster and contract templates are not loaded. The error MUST direct the operator to run the corresponding era loader before creating games in that season.
+
+#### Scenario: Create a 1995 game without templates
+
+- GIVEN no 1995 historical roster or contract templates exist
+- WHEN a user attempts to create a 1995/Jordan game
+- THEN `seed_game_data` MUST raise an exception
+- AND the error MUST indicate that 1995 templates are not loaded and direct the operator to run `scripts/seed_jordan_rosters.py`.
+
+#### Scenario: Create a 1995 game with templates
+
+- GIVEN 1995 roster and contract templates exist
+- WHEN a user creates a 1995/Jordan game
+- THEN the game MUST receive 1995 roster membership and new game-scoped approximate contracts
+- AND existing roster and dashboard reads MUST continue to use game-scoped data.
+
+### Requirement: HIST-009 Approximate contract truthfulness
+
+All generated historical contracts MUST be labeled or documented as approximate. Product copy, comments, and runbooks MUST NOT present generated salaries as exact historical values.
+
+#### Scenario: Review 1995 contract generation
+
+- GIVEN a generated 1995 historical contract template
+- THEN its salary values MUST fall within the era-calibrated tier ranges defined for the 1995-96 salary cap context
+- AND the loader source code or runbook MUST state that values are approximate and not real CBA contracts.
