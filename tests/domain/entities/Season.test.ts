@@ -64,7 +64,14 @@ describe("Season era catalog", () => {
     expect(getSeasonEraById(SEASON_ERA_IDS.LEBRON).isHistoricalDatasetAvailable).toBe(true);
   });
 
-  it("keeps the Jordan era visual-only", () => {
-    expect(getSeasonEraById(SEASON_ERA_IDS.JORDAN).isHistoricalDatasetAvailable).toBe(false);
+  it("marks the Jordan era as a historical dataset", () => {
+    expect(getSeasonEraById(SEASON_ERA_IDS.JORDAN).isHistoricalDatasetAvailable).toBe(true);
+  });
+
+  it("describes the Jordan era with real rosters and approximate contracts", () => {
+    const jordanEra = getSeasonEraById(SEASON_ERA_IDS.JORDAN);
+
+    expect(jordanEra.description).toContain("1995-96");
+    expect(jordanEra.description.toLowerCase()).toContain("aproximados");
   });
 });

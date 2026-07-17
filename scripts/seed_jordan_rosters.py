@@ -19,38 +19,52 @@ from historical_loader_core import (
 
 load_dotenv(".env.local")
 
-HISTORICAL_SEASON = "2010-11"
-SEASON_YEAR = 2010
+HISTORICAL_SEASON = "1995-96"
+SEASON_YEAR = 1995
 
-SUPERSTAR_PLAYER_NBA_IDS = {
-    977,  # Kobe Bryant
-    1495,  # Tim Duncan
-    1717,  # Dirk Nowitzki
-    2200,  # Pau Gasol
-    2544,  # LeBron James
-    2548,  # Dwyane Wade
-    2730,  # Dwight Howard
-    201142,  # Kevin Durant
-    201565,  # Derrick Rose
-}
-
-STAR_PLAYER_NBA_IDS = {
-    708,  # Kevin Garnett
-    959,  # Steve Nash
-    101108,  # Chris Paul
-    200746,  # LaMarcus Aldridge
-    201566,  # Russell Westbrook
-    201939,  # Stephen Curry
-    2546,  # Carmelo Anthony
-}
-
+# 1995-96 salary cap was ~$23M. Tiers are era-calibrated approximations
+# (not exact historical contracts) used to generate deterministic templates.
 SALARY_TIERS = {
-    "superstar": (14_500_000, 18_500_000),
-    "star": (9_500_000, 14_000_000),
-    "starter": (4_500_000, 8_500_000),
-    "rotation": (1_500_000, 4_000_000),
-    "bench": (850_000, 1_400_000),
-    "rookie": (473_604, 1_600_000),
+    "superstar": (3_000_000, 4_500_000),
+    "star": (2_000_000, 3_000_000),
+    "starter": (1_000_000, 2_000_000),
+    "rotation": (500_000, 1_000_000),
+    "bench": (300_000, 500_000),
+    "rookie": (200_000, 350_000),
+}
+
+# MVP-caliber and top-tier franchise players for 1995-96.
+SUPERSTAR_PLAYER_NBA_IDS = {
+    893,  # Michael Jordan
+    937,  # Scottie Pippen
+    895,  # Dennis Rodman
+    252,  # Karl Malone
+    304,  # John Stockton
+    165,  # Hakeem Olajuwon
+    185,  # Charles Barkley
+    151,  # Patrick Ewing
+    406,  # Shaquille O'Neal
+    764,  # David Robinson
+}
+
+# All-Star / franchise-second players for 1995-96.
+STAR_PLAYER_NBA_IDS = {
+    280,  # Anfernee Hardaway
+    133,  # Clyde Drexler
+    207,  # Tim Hardaway
+    255,  # Grant Hill
+    385,  # Shawn Kemp
+    368,  # Gary Payton
+    397,  # Reggie Miller
+    297,  # Alonzo Mourning
+    87,  # Dikembe Mutombo
+    399,  # Dominique Wilkins
+    913,  # Mitch Richmond
+    268,  # Detlef Schrempf
+    467,  # Jason Kidd
+    452,  # Vin Baker
+    307,  # Latrell Sprewell
+    708,  # Kevin Garnett (rookie scale outlier)
 }
 
 
@@ -119,7 +133,7 @@ def main() -> None:
     print(f"Upserting {len(contract_templates)} historical contract templates.")
     upsert_templates("historical_contract_templates", contract_templates)
 
-    print("Historical roster seed completed.")
+    print("Jordan era roster seed completed.")
 
 
 if __name__ == "__main__":

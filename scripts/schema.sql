@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS game_player_states (
     CONSTRAINT game_player_states_game_player_unique UNIQUE (game_id, player_id)
 );
 
--- 7. Historical template tables
+-- 7. Historical era snapshot templates (multi-era: 2010, 1995, etc.)
 CREATE TABLE IF NOT EXISTS historical_roster_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     season_year INTEGER NOT NULL,

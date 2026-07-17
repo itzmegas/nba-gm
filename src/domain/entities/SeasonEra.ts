@@ -39,10 +39,10 @@ export const SEASON_ERAS = [
   {
     id: SEASON_ERA_IDS.JORDAN,
     name: `Base era Jordan (${formatSeasonLabel(1995)})`,
-    description: "Usa una fecha clásica visual con el dataset canónico actual.",
+    description: "Usa rosters reales de 1995-96 con contratos aproximados generados.",
     seasonYear: 1995,
     initialSimulationDate: "1995-11-03T00:00:00.000Z",
-    isHistoricalDatasetAvailable: false,
+    isHistoricalDatasetAvailable: true,
   },
 ] as const satisfies readonly SeasonEra[];
 
