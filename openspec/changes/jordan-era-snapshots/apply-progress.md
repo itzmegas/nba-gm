@@ -37,8 +37,9 @@
 
 ## Manual Approval Gates / Live-Data Runbook
 
-- A1 Migration 008 application: **pending explicit approval**
-- A2 `scripts/seed_jordan_rosters.py` live-data run: **pending explicit approval**
+- A1 Migration 008 application: **✅ Confirmed by user** — migration 008 was applied successfully to Supabase.
+- A2 `scripts/seed_jordan_rosters.py` live-data run: **✅ Confirmed by user** — the 1995-96 loader ran.
+- A3 Exact target, command, and result record: **✅ Confirmed by user** — target was production Supabase; `python scripts/seed_jordan_rosters.py` was executed; a new 1995 game loaded period-correct rosters.
 
 ### Before running against a target Supabase project
 
@@ -55,10 +56,13 @@
 
 ## Remaining Work
 
-- Apply migration 008 to target Supabase after explicit approval.
-- Run `scripts/seed_jordan_rosters.py` against target Supabase after explicit approval.
-- Create a 1995 game and verify the roster shows Jordan-era players, not modern catalog.
+- Run final SDD verification and archive after it passes.
 
 ## Status
 
-**11/11 tasks complete across Slice 1 and Slice 2. Pending validation and manual live-data gates.**
+**11/11 implementation tasks and all three manual approval gates are complete. Production Supabase validation confirms a new 1995 game loads period-correct rosters.**
+
+## Live Validation Evidence
+
+- A new 1995 game was created and the user confirmed that period-correct rosters load.
+- No exact SQL counts, contract-isolation result, rollback execution, or other unreported validation is claimed.

@@ -42,17 +42,17 @@
 
 ### Tasks
 
-- [ ] 2.1 Create `scripts/seed_jordan_rosters.py` as a thin 1995-96 entry point that imports the shared core and declares 1995-specific season and salary-tier config.
-- [ ] 2.2 Encode 1995-era salary tiers and superstar/star player ID sets in the new loader without reusing 2010 salary values.
-- [ ] 2.3 Extend `openspec/changes/jordan-era-snapshots/specs/historical-era-snapshots/spec.md` with the 1995-96 scenario, fail-closed scenario, and approximate-contract truthfulness language.
-- [ ] 2.4 Add verification coverage for loader idempotency, safe identity reuse, and roster-template generation for the 1995 path.
-- [ ] 2.5 Prepare the live-data execution notes for running `scripts/seed_jordan_rosters.py` against the target Supabase project after explicit approval.
+- [x] 2.1 Create `scripts/seed_jordan_rosters.py` as a thin 1995-96 entry point that imports the shared core and declares 1995-specific season and salary-tier config.
+- [x] 2.2 Encode 1995-era salary tiers and superstar/star player ID sets in the new loader without reusing 2010 salary values.
+- [x] 2.3 Extend `openspec/changes/jordan-era-snapshots/specs/historical-era-snapshots/spec.md` with the 1995-96 scenario, fail-closed scenario, and approximate-contract truthfulness language.
+- [x] 2.4 Add verification coverage for loader idempotency, safe identity reuse, and roster-template generation for the 1995 path.
+- [x] 2.5 Prepare the live-data execution notes for running `scripts/seed_jordan_rosters.py` against the target Supabase project after explicit approval.
 
 ## Manual Approval / Live-Data Gates
 
-- [ ] A1 Obtain explicit approval before applying `scripts/migrations/008_jordan_era_snapshots.sql` to any shared or production Supabase environment.
-- [ ] A2 Obtain explicit approval before running `scripts/seed_jordan_rosters.py` against live NBA API data and the target Supabase project.
-- [ ] A3 Record the exact sandbox/production target, command, and result after the live run; do not treat this as automatic implementation.
+- [x] A1 Apply `scripts/migrations/008_jordan_era_snapshots.sql` to the target Supabase environment after approval. User reported that the migration applied successfully.
+- [x] A2 Run `scripts/seed_jordan_rosters.py` against live NBA API data and the target Supabase project after approval. User reported that the 1995-96 loader ran.
+- [x] A3 Record the exact sandbox/production target, command, and result after the live run; production Supabase was targeted, `python scripts/seed_jordan_rosters.py` was executed, and a new 1995 game loaded period-correct rosters.
 
 ## Review Workload Forecast
 
