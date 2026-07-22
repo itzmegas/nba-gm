@@ -7,6 +7,7 @@ import {
   DollarSign,
   Globe,
   LayoutDashboard,
+  LogOut,
   Settings,
   Users,
 } from "lucide-react";
@@ -24,6 +25,14 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -137,11 +146,17 @@ export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarPro
 
 interface DashboardHeaderProps {
   gameId: string;
+  gameName: string;
   selectedTeamId: string;
   seasonYear: number;
 }
 
-export function DashboardHeader({ gameId, selectedTeamId, seasonYear }: DashboardHeaderProps) {
+export function DashboardHeader({
+  gameId,
+  gameName,
+  selectedTeamId,
+  seasonYear,
+}: DashboardHeaderProps) {
   const pathname = usePathname();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
@@ -197,6 +212,23 @@ export function DashboardHeader({ gameId, selectedTeamId, seasonYear }: Dashboar
           orientation="vertical"
           className="hidden sm:block h-4 data-[orientation=vertical]:h-4"
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Menú de partida">
+              <LogOut className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel className="truncate">{gameName}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/">
+                <LogOut className="h-4 w-4" />
+                Salir y cambiar de partida
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="icon-sm" className="relative">
           <Bell className="h-4 w-4 text-muted-foreground" />
           <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-destructive" />

@@ -31,6 +31,7 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
         <SidebarInset>
           <DashboardHeader
             gameId={gameId}
+            gameName={game.name}
             selectedTeamId={game.selectedTeamId}
             seasonYear={game.seasonYear}
           />
