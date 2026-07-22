@@ -70,9 +70,10 @@ interface RosterTableProps {
   gameId: string;
   players: RosterPlayer[];
   seasonYear: number;
+  leagueTeamId?: string;
 }
 
-export function RosterTable({ gameId, players, seasonYear }: RosterTableProps) {
+export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: RosterTableProps) {
   const router = useRouter();
 
   const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
@@ -115,7 +116,11 @@ export function RosterTable({ gameId, players, seasonYear }: RosterTableProps) {
             return (
               <tr
                 key={player.id}
-                onClick={() => router.push(`/games/${gameId}/dashboard/player/${player.id}`)}
+                onClick={() =>
+                  router.push(
+                    `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                  )
+                }
                 className={`border-b border-border/30 transition-colors hover:bg-muted/40 cursor-pointer ${isEven ? "" : "bg-muted/10"}`}
               >
                 {/* Número camiseta */}

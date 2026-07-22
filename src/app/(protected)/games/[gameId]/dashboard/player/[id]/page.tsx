@@ -9,10 +9,12 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { use } from "react";
 import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { usePlayer } from "@/application/hooks/players/usePlayers";
+import { useTeams } from "@/application/hooks/teams/useTeams";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,12 +41,20 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
   const resolvedParams = use(params);
   const gameId = resolvedParams.gameId;
   const playerId = resolvedParams.id;
+  const searchParams = useSearchParams();
 
   const { data: game, isLoading: isLoadingGame } = useGame(gameId);
   const { data: player, isLoading: isLoadingPlayer } = usePlayer(playerId);
   const { data: contract, isLoading: isLoadingContract } = useContractsByPlayer(gameId, playerId);
+  const { data: teams, isLoading: isLoadingTeams } = useTeams();
+  const leagueTeamId = searchParams.get("leagueTeamId");
+  const validLeagueTeamId =
+    leagueTeamId && teams?.some((team) => team.id === leagueTeamId) ? leagueTeamId : null;
+  const backHref = validLeagueTeamId
+    ? `/games/${gameId}/dashboard/league?teamId=${encodeURIComponent(validLeagueTeamId)}`
+    : `/games/${gameId}/dashboard/roster`;
 
-  if (isLoadingGame || isLoadingPlayer || isLoadingContract) {
+  if (isLoadingGame || isLoadingPlayer || isLoadingContract || isLoadingTeams) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="flex items-center gap-4">
@@ -62,7 +72,7 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
       <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
         <UserIcon className="h-16 w-16 text-muted-foreground opacity-50" />
         <p className="text-xl font-medium text-muted-foreground">Jugador no encontrado</p>
-        <Link href={`/games/${gameId}/dashboard/roster`}>
+        <Link href={backHref}>
           <Button variant="outline">Volver al roster</Button>
         </Link>
       </div>
@@ -74,7 +84,7 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
   return (
     <div className="flex flex-col gap-6 pb-12">
       <div>
-        <Link href={`/games/${gameId}/dashboard/roster`}>
+        <Link href={backHref}>
           <Button variant="ghost" size="sm" className="gap-2 -ml-3 text-muted-foreground">
             <ArrowLeft className="h-4 w-4" />
             Volver al roster

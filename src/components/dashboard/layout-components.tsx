@@ -5,6 +5,7 @@ import {
   Bell,
   Calendar,
   DollarSign,
+  Globe,
   LayoutDashboard,
   Settings,
   Users,
@@ -47,6 +48,7 @@ interface DashboardNavItem {
 const NAV_ITEMS: DashboardNavItem[] = [
   { label: "Dashboard", path: "", icon: LayoutDashboard },
   { label: "Roster", path: "/roster", icon: Users },
+  { label: "Liga", path: "/league", icon: Globe },
   { label: "Traspasos", path: "/trades", icon: ArrowLeftRight },
   { label: "Agencia Libre", path: "/free-agency", icon: DollarSign },
   { label: "Calendario", path: "/schedule", icon: Calendar },
