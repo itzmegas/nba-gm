@@ -6,7 +6,7 @@ import { SupabaseGameRepository } from "@/infrastructure/repositories/SupabaseGa
 interface SupabaseQueryContext {
   table: string;
   operation: "select" | "insert" | "update" | "delete";
-  filters: Array<{ column: string; value: unknown; operator: "eq" | "gte" }>;
+  filters: Array<{ column: string; value: unknown; operator: "eq" | "neq" | "gte" }>;
   orderBy?: { column: string; ascending?: boolean };
   insertPayload?: unknown;
   updatePayload?: unknown;
@@ -46,6 +46,11 @@ class QueryBuilder {
 
   eq(column: string, value: unknown): QueryBuilder {
     this.context.filters.push({ column, value, operator: "eq" });
+    return this;
+  }
+
+  neq(column: string, value: unknown): QueryBuilder {
+    this.context.filters.push({ column, value, operator: "neq" });
     return this;
   }
 
@@ -158,10 +163,24 @@ describe("SupabaseGameRepository", () => {
       name: "Segunda Asociación",
       status: GAME_STATUS.INITIALIZING,
     };
+    const deletedRow = {
+      ...baseGameRow,
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      name: "Partida eliminada",
+      status: GAME_STATUS.DELETED,
+      deleted_at: "2026-01-03T00:00:00.000Z",
+    };
 
     const { repo, calls } = createRepository((context) => {
       if (context.table === "games" && context.selected && !context.single) {
-        return { data: [baseGameRow, secondRow], error: null };
+        const excludesDeleted = context.filters.some(
+          ({ column, operator, value }) =>
+            column === "status" && operator === "neq" && value === GAME_STATUS.DELETED
+        );
+        return {
+          data: excludesDeleted ? [baseGameRow, secondRow] : [baseGameRow, secondRow, deletedRow],
+          error: null,
+        };
       }
       return { data: [], error: null };
     });
@@ -176,6 +195,11 @@ describe("SupabaseGameRepository", () => {
       column: "user_id",
       value: UUIDS.userId,
       operator: "eq",
+    });
+    expect(calls[0].filters).toContainEqual({
+      column: "status",
+      value: GAME_STATUS.DELETED,
+      operator: "neq",
     });
   });
 

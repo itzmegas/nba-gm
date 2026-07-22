@@ -19,6 +19,7 @@ export class SupabaseGameRepository implements GameRepository {
       .from("games")
       .select("*")
       .eq("user_id", userId)
+      .neq("status", GAME_STATUS.DELETED)
       .order("updated_at", { ascending: false });
 
     if (error) throw new Error(error.message);

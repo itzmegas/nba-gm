@@ -3,6 +3,17 @@
 import { Calendar, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useDeleteGame } from "@/application/hooks/games/useDeleteGame";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Game } from "@/domain/entities/Game";
@@ -62,14 +73,39 @@ export function GameList({ games, teams }: GameListProps) {
                 <Link href={`/games/${game.id}/dashboard`} className="flex-1">
                   <Button className="w-full">Load</Button>
                 </Link>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => deleteGameMutation.mutate(game.id)}
-                  disabled={deleteGameMutation.isPending}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Eliminar ${game.name}`}
+                      disabled={deleteGameMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar partida?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        La partida &quot;{game.name}&quot; dejará de aparecer en el listado y no se
+                        podrá cargar nuevamente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={deleteGameMutation.isPending}>
+                        Cancelar
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        disabled={deleteGameMutation.isPending}
+                        onClick={() => deleteGameMutation.mutate(game.id)}
+                      >
+                        Eliminar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>
