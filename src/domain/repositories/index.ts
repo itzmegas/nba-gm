@@ -1,3 +1,4 @@
+export type { CareerSaveRepository } from "./CareerSaveRepository";
 export type { ContractRepository } from "./ContractRepository";
 export type { GameRepository } from "./GameRepository";
 export type { PlayerRepository } from "./PlayerRepository";

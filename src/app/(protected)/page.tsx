@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, Plus } from "lucide-react";
+import { FolderOpen, Plus, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useGames } from "@/application/hooks/games/useGames";
 import { useTeams } from "@/application/hooks/teams/useTeams";
@@ -56,6 +56,19 @@ export default function GameMenuPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 md:py-10 space-y-6">
+        <Link href="/career" aria-label="Open Player Career">
+          <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10">
+            <CardContent className="py-4 flex items-center gap-3">
+              <UserRound className="text-primary" />
+              <div>
+                <p className="font-bold">Player Career</p>
+                <p className="text-sm text-muted-foreground">
+                  Build a career from college to retirement.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
         <div className="space-y-1">
           <h1 className="text-3xl md:text-4xl font-black tracking-tight">Tus simulaciones</h1>
           <p className="text-muted-foreground">Cargá una partida o iniciá una nueva franquicia.</p>

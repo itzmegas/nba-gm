@@ -145,7 +145,24 @@ CREATE TABLE IF NOT EXISTS historical_contract_templates (
     CONSTRAINT historical_contract_templates_season_player_unique UNIQUE (season_year, player_id)
 );
 
--- Indexes for performance
+CREATE TABLE IF NOT EXISTS career_saves (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    position TEXT NOT NULL,
+    college TEXT NOT NULL,
+    current_age SMALLINT NOT NULL DEFAULT 18 CHECK (current_age >= 18),
+    current_overall SMALLINT NOT NULL CHECK (current_overall BETWEEN 40 AND 99),
+    events_resolved SMALLINT NOT NULL DEFAULT 0 CHECK (events_resolved >= 0),
+    stage TEXT NOT NULL DEFAULT 'college'
+      CHECK (stage IN ('college', 'draft', 'nba', 'retired')),
+    current_team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
+    pending_event JSONB,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_players_team_id ON players(team_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_player_id ON contracts(player_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_team_id ON contracts(team_id);
@@ -162,8 +179,8 @@ CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_season_year ON histor
 CREATE INDEX IF NOT EXISTS idx_historical_roster_templates_team_id ON historical_roster_templates(team_id);
 CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_season_year ON historical_contract_templates(season_year);
 CREATE INDEX IF NOT EXISTS idx_historical_contract_templates_team_id ON historical_contract_templates(team_id);
+CREATE INDEX IF NOT EXISTS idx_career_saves_user_id ON career_saves(user_id);
 
--- RLS
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_player_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
@@ -171,6 +188,13 @@ ALTER TABLE historical_roster_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE historical_contract_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
+ALTER TABLE career_saves ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS career_saves_all_owner ON career_saves; CREATE POLICY career_saves_all_owner
+  ON career_saves
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
 
 -- Games owner policies
 DROP POLICY IF EXISTS games_select_owner ON games;
