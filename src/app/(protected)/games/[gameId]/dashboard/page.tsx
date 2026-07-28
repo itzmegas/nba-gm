@@ -3,7 +3,8 @@
 import { Calendar as CalendarIcon, Newspaper, Trophy } from "lucide-react";
 import { use } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
-import { useTeam } from "@/application/hooks/teams/useTeams";
+import { useNextGame, useStandings } from "@/application/hooks/simulation";
+import { useTeams } from "@/application/hooks/teams/useTeams";
 import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 import { CapSpaceWidget } from "@/components/dashboard/cap-space-widget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +17,19 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
   const { gameId } = use(params);
   const { data: game, isLoading: isLoadingGame } = useGame(gameId);
   const selectedTeamId = game?.selectedTeamId ?? "";
-  const { data: team, isLoading: isLoadingTeam } = useTeam(selectedTeamId);
+  const { data: teams, isLoading: isLoadingTeams } = useTeams();
+  const { data: nextGame } = useNextGame(gameId, selectedTeamId, game?.simulationDate);
+  const { data: standings } = useStandings(gameId);
+  const team = teams?.find((candidate) => candidate.id === selectedTeamId);
+  const opponentId = nextGame
+    ? nextGame.homeTeamId === selectedTeamId
+      ? nextGame.awayTeamId
+      : nextGame.homeTeamId
+    : undefined;
+  const opponent = teams?.find((candidate) => candidate.id === opponentId);
+  const visibleStandings = standings?.slice(0, 3) ?? [];
 
-  if (isLoadingGame || isLoadingTeam || !game) {
+  if (isLoadingGame || isLoadingTeams || !game) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
@@ -56,19 +67,25 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
               <div className="flex items-center justify-center gap-6 w-full">
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
-                    {team?.abbreviation}
+                    {team?.abbreviation ?? "—"}
                   </div>
                 </div>
                 <div className="text-sm font-bold text-muted-foreground">VS</div>
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
-                    BOS
+                    {opponent?.abbreviation ?? "—"}
                   </div>
                 </div>
               </div>
               <div>
-                <p className="font-bold">Boston Celtics</p>
-                <p className="text-sm text-muted-foreground">Hoy, 8:00 PM</p>
+                <p className="font-bold">{opponent?.name ?? "Sin próximo partido"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {nextGame
+                    ? new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(
+                        new Date(`${nextGame.date}T12:00:00`)
+                      )
+                    : "Calendario pendiente"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -83,17 +100,20 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3 mt-2">
-              {[1, 2, 3].map((pos) => (
+              {visibleStandings.map((standing, index) => (
                 <div
-                  key={pos}
-                  className={`flex justify-between items-center text-sm p-2 rounded-md ${pos === 2 ? "bg-primary/10 border border-primary/20" : ""}`}
+                  key={standing.teamId}
+                  className={`flex justify-between items-center text-sm p-2 rounded-md ${standing.teamId === selectedTeamId ? "bg-primary/10 border border-primary/20" : ""}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-bold w-4">{pos}.</span>
-                    <span>{pos === 2 ? team?.abbreviation : pos === 1 ? "DEN" : "PHX"}</span>
+                    <span className="font-bold w-4">{index + 1}.</span>
+                    <span>
+                      {teams?.find((candidate) => candidate.id === standing.teamId)?.abbreviation ??
+                        "—"}
+                    </span>
                   </div>
                   <div className="text-muted-foreground">
-                    {pos === 1 ? "10-2" : pos === 2 ? "9-3" : "8-4"}
+                    {standing.wins}-{standing.losses}
                   </div>
                 </div>
               ))}

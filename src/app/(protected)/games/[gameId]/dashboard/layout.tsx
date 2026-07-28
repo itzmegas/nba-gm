@@ -26,7 +26,11 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
   return (
     <GameIdProvider gameId={gameId}>
       <SidebarProvider>
-        <DashboardSidebar gameId={gameId} selectedTeamId={game.selectedTeamId} />
+        <DashboardSidebar
+          gameId={gameId}
+          selectedTeamId={game.selectedTeamId}
+          simulationDate={game.simulationDate}
+        />
 
         <SidebarInset>
           <DashboardHeader

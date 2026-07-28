@@ -15,6 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import {
   Breadcrumb,
@@ -67,14 +68,20 @@ const NAV_ITEMS: DashboardNavItem[] = [
 interface DashboardSidebarProps {
   gameId: string;
   selectedTeamId: string;
+  simulationDate: Date;
 }
 
-export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarProps) {
+export function DashboardSidebar({
+  gameId,
+  selectedTeamId,
+  simulationDate,
+}: DashboardSidebarProps) {
   const pathname = usePathname();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
+  const advanceDay = useAdvanceDay();
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -134,10 +141,19 @@ export function DashboardSidebar({ gameId, selectedTeamId }: DashboardSidebarPro
       </SidebarContent>
 
       <SidebarFooter>
-        <Button className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0">
+        <Button
+          className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+          onClick={() => advanceDay.mutate({ gameId, simulationDate })}
+          disabled={advanceDay.isPending}
+        >
           <Calendar className="h-4 w-4" />
-          <span className="group-data-[collapsible=icon]:hidden">Simular Día ▶</span>
+          <span className="group-data-[collapsible=icon]:hidden">
+            {advanceDay.isPending ? "Simulando…" : "Simular Día ▶"}
+          </span>
         </Button>
+        {advanceDay.isError && (
+          <p className="text-xs text-destructive">No se pudo avanzar el día.</p>
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
