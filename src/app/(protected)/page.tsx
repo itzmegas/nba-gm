@@ -39,7 +39,7 @@ export default function GameMenuPage() {
         <div className="max-w-6xl mx-auto h-16 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl font-black tracking-tighter text-primary">
-              THE ASSOCIATION
+              GM SIMULATOR
             </span>
             <span className="text-xs font-medium bg-muted px-2 py-1 rounded-full text-muted-foreground hidden sm:inline-block">
               GAME MENU
@@ -56,7 +56,7 @@ export default function GameMenuPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 md:py-10 space-y-6">
-        <Link href="/career" aria-label="Open Player Career">
+        {/* <Link href="/career" aria-label="Open Player Career">
           <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10">
             <CardContent className="py-4 flex items-center gap-3">
               <UserRound className="text-primary" />
@@ -68,10 +68,14 @@ export default function GameMenuPage() {
               </div>
             </CardContent>
           </Card>
-        </Link>
+        </Link> */}
         <div className="space-y-1">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight">Tus simulaciones</h1>
-          <p className="text-muted-foreground">Cargá una partida o iniciá una nueva franquicia.</p>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight">
+            Tus simulaciones
+          </h1>
+          <p className="text-muted-foreground">
+            Cargá una partida o iniciá una nueva franquicia.
+          </p>
         </div>
 
         {!games || games.length === 0 ? (
