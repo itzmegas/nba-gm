@@ -1,7 +1,12 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useTeams } from "@/application";
-import { getMonthCells, getTeamGameSummary } from "@/application/hooks/schedule/calendar";
+import {
+  getMonthCells,
+  getSelectedTeamGameState,
+  getTeamGameSummary,
+  SELECTED_TEAM_GAME_STATE,
+} from "@/application/hooks/schedule/calendar";
 import { useSchedule } from "@/application/hooks/schedule/useSchedule";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -153,6 +158,16 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                           const home = teamsById.get(scheduledGame.homeTeamId);
                           const completed =
                             scheduledGame.status === SCHEDULED_GAME_STATUS.COMPLETED;
+                          const selectedTeamIsHome = scheduledGame.homeTeamId === selectedTeamId;
+                          const opponent = selectedTeamIsHome ? away : home;
+                          const location = selectedTeamIsHome ? "Local" : "Visitante";
+                          const state = getSelectedTeamGameState(scheduledGame, selectedTeamId);
+                          const stateLabel = {
+                            [SELECTED_TEAM_GAME_STATE.SCHEDULED]: "Programado",
+                            [SELECTED_TEAM_GAME_STATE.VICTORY]: "Victoria",
+                            [SELECTED_TEAM_GAME_STATE.DEFEAT]: "Derrota",
+                            [SELECTED_TEAM_GAME_STATE.FINAL]: "Final",
+                          }[state];
 
                           return (
                             <button
@@ -160,25 +175,27 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                               onClick={() => setSelectedDate(date)}
                               aria-label={`Ver todos los partidos del ${date}`}
                               title={`${away?.city ?? ""} ${away?.name ?? "Visitante"} @ ${home?.city ?? ""} ${home?.name ?? "Local"}`}
-                              className={`w-full rounded-md border px-2 py-1 text-left text-xs ${
-                                completed
-                                  ? "border-emerald-500/30 bg-emerald-500/10"
-                                  : "border-primary/20 bg-primary/5"
+                              className={`w-full overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm ${
+                                state === SELECTED_TEAM_GAME_STATE.VICTORY
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                                  : state === SELECTED_TEAM_GAME_STATE.DEFEAT
+                                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                    : "border-primary/30 bg-primary/5"
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-1 font-semibold">
-                                <span>
-                                  {away?.abbreviation ?? "—"} @ {home?.abbreviation ?? "—"}
+                              <div className="flex items-center justify-between gap-1 font-bold">
+                                <span className="min-w-0 truncate">
+                                  {location} · {opponent?.abbreviation ?? "—"}
                                 </span>
                                 {completed && (
-                                  <span>
+                                  <span className="shrink-0 tabular-nums">
                                     {scheduledGame.awayScore ?? "—"}-
                                     {scheduledGame.homeScore ?? "—"}
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] uppercase text-muted-foreground">
-                                {completed ? "Final" : "Programado"}
+                              <span className="block truncate text-[10px] font-semibold uppercase">
+                                {stateLabel}
                               </span>
                             </button>
                           );
@@ -188,7 +205,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                           type="button"
                           onClick={() => setSelectedDate(date)}
                           aria-label={`Ver ${games.length} partidos del ${date}`}
-                          className="w-full rounded px-1 py-0.5 text-left text-[11px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="w-full rounded px-1 py-0.5 text-left text-[10px] text-muted-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {selectedTeamGame
                             ? `+${remainingGameCount} partidos`

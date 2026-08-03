@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getMonthCells, getTeamGameSummary } from "@/application/hooks/schedule/calendar";
-import type { ScheduledGame } from "@/domain";
+import {
+  getMonthCells,
+  getSelectedTeamGameState,
+  getTeamGameSummary,
+  SELECTED_TEAM_GAME_STATE,
+} from "@/application/hooks/schedule/calendar";
+import { SCHEDULED_GAME_STATUS, type ScheduledGame } from "@/domain";
 
 describe("getMonthCells", () => {
   it("builds complete weeks with the correct empty cells for a leap month", () => {
@@ -29,5 +34,37 @@ describe("getTeamGameSummary", () => {
       selectedTeamGame: undefined,
       remainingGameCount: 2,
     });
+  });
+});
+
+describe("getSelectedTeamGameState", () => {
+  const completedGame = {
+    homeTeamId: "home",
+    awayTeamId: "away",
+    status: SCHEDULED_GAME_STATUS.COMPLETED,
+  } as ScheduledGame;
+
+  it("reports a home win from the selected team's perspective", () => {
+    expect(
+      getSelectedTeamGameState({ ...completedGame, homeScore: 110, awayScore: 100 }, "home")
+    ).toBe(SELECTED_TEAM_GAME_STATE.VICTORY);
+  });
+
+  it("reports an away win from the selected team's perspective", () => {
+    expect(
+      getSelectedTeamGameState({ ...completedGame, homeScore: 100, awayScore: 110 }, "away")
+    ).toBe(SELECTED_TEAM_GAME_STATE.VICTORY);
+  });
+
+  it("reports a loss from the selected team's perspective", () => {
+    expect(
+      getSelectedTeamGameState({ ...completedGame, homeScore: 110, awayScore: 100 }, "away")
+    ).toBe(SELECTED_TEAM_GAME_STATE.DEFEAT);
+  });
+
+  it("keeps completed games with a missing score neutral", () => {
+    expect(getSelectedTeamGameState({ ...completedGame, homeScore: 110 }, "home")).toBe(
+      SELECTED_TEAM_GAME_STATE.FINAL
+    );
   });
 });

@@ -1,5 +1,15 @@
 import type { ScheduledGame } from "@/domain";
 
+export const SELECTED_TEAM_GAME_STATE = {
+  SCHEDULED: "scheduled",
+  VICTORY: "victory",
+  DEFEAT: "defeat",
+  FINAL: "final",
+} as const;
+
+export type SelectedTeamGameState =
+  (typeof SELECTED_TEAM_GAME_STATE)[keyof typeof SELECTED_TEAM_GAME_STATE];
+
 export function getMonthCells(year: number, month: number): Array<string | null> {
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
@@ -22,4 +32,24 @@ export function getTeamGameSummary(games: ScheduledGame[], selectedTeamId: strin
     selectedTeamGame,
     remainingGameCount: games.length - (selectedTeamGame ? 1 : 0),
   };
+}
+
+export function getSelectedTeamGameState(
+  game: ScheduledGame,
+  selectedTeamId: string
+): SelectedTeamGameState {
+  if (game.status !== "completed") return SELECTED_TEAM_GAME_STATE.SCHEDULED;
+  if (
+    game.homeScore === undefined ||
+    game.awayScore === undefined ||
+    game.homeScore === game.awayScore
+  )
+    return SELECTED_TEAM_GAME_STATE.FINAL;
+
+  const selectedTeamWon =
+    game.homeTeamId === selectedTeamId
+      ? game.homeScore > game.awayScore
+      : game.awayTeamId === selectedTeamId && game.awayScore > game.homeScore;
+
+  return selectedTeamWon ? SELECTED_TEAM_GAME_STATE.VICTORY : SELECTED_TEAM_GAME_STATE.DEFEAT;
 }
