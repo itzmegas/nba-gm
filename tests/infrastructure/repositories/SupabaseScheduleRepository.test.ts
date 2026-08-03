@@ -5,20 +5,27 @@ import { SupabaseScheduleRepository } from "@/infrastructure/repositories/Supaba
 
 function createClient(
   data: unknown,
-  resolveData: (filters: Array<[string, unknown]>) => unknown = () => data
+  resolveData: (filters: Array<[string, unknown]>) => unknown = () => data,
+  error: { message: string } | null = null
 ) {
   const filters: Array<[string, unknown]> = [];
   const query = {
     select: () => query,
-    eq: () => query,
-    or: () => query,
+    eq: (column: string, value: unknown) => {
+      filters.push([column, value]);
+      return query;
+    },
+    or: (value: string) => {
+      filters.push(["or", value]);
+      return query;
+    },
     gt: (column: string, value: unknown) => {
       filters.push([column, value]);
       return query;
     },
     order: () => query,
     limit: () => query,
-    maybeSingle: () => Promise.resolve({ data: resolveData(filters), error: null }),
+    maybeSingle: () => Promise.resolve({ data: resolveData(filters), error }),
     // biome-ignore lint/suspicious/noThenProperty: test double for Supabase's awaitable query builder.
     then: (resolve: (value: { data: unknown; error: null }) => unknown) =>
       Promise.resolve(resolve({ data, error: null })),
@@ -28,6 +35,29 @@ function createClient(
 }
 
 describe("SupabaseScheduleRepository", () => {
+  it("filters the selected team game by exact date and returns null when there is none", async () => {
+    const mock = createClient(null);
+    const repository = new SupabaseScheduleRepository(mock.client);
+
+    await expect(
+      repository.getForTeamOnDate("game", "team", new Date("2026-10-15T23:00:00-03:00"))
+    ).resolves.toBeNull();
+    expect(mock.filters).toEqual([
+      ["game_id", "game"],
+      ["game_date", "2026-10-16"],
+      ["or", "home_team_id.eq.team,away_team_id.eq.team"],
+    ]);
+  });
+
+  it("preserves exact-date query errors", async () => {
+    const mock = createClient(null, undefined, { message: "query failed" });
+    const repository = new SupabaseScheduleRepository(mock.client);
+
+    await expect(
+      repository.getForTeamOnDate("game", "team", new Date("2026-10-15T00:00:00Z"))
+    ).rejects.toThrow("query failed");
+  });
+
   it("maps the next scheduled game from snake case", async () => {
     const mock = createClient({
       id: "11111111-1111-4111-8111-111111111111",

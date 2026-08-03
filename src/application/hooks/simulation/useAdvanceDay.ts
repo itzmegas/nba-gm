@@ -23,6 +23,8 @@ export function useAdvanceDay() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["games", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["schedule", "next", gameId] }),
+        queryClient.invalidateQueries({ queryKey: ["schedule", "current", gameId] }),
+        queryClient.invalidateQueries({ queryKey: ["schedule", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
       ]);
     },

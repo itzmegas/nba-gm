@@ -5,6 +5,23 @@ import type { ScheduleRepository } from "@/domain/repositories/ScheduleRepositor
 export class SupabaseScheduleRepository implements ScheduleRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  async getForTeamOnDate(
+    gameId: string,
+    teamId: string,
+    simulationDate: Date
+  ): Promise<ScheduledGame | null> {
+    const { data, error } = await this.client
+      .from("scheduled_games")
+      .select("*")
+      .eq("game_id", gameId)
+      .eq("game_date", simulationDate.toISOString().slice(0, 10))
+      .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data ? this.mapToEntity(data) : null;
+  }
+
   async getNextForTeam(
     gameId: string,
     teamId: string,

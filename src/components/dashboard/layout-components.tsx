@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
+import { useCurrentTeamGame } from "@/application/hooks/simulation/useCurrentTeamGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import {
   Breadcrumb,
@@ -47,7 +48,15 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { SCHEDULED_GAME_STATUS } from "@/domain/entities/ScheduledGame";
 import { formatSeasonLabel } from "@/domain/entities/Season";
+
+const simulationDateFormatter = new Intl.DateTimeFormat("es-ES", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 interface DashboardNavItem {
   label: string;
@@ -82,6 +91,16 @@ export function DashboardSidebar({
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
   const advanceDay = useAdvanceDay();
+  const currentGame = useCurrentTeamGame(gameId, selectedTeamId, simulationDate);
+  const opponentId = currentGame.data
+    ? currentGame.data.homeTeamId === selectedTeamId
+      ? currentGame.data.awayTeamId
+      : currentGame.data.homeTeamId
+    : undefined;
+  const opponent = teams?.find((team) => team.id === opponentId);
+  const matchup = currentGame.data
+    ? `${currentGame.data.homeTeamId === selectedTeamId ? "vs" : "@"} ${opponent?.abbreviation ?? "---"}`
+    : "Día libre";
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -141,6 +160,18 @@ export function DashboardSidebar({
       </SidebarContent>
 
       <SidebarFooter>
+        <div className="min-h-11 px-1 text-xs group-data-[collapsible=icon]:hidden">
+          <p className="font-medium capitalize">{simulationDateFormatter.format(simulationDate)}</p>
+          <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
+            {currentGame.isPending
+              ? "Cargando…"
+              : currentGame.isError
+                ? "No se pudo cargar el partido."
+                : matchup}
+            {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
+              ` · Final ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
+          </p>
+        </div>
         <Button
           className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
           onClick={() => advanceDay.mutate({ gameId, simulationDate })}
