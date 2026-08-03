@@ -17,6 +17,7 @@ interface CalendarProps {
 const WEEKDAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarProps) {
+  const simulationDateIso = simulationDate.toISOString().slice(0, 10);
   const [visibleMonth, setVisibleMonth] = useState(() => ({
     year: simulationDate.getUTCFullYear(),
     month: simulationDate.getUTCMonth(),
@@ -110,6 +111,8 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
           ))}
           {cells.map((date, index) => {
             const games = date ? (gamesByDate.get(date) ?? []) : [];
+            const isCurrentDay = date === simulationDateIso;
+            const isPastDay = date !== null && date < simulationDateIso;
             const { selectedTeamGame, remainingGameCount } = getTeamGameSummary(
               games,
               selectedTeamId
@@ -118,13 +121,30 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
             return (
               <div
                 key={date ?? `empty-${index}`}
-                className="h-28 overflow-hidden border-r border-b p-2 nth-[7n]:border-r-0"
+                className={`h-28 overflow-hidden border-r border-b p-2 nth-[7n]:border-r-0 ${
+                  isCurrentDay
+                    ? "bg-primary/10 ring-2 ring-inset ring-primary/60"
+                    : isPastDay
+                      ? "bg-muted/30"
+                      : ""
+                }`}
               >
                 {date && (
                   <>
-                    <time dateTime={date} className="text-xs font-bold text-muted-foreground">
-                      {Number(date.slice(-2))}
-                    </time>
+                    <div className="flex items-center justify-between gap-1">
+                      <time
+                        dateTime={date}
+                        aria-current={isCurrentDay ? "date" : undefined}
+                        className="text-xs font-bold text-muted-foreground"
+                      >
+                        {Number(date.slice(-2))}
+                      </time>
+                      {isCurrentDay && (
+                        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                          Hoy
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-1 space-y-1">
                       {selectedTeamGame &&
                         (() => {
