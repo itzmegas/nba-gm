@@ -126,12 +126,10 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
             return (
               <div
                 key={date ?? `empty-${index}`}
-                className={`h-28 overflow-hidden border-r border-b p-2 nth-[7n]:border-r-0 ${
+                className={`h-28 overflow-hidden p-2 ${
                   isCurrentDay
-                    ? "bg-primary/10 ring-2 ring-inset ring-primary/60"
-                    : isPastDay
-                      ? "bg-muted/30"
-                      : ""
+                    ? "border-2 border-primary bg-primary/15"
+                    : `border-r border-b ${isPastDay ? "bg-muted/30" : ""} nth-[7n]:border-r-0`
                 }`}
               >
                 {date && (
