@@ -217,16 +217,29 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
 
               return (
                 <div key={scheduledGame.id} className="rounded-lg border p-3 text-sm">
-                  <div className="flex items-center justify-between gap-3 font-semibold">
-                    <span>
-                      {away?.abbreviation ?? "—"} {away?.city} {away?.name} @{" "}
-                      {home?.abbreviation ?? "—"} {home?.city} {home?.name}
-                    </span>
-                    {completed && (
-                      <span className="shrink-0">
-                        {scheduledGame.awayScore ?? "—"}-{scheduledGame.homeScore ?? "—"}
+                  <div className="space-y-1 font-semibold">
+                    <div className="flex items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="inline-block w-8">{away?.abbreviation ?? "—"}</span> ·{" "}
+                        {away?.name ?? "Visitante"}
                       </span>
-                    )}
+                      {completed && (
+                        <span className="w-8 shrink-0 text-right tabular-nums">
+                          {scheduledGame.awayScore ?? "—"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="inline-block w-8">{home?.abbreviation ?? "—"}</span> ·{" "}
+                        {home?.name ?? "Local"}
+                      </span>
+                      {completed && (
+                        <span className="w-8 shrink-0 text-right tabular-nums">
+                          {scheduledGame.homeScore ?? "—"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="text-xs uppercase text-muted-foreground">
                     {completed ? "Final" : "Programado"}
