@@ -49,7 +49,16 @@ export function useCreateGame() {
         throw new Error(`Failed to seed game data: ${seedError.message}`);
       }
 
-      // 3. Activate the game after successful seeding
+      const { error: scheduleError } = await supabase.rpc("initialize_game_schedule", {
+        p_game_id: game.id,
+      });
+
+      if (scheduleError) {
+        await repository.softDelete(game.id);
+        throw new Error(`Failed to initialize game schedule: ${scheduleError.message}`);
+      }
+
+      // 3. Activate the game after successful initialization
       const activatedGame = await repository.update(game.id, {
         status: GAME_STATUS.ACTIVE,
       });

@@ -15,9 +15,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation";
 import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
 import { useCurrentTeamGame } from "@/application/hooks/simulation/useCurrentTeamGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import {
+  BATCH_SIMULATION_MODE,
+  type BatchSimulationMode,
+  useBatchSimulationStore,
+} from "@/application/stores/useBatchSimulationStore";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -78,12 +84,14 @@ interface DashboardSidebarProps {
   gameId: string;
   selectedTeamId: string;
   simulationDate: Date;
+  seasonYear: number;
 }
 
 export function DashboardSidebar({
   gameId,
   selectedTeamId,
   simulationDate,
+  seasonYear,
 }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { data: teams } = useTeams();
@@ -91,6 +99,12 @@ export function DashboardSidebar({
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
   const advanceDay = useAdvanceDay();
+  const advanceRange = useAdvanceRange();
+  const batchActive = useBatchSimulationStore((state) => state.isActive);
+  const batchMode = useBatchSimulationStore((state) => state.mode);
+  const completedDays = useBatchSimulationStore((state) => state.completedDays);
+  const totalDays = useBatchSimulationStore((state) => state.totalDays);
+  const batchError = useBatchSimulationStore((state) => state.error);
   const currentGame = useCurrentTeamGame(gameId, selectedTeamId, simulationDate);
   const opponentId = currentGame.data
     ? currentGame.data.homeTeamId === selectedTeamId
@@ -101,6 +115,18 @@ export function DashboardSidebar({
   const matchup = currentGame.data
     ? `${currentGame.data.homeTeamId === selectedTeamId ? "vs" : "@"} ${opponent?.abbreviation ?? "---"}`
     : "Día libre";
+  const monthEnd = getMonthEnd(simulationDate, seasonYear);
+  const monthDays = Math.max(
+    0,
+    Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
+  );
+  const startBatch = (mode: BatchSimulationMode) => {
+    if (advanceDay.isPending) return;
+    const total = mode === BATCH_SIMULATION_MODE.MONTH ? monthDays : null;
+    if (useBatchSimulationStore.getState().startBatch(mode, total)) {
+      advanceRange.mutate({ gameId, simulationDate, mode, seasonYear });
+    }
+  };
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -124,7 +150,7 @@ export function DashboardSidebar({
           )}
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-semibold">
-              {selectedTeam?.name || "The Association"}
+              {selectedTeam?.name || "Equipo"}
             </span>
             <span className="truncate text-xs text-sidebar-foreground/70">
               {selectedTeam?.city || "Franquicia"}
@@ -175,15 +201,41 @@ export function DashboardSidebar({
         <Button
           className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
           onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-          disabled={advanceDay.isPending}
+          disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
+          
         >
           <Calendar className="h-4 w-4" />
           <span className="group-data-[collapsible=icon]:hidden">
             {advanceDay.isPending ? "Simulando…" : "Simular Día ▶"}
           </span>
         </Button>
-        {advanceDay.isError && (
-          <p className="text-xs text-destructive">No se pudo avanzar el día.</p>
+        <div className="grid grid-cols-2 gap-1 pt-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
+            disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
+          >
+            {batchMode === BATCH_SIMULATION_MODE.MONTH ? "Simulando mes…" : "Simular Mes"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
+            disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
+          >
+            {batchMode === BATCH_SIMULATION_MODE.SEASON
+              ? "Simulando temporada…"
+              : "Simular Temporada"}
+          </Button>
+        </div>
+        {batchActive && (
+          <p className="text-xs text-muted-foreground">
+            {completedDays} días completados{totalDays === null ? "" : ` de ${totalDays}`}
+          </p>
+        )}
+        {(batchError || advanceDay.isError) && (
+          <p className="text-xs text-destructive">No se pudo avanzar la simulación.</p>
         )}
       </SidebarFooter>
       <SidebarRail />

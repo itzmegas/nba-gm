@@ -9,5 +9,11 @@ export {
 export { useCreateGame, useDeleteGame, useGame, useGames } from "./games";
 export { usePlayerStates } from "./player-states";
 export { useActivePlayers, usePlayer, usePlayers, usePlayersByTeam } from "./players";
-export { useAdvanceDay, useNextGame, useStandings } from "./simulation";
+export {
+  getMonthEnd,
+  useAdvanceDay,
+  useAdvanceRange,
+  useNextGame,
+  useStandings,
+} from "./simulation";
 export { useTeam, useTeams } from "./teams";

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBatchSimulationStore } from "@/application/stores/useBatchSimulationStore";
 import { createClient } from "@/infrastructure/supabase/client";
 
 export interface AdvanceDayInput {
@@ -11,6 +12,9 @@ export function useAdvanceDay() {
 
   return useMutation<unknown, Error, AdvanceDayInput>({
     mutationFn: async ({ gameId, simulationDate }) => {
+      if (!useBatchSimulationStore.getState().startDay()) {
+        throw new Error("Another simulation is already active.");
+      }
       const { data, error } = await createClient().rpc("advance_simulation_day", {
         p_game_id: gameId,
         p_expected_date: simulationDate.toISOString().slice(0, 10),
@@ -27,6 +31,9 @@ export function useAdvanceDay() {
         queryClient.invalidateQueries({ queryKey: ["schedule", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
       ]);
+    },
+    onSettled: () => {
+      useBatchSimulationStore.getState().finishDay();
     },
   });
 }

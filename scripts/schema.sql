@@ -398,6 +398,26 @@ DROP POLICY IF EXISTS league_standings_owner ON league_standings;
 CREATE POLICY league_standings_owner ON league_standings FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM games g WHERE g.id = league_standings.game_id AND g.user_id = auth.uid()));
 
 DROP FUNCTION IF EXISTS advance_simulation_day(UUID);
+CREATE OR REPLACE FUNCTION initialize_game_schedule(p_game_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_game games%ROWTYPE;
+BEGIN
+  SELECT * INTO v_game FROM games WHERE id = p_game_id AND user_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  WITH teams_ordered AS (SELECT id, row_number() OVER (ORDER BY nba_id) - 1 AS slot FROM teams),
+  rounds AS (SELECT c, r, 0 AS home_slot, 1 + r % 29 AS away_slot FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
+    UNION ALL SELECT c, r, 1 + (r + k) % 29, 1 + (r - k + 29) % 29 FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r) CROSS JOIN generate_series(1, 14) AS pairs(k))
+  INSERT INTO scheduled_games (game_id, game_date, home_team_id, away_team_id)
+  SELECT p_game_id, v_game.simulation_date + 1 + (((c * 29 + r) * (make_date(v_game.season_year + 1, 4, 15) - v_game.simulation_date - 1) / 57)::INTEGER), home.id, away.id
+  FROM rounds
+  JOIN teams_ordered home ON home.slot = CASE WHEN c = 0 THEN home_slot ELSE away_slot END
+  JOIN teams_ordered away ON away.slot = CASE WHEN c = 0 THEN away_slot ELSE home_slot END
+  ON CONFLICT DO NOTHING;
+  INSERT INTO league_standings (game_id, team_id) SELECT p_game_id, id FROM teams ON CONFLICT DO NOTHING;
+END;
+$$;
+REVOKE ALL ON FUNCTION initialize_game_schedule(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION initialize_game_schedule(UUID) TO authenticated;
 CREATE OR REPLACE FUNCTION advance_simulation_day(p_game_id UUID, p_expected_date DATE)
 RETURNS TABLE (new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID, away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID, standing_team_id UUID, wins INTEGER, losses INTEGER)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -414,16 +434,7 @@ BEGIN
   v_new_date := v_game.simulation_date + 1;
   IF v_new_date > make_date(v_game.season_year + 1, 4, 15) THEN new_date := v_game.simulation_date; season_complete := true; RETURN NEXT; RETURN; END IF;
    IF NOT EXISTS (SELECT 1 FROM scheduled_games WHERE game_id = p_game_id) THEN
-     WITH teams_ordered AS (SELECT id, row_number() OVER (ORDER BY nba_id) - 1 AS slot FROM teams),
-     rounds AS (SELECT c, r, 0 AS home_slot, 1 + r % 29 AS away_slot FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
-       UNION ALL SELECT c, r, 1 + (r + k) % 29, 1 + (r - k + 29) % 29 FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r) CROSS JOIN generate_series(1, 14) AS pairs(k))
-     INSERT INTO scheduled_games (game_id, game_date, home_team_id, away_team_id)
-     SELECT p_game_id, make_date(v_game.season_year, 10, 15) + (((c * 29 + r) * 182 / 57)::INTEGER),
-        home.id, away.id
-     FROM rounds
-     JOIN teams_ordered home ON home.slot = CASE WHEN c = 0 THEN home_slot ELSE away_slot END
-     JOIN teams_ordered away ON away.slot = CASE WHEN c = 0 THEN away_slot ELSE home_slot END;
-    INSERT INTO league_standings (game_id, team_id) SELECT p_game_id, id FROM teams ON CONFLICT DO NOTHING;
+     PERFORM initialize_game_schedule(p_game_id);
   END IF;
   FOR v_match IN SELECT * FROM scheduled_games WHERE game_id = p_game_id AND game_date = v_new_date AND status = 'scheduled' FOR UPDATE LOOP
     SELECT base_rating INTO v_home_rating FROM teams WHERE id = v_match.home_team_id; SELECT base_rating INTO v_away_rating FROM teams WHERE id = v_match.away_team_id;
