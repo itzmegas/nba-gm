@@ -169,6 +169,8 @@ CREATE INDEX IF NOT EXISTS idx_contracts_team_id ON contracts(team_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_game_id ON contracts(game_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_game_team_id ON contracts(game_id, team_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_game_player_id ON contracts(game_id, player_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contracts_game_player_unique
+  ON contracts(game_id, player_id);
 CREATE INDEX IF NOT EXISTS idx_games_user_id ON games(user_id);
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
 CREATE INDEX IF NOT EXISTS idx_games_user_status ON games(user_id, status);
@@ -372,6 +374,243 @@ CREATE POLICY historical_contract_templates_read_authenticated
   FOR SELECT
   TO authenticated
   USING (true);
+
+-- 8. Transaction assets and immutable trade history.
+CREATE TABLE IF NOT EXISTS draft_picks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    draft_year INTEGER NOT NULL CHECK (draft_year >= 2000),
+    draft_round SMALLINT NOT NULL CHECK (draft_round IN (1, 2)),
+    original_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    protection TEXT CHECK (protection IS NULL OR char_length(trim(protection)) > 0),
+    UNIQUE (draft_year, draft_round, original_team_id)
+);
+
+CREATE TABLE IF NOT EXISTS game_pick_inventory (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id UUID REFERENCES games(id) ON DELETE CASCADE NOT NULL,
+    draft_pick_id UUID REFERENCES draft_picks(id) ON DELETE RESTRICT NOT NULL,
+    owner_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    is_transferable BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (game_id, draft_pick_id)
+);
+
+CREATE TABLE IF NOT EXISTS executed_trades (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id UUID REFERENCES games(id) ON DELETE RESTRICT NOT NULL,
+    team_a_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    team_b_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    executed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT executed_trades_distinct_teams CHECK (team_a_id <> team_b_id)
+);
+
+CREATE TABLE IF NOT EXISTS trade_asset_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    executed_trade_id UUID REFERENCES executed_trades(id) ON DELETE RESTRICT NOT NULL,
+    asset_type TEXT NOT NULL CHECK (asset_type IN ('player', 'pick')),
+    asset_id UUID NOT NULL,
+    from_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    to_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT trade_asset_snapshots_distinct_teams CHECK (from_team_id <> to_team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_pick_inventory_game_owner
+  ON game_pick_inventory(game_id, owner_team_id);
+CREATE INDEX IF NOT EXISTS idx_executed_trades_game_executed_at
+  ON executed_trades(game_id, executed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trade_asset_snapshots_trade
+  ON trade_asset_snapshots(executed_trade_id);
+
+ALTER TABLE draft_picks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_pick_inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE executed_trades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_asset_snapshots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS draft_picks_read_authenticated ON draft_picks;
+CREATE POLICY draft_picks_read_authenticated ON draft_picks
+  FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS game_pick_inventory_owner ON game_pick_inventory;
+CREATE POLICY game_pick_inventory_owner ON game_pick_inventory
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM games g WHERE g.id = game_pick_inventory.game_id AND g.user_id = auth.uid()
+  ));
+DROP POLICY IF EXISTS executed_trades_owner ON executed_trades;
+CREATE POLICY executed_trades_owner ON executed_trades
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM games g WHERE g.id = executed_trades.game_id AND g.user_id = auth.uid()
+  ));
+DROP POLICY IF EXISTS trade_asset_snapshots_owner ON trade_asset_snapshots;
+CREATE POLICY trade_asset_snapshots_owner ON trade_asset_snapshots
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1
+    FROM executed_trades t JOIN games g ON g.id = t.game_id
+    WHERE t.id = trade_asset_snapshots.executed_trade_id AND g.user_id = auth.uid()
+  ));
+
+-- Seed every game from the canonical pick catalog. Re-running is intentionally harmless.
+CREATE OR REPLACE FUNCTION seed_game_pick_inventory(p_game_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_season_year INTEGER;
+BEGIN
+  SELECT season_year INTO v_season_year FROM games
+  WHERE id = p_game_id AND user_id = auth.uid();
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Game not found or access denied';
+  END IF;
+  INSERT INTO draft_picks (draft_year, draft_round, original_team_id)
+  SELECT y.draft_year, r.draft_round, t.id
+  FROM generate_series(v_season_year, v_season_year + 6) AS y(draft_year)
+  CROSS JOIN (VALUES (1), (2)) AS r(draft_round)
+  CROSS JOIN teams t
+  ON CONFLICT (draft_year, draft_round, original_team_id) DO NOTHING;
+  INSERT INTO game_pick_inventory (game_id, draft_pick_id, owner_team_id)
+  SELECT p_game_id, p.id, p.original_team_id FROM draft_picks p
+  WHERE p.draft_year BETWEEN v_season_year AND v_season_year + 6
+  ON CONFLICT (game_id, draft_pick_id) DO NOTHING;
+END;
+$$;
+REVOKE ALL ON FUNCTION seed_game_pick_inventory(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION seed_game_pick_inventory(UUID) TO authenticated;
+
+CREATE OR REPLACE FUNCTION seed_game_pick_inventory_after_game()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_season_year INTEGER;
+BEGIN
+  SELECT season_year INTO v_season_year FROM games WHERE id = NEW.id;
+  INSERT INTO draft_picks (draft_year, draft_round, original_team_id)
+  SELECT y.draft_year, r.draft_round, t.id
+  FROM generate_series(v_season_year, v_season_year + 6) AS y(draft_year)
+  CROSS JOIN (VALUES (1), (2)) AS r(draft_round)
+  CROSS JOIN teams t
+  ON CONFLICT (draft_year, draft_round, original_team_id) DO NOTHING;
+  INSERT INTO game_pick_inventory (game_id, draft_pick_id, owner_team_id)
+  SELECT NEW.id, p.id, p.original_team_id FROM draft_picks p
+  WHERE p.draft_year BETWEEN v_season_year AND v_season_year + 6
+  ON CONFLICT (game_id, draft_pick_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS games_seed_pick_inventory ON games;
+CREATE TRIGGER games_seed_pick_inventory
+  AFTER INSERT ON games FOR EACH ROW EXECUTE FUNCTION seed_game_pick_inventory_after_game();
+REVOKE ALL ON FUNCTION seed_game_pick_inventory_after_game() FROM PUBLIC;
+
+-- Canonical first- and second-round picks for every existing game's seven-season window.
+-- This is deliberately small and idempotent; future draft modeling can extend it.
+INSERT INTO draft_picks (draft_year, draft_round, original_team_id)
+SELECT y.draft_year, r.draft_round, t.id
+FROM (SELECT DISTINCT season_year FROM games) g
+CROSS JOIN LATERAL generate_series(g.season_year, g.season_year + 6) AS y(draft_year)
+CROSS JOIN (VALUES (1), (2)) AS r(draft_round)
+CROSS JOIN teams t
+ON CONFLICT (draft_year, draft_round, original_team_id) DO NOTHING;
+
+INSERT INTO game_pick_inventory (game_id, draft_pick_id, owner_team_id)
+SELECT g.id, p.id, p.original_team_id
+FROM games g
+JOIN draft_picks p ON p.draft_year BETWEEN g.season_year AND g.season_year + 6
+ON CONFLICT (game_id, draft_pick_id) DO NOTHING;
+
+-- Trusted boundary: all ownership checks and writes happen under one row-locked transaction.
+CREATE OR REPLACE FUNCTION execute_trade_transactional(
+  p_game_id UUID,
+  p_team_a_id UUID,
+  p_team_b_id UUID,
+  p_assets JSONB
+)
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_trade_id UUID;
+  v_asset JSONB;
+  v_type TEXT;
+  v_id UUID;
+  v_from UUID;
+  v_to UUID;
+  v_pick game_pick_inventory%ROWTYPE;
+  v_state game_player_states%ROWTYPE;
+  v_metadata JSONB;
+  v_contract contracts%ROWTYPE;
+  v_contract_count INTEGER;
+  v_updated_count INTEGER;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM games WHERE id = p_game_id AND user_id = auth.uid())
+    OR p_team_a_id = p_team_b_id THEN
+    RAISE EXCEPTION 'Game or participating teams are invalid';
+  END IF;
+  IF jsonb_typeof(p_assets) <> 'array' OR jsonb_array_length(p_assets) < 2 THEN
+    RAISE EXCEPTION 'A trade requires assets from both teams';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_assets) a WHERE NOT (a ? 'asset_type' AND a ? 'asset_id' AND a ? 'from_team_id'))
+    OR (SELECT count(*) FROM jsonb_array_elements(p_assets) a WHERE a->>'from_team_id' = p_team_a_id::TEXT) = 0
+    OR (SELECT count(*) FROM jsonb_array_elements(p_assets) a WHERE a->>'from_team_id' = p_team_b_id::TEXT) = 0 THEN
+    RAISE EXCEPTION 'Each team must send at least one asset';
+  END IF;
+  IF (SELECT count(*) FROM jsonb_array_elements(p_assets) a) <> (
+    SELECT count(DISTINCT (a->>'asset_type') || ':' || (a->>'asset_id')) FROM jsonb_array_elements(p_assets) a
+  ) THEN
+    RAISE EXCEPTION 'Duplicate trade asset';
+  END IF;
+
+  INSERT INTO executed_trades (game_id, team_a_id, team_b_id)
+  VALUES (p_game_id, p_team_a_id, p_team_b_id) RETURNING id INTO v_trade_id;
+
+  FOR v_asset IN SELECT * FROM jsonb_array_elements(p_assets) LOOP
+    v_type := v_asset->>'asset_type';
+    v_id := (v_asset->>'asset_id')::UUID;
+    v_from := (v_asset->>'from_team_id')::UUID;
+    v_to := CASE WHEN v_from = p_team_a_id THEN p_team_b_id ELSE p_team_a_id END;
+    IF v_from NOT IN (p_team_a_id, p_team_b_id) OR v_type NOT IN ('player', 'pick') THEN
+      RAISE EXCEPTION 'Asset does not belong to this trade';
+    END IF;
+    IF v_type = 'player' THEN
+      SELECT * INTO v_state FROM game_player_states
+      WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE;
+      IF NOT FOUND OR v_state.team_id IS DISTINCT FROM v_from THEN
+        RAISE EXCEPTION 'Player ownership is stale or invalid';
+      END IF;
+      SELECT count(*) INTO v_contract_count FROM contracts
+      WHERE game_id = p_game_id AND player_id = v_id;
+      IF v_contract_count = 0 THEN
+        RAISE EXCEPTION 'Player contract is missing';
+      END IF;
+      FOR v_contract IN SELECT * FROM contracts
+        WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE LOOP
+        IF v_contract.team_id IS DISTINCT FROM v_from THEN
+          RAISE EXCEPTION 'Player contract ownership is stale or invalid';
+        END IF;
+      END LOOP;
+      UPDATE game_player_states SET team_id = v_to, updated_at = now() WHERE id = v_state.id;
+      UPDATE contracts SET team_id = v_to, updated_at = now()
+      WHERE game_id = p_game_id AND player_id = v_id AND team_id = v_from;
+      GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+      IF v_updated_count <> v_contract_count THEN
+        RAISE EXCEPTION 'Player contract transfer was incomplete';
+      END IF;
+      v_metadata := jsonb_build_object('player_id', v_id);
+    ELSE
+      SELECT * INTO v_pick FROM game_pick_inventory
+      WHERE game_id = p_game_id AND id = v_id FOR UPDATE;
+      IF NOT FOUND OR v_pick.owner_team_id IS DISTINCT FROM v_from OR NOT v_pick.is_transferable THEN
+        RAISE EXCEPTION 'Draft pick ownership is stale or invalid';
+      END IF;
+      SELECT jsonb_build_object('pick_id', p.id, 'draft_year', p.draft_year,
+        'draft_round', p.draft_round, 'protection', p.protection,
+        'original_team_id', p.original_team_id)
+      INTO v_metadata FROM draft_picks p WHERE p.id = v_pick.draft_pick_id;
+      UPDATE game_pick_inventory SET owner_team_id = v_to, updated_at = now() WHERE id = v_pick.id;
+    END IF;
+    INSERT INTO trade_asset_snapshots (executed_trade_id, asset_type, asset_id, from_team_id, to_team_id, metadata)
+    VALUES (v_trade_id, v_type, v_id, v_from, v_to, coalesce(v_metadata, '{}'::jsonb));
+  END LOOP;
+  RETURN v_trade_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION execute_trade_transactional(UUID, UUID, UUID, JSONB) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION execute_trade_transactional(UUID, UUID, UUID, JSONB) TO authenticated;
 
 -- 9. Season simulation schedule, standings, and atomic day advancement.
 -- Keep this block synchronized with migrations/009_season_simulation.sql.

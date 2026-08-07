@@ -12,4 +12,22 @@ export { playerStateSchema } from "./PlayerState";
 export type { ScheduledGame, ScheduledGameStatus } from "./ScheduledGame";
 export { SCHEDULED_GAME_STATUS, scheduledGameSchema } from "./ScheduledGame";
 export type { Team } from "./Team";
-export type { TeamTradeDetails, TradeAsset, TradePackage, TradeValidationResult } from "./Trade";
+export type {
+  DraftPick,
+  ExecutedTrade,
+  PickInventory,
+  TeamTradeDetails,
+  TradeAsset,
+  TradeAssetType,
+  TradePackage,
+  TradeValidationResult,
+  TransferredAsset,
+} from "./Trade";
+export {
+  draftPickSchema,
+  executedTradeSchema,
+  pickInventorySchema,
+  TRADE_ASSET_TYPE,
+  tradeAssetInputSchema,
+  transferredAssetSchema,
+} from "./Trade";
