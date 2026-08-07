@@ -375,15 +375,106 @@ CREATE POLICY historical_contract_templates_read_authenticated
   TO authenticated
   USING (true);
 
+-- Snapshot source rosters and contracts once; retries never overwrite game-owned state.
+CREATE OR REPLACE FUNCTION seed_game_data(p_game_id UUID, p_team_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_season_year INTEGER;
+  v_has_historical_templates BOOLEAN;
+  v_roster_count INTEGER;
+  v_contract_count INTEGER;
+BEGIN
+  SELECT g.season_year INTO v_season_year
+  FROM games g
+  WHERE g.id = p_game_id
+    AND g.selected_team_id = p_team_id
+    AND g.user_id = auth.uid()
+    AND g.status = 'initializing'
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'seed_game_data aborted: game is not initializing, not owned by the caller, or selected team does not match';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM historical_roster_templates WHERE season_year = v_season_year
+  ) INTO v_has_historical_templates;
+  IF v_season_year IN (2010, 1995) AND NOT v_has_historical_templates THEN
+    RAISE EXCEPTION 'seed_game_data aborted: historical templates for season % are not loaded', v_season_year;
+  END IF;
+
+  IF v_has_historical_templates THEN
+    INSERT INTO game_player_states (game_id, player_id, team_id, is_active)
+    SELECT p_game_id, player_id, team_id, is_active
+    FROM historical_roster_templates
+    WHERE season_year = v_season_year
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+
+    INSERT INTO contracts (
+      game_id, player_id, team_id, start_year, end_year,
+      salary_y1, salary_y2, salary_y3, salary_y4, salary_y5,
+      is_player_option, is_team_option, is_guaranteed
+    )
+    SELECT
+      p_game_id, player_id, team_id, start_year, end_year,
+      salary_y1, salary_y2, salary_y3, salary_y4, salary_y5,
+      is_player_option, is_team_option, is_guaranteed
+    FROM historical_contract_templates
+    WHERE season_year = v_season_year
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+  ELSE
+    INSERT INTO game_player_states (game_id, player_id, team_id)
+    SELECT p_game_id, id, team_id FROM players WHERE team_id IS NOT NULL
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+
+    INSERT INTO contracts (
+      game_id, player_id, team_id, start_year, end_year,
+      salary_y1, salary_y2, salary_y3, salary_y4, salary_y5,
+      is_player_option, is_team_option, is_guaranteed
+    )
+    SELECT
+      p_game_id, ranked.player_id, ranked.team_id, v_season_year, v_season_year + 4,
+      ranked.salary, round(ranked.salary * 1.05), round(ranked.salary * 1.1025),
+      round(ranked.salary * 1.157625), round(ranked.salary * 1.21550625),
+      false, false, true
+    FROM (
+      SELECT
+        p.id AS player_id,
+        p.team_id,
+        CASE
+          WHEN row_number() OVER (PARTITION BY p.team_id ORDER BY p.nba_id NULLS LAST, p.id) = 1 THEN 45000000
+          WHEN row_number() OVER (PARTITION BY p.team_id ORDER BY p.nba_id NULLS LAST, p.id) <= 3 THEN 30000000
+          WHEN row_number() OVER (PARTITION BY p.team_id ORDER BY p.nba_id NULLS LAST, p.id) <= 6 THEN 15000000
+          WHEN row_number() OVER (PARTITION BY p.team_id ORDER BY p.nba_id NULLS LAST, p.id) <= 10 THEN 7000000
+          ELSE 2000000
+        END AS salary
+      FROM players p
+      WHERE p.team_id IS NOT NULL
+    ) ranked
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+  END IF;
+
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id;
+  SELECT count(*) INTO v_contract_count FROM contracts WHERE game_id = p_game_id;
+  IF v_roster_count = 0 OR v_contract_count <> v_roster_count THEN
+    RAISE EXCEPTION 'seed_game_data aborted: incomplete snapshot (% roster rows, % contracts)', v_roster_count, v_contract_count;
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION seed_game_data(UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION seed_game_data(UUID, UUID) TO authenticated;
+
 -- 8. Transaction assets and immutable trade history.
 CREATE TABLE IF NOT EXISTS draft_picks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    draft_year INTEGER NOT NULL CHECK (draft_year >= 2000),
+    draft_year INTEGER NOT NULL,
     draft_round SMALLINT NOT NULL CHECK (draft_round IN (1, 2)),
     original_team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
     protection TEXT CHECK (protection IS NULL OR char_length(trim(protection)) > 0),
     UNIQUE (draft_year, draft_round, original_team_id)
 );
+
+ALTER TABLE draft_picks DROP CONSTRAINT IF EXISTS draft_picks_draft_year_check;
+ALTER TABLE draft_picks ADD CONSTRAINT draft_picks_draft_year_check CHECK (draft_year >= 1947);
 
 CREATE TABLE IF NOT EXISTS game_pick_inventory (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
