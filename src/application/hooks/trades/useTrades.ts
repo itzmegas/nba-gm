@@ -2,13 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TradeEngine } from "@/application/services/TradeEngine";
 import type { Contract } from "@/domain/entities/Contract";
 import type { TradePackage } from "@/domain/entities/Trade";
-import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
+import { SupabaseTradeRepository } from "@/infrastructure/repositories/SupabaseTradeRepository";
 import { createClient } from "@/infrastructure/supabase/client";
 
 const getTradeEngine = () => {
   const supabase = createClient();
-  const contractRepo = new SupabaseContractRepository(supabase);
-  return new TradeEngine(contractRepo);
+  return new TradeEngine(new SupabaseTradeRepository(supabase));
 };
 
 // Hook para simular un trade (validación sin ejecutar)
@@ -58,7 +57,8 @@ export function useExecuteTrade() {
       const engine = getTradeEngine();
       return engine.executeTrade(gameId, teamAContracts, teamBContracts, packageA, packageB);
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (result, variables) => {
+      if (!result.success) return;
       const { gameId, packageA, packageB } = variables;
 
       await Promise.all([
@@ -71,6 +71,8 @@ export function useExecuteTrade() {
         }),
         queryClient.invalidateQueries({ queryKey: ["games", gameId, "roster", packageA.teamId] }),
         queryClient.invalidateQueries({ queryKey: ["games", gameId, "roster", packageB.teamId] }),
+        queryClient.invalidateQueries({ queryKey: ["games", gameId, "trade-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["games", gameId, "draft-picks"] }),
       ]);
     },
   });

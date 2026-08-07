@@ -1,11 +1,12 @@
 import type { Contract } from "@/domain/entities/Contract";
-import type { TradePackage, TradeValidationResult } from "@/domain/entities/Trade";
-import type { ContractRepository } from "@/domain/repositories/ContractRepository";
+import type { ExecutedTrade, TradePackage, TradeValidationResult } from "@/domain/entities/Trade";
+import type { TradeRepository } from "@/domain/repositories/TradeRepository";
 import { TradeValidator } from "@/domain/services/TradeValidator";
 
 export interface TradeExecutionResult {
   success: boolean;
   validationResult?: TradeValidationResult;
+  trade?: ExecutedTrade;
   executedAt?: Date;
   error?: string;
 }
@@ -13,7 +14,7 @@ export interface TradeExecutionResult {
 export class TradeEngine {
   private validator = new TradeValidator();
 
-  constructor(private contractRepository: ContractRepository) {}
+  constructor(private tradeRepository: TradeRepository) {}
 
   async executeTrade(
     gameId: string,
@@ -46,31 +47,19 @@ export class TradeEngine {
       }
     }
 
-    // 2. Ejecutar el trade (actualizar contratos en DB)
     try {
-      // Transferir jugadores de A a B
-      for (const asset of packageA.outgoingAssets) {
-        if (asset.type === "player" && asset.contract) {
-          await this.contractRepository.update(gameId, asset.contract.id, {
-            teamId: packageB.teamId,
-          });
-        }
-      }
-
-      // Transferir jugadores de B a A
-      for (const asset of packageB.outgoingAssets) {
-        if (asset.type === "player" && asset.contract) {
-          await this.contractRepository.update(gameId, asset.contract.id, {
-            teamId: packageA.teamId,
-          });
-        }
-      }
-
-      // Nota: Los picks del draft y cash considerations se manejarían en otra tabla
+      const trade = await this.tradeRepository.execute(
+        gameId,
+        packageA.teamId,
+        packageB.teamId,
+        packageA,
+        packageB
+      );
 
       return {
         success: true,
-        executedAt: new Date(),
+        trade,
+        executedAt: trade.executedAt,
       };
     } catch (error) {
       return {

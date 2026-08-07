@@ -4,6 +4,8 @@ import {
   ArrowLeftRight,
   Bell,
   Calendar,
+  Calendar1,
+  CalendarDays,
   DollarSign,
   Globe,
   LayoutDashboard,
@@ -56,6 +58,7 @@ import {
 } from "@/components/ui/sidebar";
 import { SCHEDULED_GAME_STATUS } from "@/domain/entities/ScheduledGame";
 import { formatSeasonLabel } from "@/domain/entities/Season";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 const simulationDateFormatter = new Intl.DateTimeFormat("es-ES", {
   day: "numeric",
@@ -106,7 +109,11 @@ export function DashboardSidebar({
   const completedDays = useBatchSimulationStore((state) => state.completedDays);
   const totalDays = useBatchSimulationStore((state) => state.totalDays);
   const batchError = useBatchSimulationStore((state) => state.error);
-  const currentGame = useCurrentTeamGame(gameId, selectedTeamId, simulationDate);
+  const currentGame = useCurrentTeamGame(
+    gameId,
+    selectedTeamId,
+    simulationDate,
+  );
   const opponentId = currentGame.data
     ? currentGame.data.homeTeamId === selectedTeamId
       ? currentGame.data.awayTeamId
@@ -119,7 +126,10 @@ export function DashboardSidebar({
   const monthEnd = getMonthEnd(simulationDate, seasonYear);
   const monthDays = Math.max(
     0,
-    Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
+    Math.round(
+      (Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) /
+        86_400_000,
+    ),
   );
   const startBatch = (mode: BatchSimulationMode) => {
     if (advanceDay.isPending) return;
@@ -129,20 +139,31 @@ export function DashboardSidebar({
     }
   };
 
+  const labelSeason =
+    batchMode === BATCH_SIMULATION_MODE.SEASON
+      ? "Simulando temporada…"
+      : "Simular Temporada";
+
+  const labelMonth =
+    batchMode === BATCH_SIMULATION_MODE.MONTH
+      ? "Simulando mes…"
+      : "Simular Mes";
+
+  const labelDay = advanceDay.isPending ? "Simulando…" : "Simular Día ▶";
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
+      <SidebarHeader className="px-4 py-2">
         <Link
           href={dashboardBasePath}
-          className="flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-sidebar-accent"
+          className="flex items-center gap-2 rounded-lg py-2"
         >
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
               alt="Logo"
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded-md object-contain"
+              width={60}
+              height={60}
+              className="rounded-full border object-cove bg-amber-300"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
@@ -150,7 +171,9 @@ export function DashboardSidebar({
             </div>
           )}
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold">{selectedTeam?.name || "Equipo"}</span>
+            <span className="truncate font-semibold">
+              {selectedTeam?.name || "Equipo"}
+            </span>
             <span className="truncate text-xs text-sidebar-foreground/70">
               {selectedTeam?.city || "Franquicia"}
             </span>
@@ -161,7 +184,7 @@ export function DashboardSidebar({
       <SidebarSeparator />
 
       <SidebarContent>
-        <SidebarMenu>
+        <SidebarMenu className="py-4">
           {NAV_ITEMS.map((item) => {
             const href = `${dashboardBasePath}${item.path}`;
             const isRoot = item.path === "";
@@ -172,7 +195,11 @@ export function DashboardSidebar({
 
             return (
               <SidebarMenuItem key={href}>
-                <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={item.label}
+                >
                   <Link href={href}>
                     <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
@@ -184,53 +211,93 @@ export function DashboardSidebar({
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter>
-        <div className="min-h-11 px-1 text-xs group-data-[collapsible=icon]:hidden">
-          <p className="font-medium capitalize">{simulationDateFormatter.format(simulationDate)}</p>
-          <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
-            {currentGame.isPending
-              ? "Cargando…"
-              : currentGame.isError
-                ? "No se pudo cargar el partido."
-                : matchup}
-            {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
-              ` · Final ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
-          </p>
+      <SidebarFooter className="gap-6">
+        <div className="min-h-11 p-2 text-xs border-2 rounded-sm group-data-[collapsible=icon]:hidden">
+          <div className="border-l-6 border-green-700 px-1">
+            <p className="font-medium capitalize">
+              {simulationDateFormatter.format(simulationDate)}
+            </p>
+            <p
+              className={
+                currentGame.isError
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }
+            >
+              {currentGame.isPending
+                ? "Cargando…"
+                : currentGame.isError
+                  ? "No se pudo cargar el partido."
+                  : matchup}
+              {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
+                ` · Final ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
+            </p>
+          </div>
         </div>
-        <Button
-          className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
-          onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-          disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-        >
-          <Calendar className="h-4 w-4" />
-          <span className="group-data-[collapsible=icon]:hidden">
-            {advanceDay.isPending ? "Simulando…" : "Simular Día ▶"}
-          </span>
-        </Button>
-        <div className="grid grid-cols-2 gap-1 pt-1">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
-            disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-          >
-            {batchMode === BATCH_SIMULATION_MODE.MONTH ? "Simulando mes…" : "Simular Mes"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
-            disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-          >
-            {batchMode === BATCH_SIMULATION_MODE.SEASON
-              ? "Simulando temporada…"
-              : "Simular Temporada"}
-          </Button>
-        </div>
-        {batchActive && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">
-              {completedDays} días completados{totalDays === null ? "" : ` de ${totalDays}`}
+        <div className="flex flex-col gap-1">
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                onClick={() => advanceDay.mutate({ gameId, simulationDate })}
+                disabled={
+                  advanceDay.isPending || batchActive || advanceRange.isPending
+                }
+              >
+                <Calendar1 className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {labelDay}
+                </span>
+              </Button>
+            </TooltipTrigger>
+
+            <TooltipContent>{labelDay}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-amber-400 hover:bg-amber-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
+                disabled={
+                  advanceDay.isPending || batchActive || advanceRange.isPending
+                }
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {labelMonth}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{labelMonth}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-red-400 hover:bg-red-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
+                disabled={
+                  advanceDay.isPending || batchActive || advanceRange.isPending
+                }
+              >
+                <Calendar className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {labelSeason}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{labelSeason}</TooltipContent>
+          </Tooltip>
+
+          <div className="space-y-1 py-4">
+            <p className="text-center text-xs text-muted-foreground">
+              {completedDays} días completados
+              {totalDays === null ? "" : ` de ${totalDays}`}
             </p>
             <Button
               className="w-full"
@@ -242,10 +309,13 @@ export function DashboardSidebar({
               {stopRequested ? "Pausando…" : "Pausar simulación"}
             </Button>
           </div>
-        )}
-        {(batchError || advanceDay.isError) && (
-          <p className="text-xs text-destructive">No se pudo avanzar la simulación.</p>
-        )}
+
+          {(batchError || advanceDay.isError) && (
+            <p className="text-xs text-destructive">
+              No se pudo avanzar la simulación.
+            </p>
+          )}
+        </div>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -287,7 +357,10 @@ export function DashboardHeader({
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <div className="flex flex-1 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4 data-[orientation=vertical]:h-4" />
+        <Separator
+          orientation="vertical"
+          className="mr-2 h-4 data-[orientation=vertical]:h-4"
+        />
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -327,7 +400,9 @@ export function DashboardHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel className="truncate">{gameName}</DropdownMenuLabel>
+            <DropdownMenuLabel className="truncate">
+              {gameName}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/">
