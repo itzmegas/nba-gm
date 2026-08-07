@@ -54,6 +54,8 @@ export function useAdvanceRange() {
       let completedDays = 0;
 
       while (monthEnd === null || currentDate < monthEnd) {
+        if (useBatchSimulationStore.getState().stopRequested) break;
+
         const previousDate = currentDate;
         const { data, error } = await createClient().rpc("advance_simulation_day", {
           p_game_id: gameId,
@@ -66,19 +68,19 @@ export function useAdvanceRange() {
         completedDays += 1;
         store.updateProgress(completedDays);
         currentDate = result.new_date;
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["games", gameId] }),
+          queryClient.invalidateQueries({ queryKey: ["schedule", "next", gameId] }),
+          queryClient.invalidateQueries({ queryKey: ["schedule", "current", gameId] }),
+          queryClient.invalidateQueries({ queryKey: ["schedule", gameId] }),
+          queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
+        ]);
         if (result.season_complete) break;
       }
 
       return completedDays;
     },
-    onSettled: async (_data, error, { gameId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["games", gameId] }),
-        queryClient.invalidateQueries({ queryKey: ["schedule", "next", gameId] }),
-        queryClient.invalidateQueries({ queryKey: ["schedule", "current", gameId] }),
-        queryClient.invalidateQueries({ queryKey: ["schedule", gameId] }),
-        queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
-      ]);
+    onSettled: (_data, error) => {
       if (error) useBatchSimulationStore.getState().failBatch(error.message);
       else useBatchSimulationStore.getState().finishBatch();
     },

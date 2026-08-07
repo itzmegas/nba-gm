@@ -5,6 +5,7 @@ import { DashboardSidebar } from "@/components/dashboard/layout-components";
 
 interface BatchRenderState {
   isActive: boolean;
+  stopRequested: boolean;
   mode: "month" | "season" | null;
   completedDays: number;
   totalDays: number | null;
@@ -13,6 +14,7 @@ interface BatchRenderState {
 
 let batchState: BatchRenderState = {
   isActive: true,
+  stopRequested: false,
   mode: "month",
   completedDays: 2,
   totalDays: 5,
@@ -127,6 +129,7 @@ describe("DashboardSidebar simulation feedback", () => {
   beforeEach(() => {
     batchState = {
       isActive: true,
+      stopRequested: false,
       mode: "month",
       completedDays: 2,
       totalDays: 5,
@@ -134,11 +137,21 @@ describe("DashboardSidebar simulation feedback", () => {
     };
   });
 
-  it("renders committed progress and disables every simulation action", () => {
+  it("renders committed progress, disables simulation actions, and offers pause", () => {
     const markup = renderSidebar();
 
     expect(markup).toContain("2 días completados de 5");
+    expect(markup).toContain("Pausar simulación");
     expect((markup.match(/disabled=""/g) ?? []).length).toBe(3);
+  });
+
+  it("disables pause after it is requested", () => {
+    batchState.stopRequested = true;
+
+    const markup = renderSidebar();
+
+    expect(markup).toContain("Pausando…");
+    expect((markup.match(/disabled=""/g) ?? []).length).toBe(4);
   });
 
   it("renders batch errors without changing committed progress", () => {

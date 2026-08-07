@@ -101,6 +101,7 @@ export function DashboardSidebar({
   const advanceDay = useAdvanceDay();
   const advanceRange = useAdvanceRange();
   const batchActive = useBatchSimulationStore((state) => state.isActive);
+  const stopRequested = useBatchSimulationStore((state) => state.stopRequested);
   const batchMode = useBatchSimulationStore((state) => state.mode);
   const completedDays = useBatchSimulationStore((state) => state.completedDays);
   const totalDays = useBatchSimulationStore((state) => state.totalDays);
@@ -149,9 +150,7 @@ export function DashboardSidebar({
             </div>
           )}
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold">
-              {selectedTeam?.name || "Equipo"}
-            </span>
+            <span className="truncate font-semibold">{selectedTeam?.name || "Equipo"}</span>
             <span className="truncate text-xs text-sidebar-foreground/70">
               {selectedTeam?.city || "Franquicia"}
             </span>
@@ -202,7 +201,6 @@ export function DashboardSidebar({
           className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
           onClick={() => advanceDay.mutate({ gameId, simulationDate })}
           disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-          
         >
           <Calendar className="h-4 w-4" />
           <span className="group-data-[collapsible=icon]:hidden">
@@ -230,9 +228,20 @@ export function DashboardSidebar({
           </Button>
         </div>
         {batchActive && (
-          <p className="text-xs text-muted-foreground">
-            {completedDays} días completados{totalDays === null ? "" : ` de ${totalDays}`}
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {completedDays} días completados{totalDays === null ? "" : ` de ${totalDays}`}
+            </p>
+            <Button
+              className="w-full"
+              size="sm"
+              variant="secondary"
+              onClick={() => useBatchSimulationStore.getState().requestStop()}
+              disabled={stopRequested}
+            >
+              {stopRequested ? "Pausando…" : "Pausar simulación"}
+            </Button>
+          </div>
         )}
         {(batchError || advanceDay.isError) && (
           <p className="text-xs text-destructive">No se pudo avanzar la simulación.</p>

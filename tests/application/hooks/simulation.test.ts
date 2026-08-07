@@ -74,6 +74,7 @@ beforeEach(() => {
   invalidateQueries.mockReset();
   useBatchSimulationStore.setState({
     isActive: false,
+    stopRequested: false,
     mode: null,
     completedDays: 0,
     totalDays: null,
@@ -284,7 +285,7 @@ describe("batch simulation", () => {
 
     expect(rpc).not.toHaveBeenCalled();
     expect(useBatchSimulationStore.getState().isActive).toBe(false);
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("does not start a second active batch", () => {
@@ -294,5 +295,22 @@ describe("batch simulation", () => {
     expect(useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.MONTH, 3)).toBe(
       false
     );
+  });
+
+  it("stops before the next day when pause is requested", async () => {
+    rpc.mockImplementationOnce(async () => {
+      useBatchSimulationStore.getState().requestStop();
+      return {
+        data: [{ new_date: "2026-10-31", season_complete: false }],
+        error: null,
+      };
+    });
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.SEASON, null);
+
+    await useAdvanceRange().mutateAsync({ ...input, mode: BATCH_SIMULATION_MODE.SEASON });
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(1);
+    expect(useBatchSimulationStore.getState().isActive).toBe(false);
   });
 });

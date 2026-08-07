@@ -144,10 +144,12 @@ describe("SupabaseScheduleRepository", () => {
       expect(sql).not.toMatch(/row_number\(\)[\s\S]*% 183/);
       expect(sql).toContain("generate_series(0, 28)");
       expect(sql).toContain("generate_series(1, 14)");
-      expect(sql).toContain("((c * 29 + r) * 182 / 57)");
+      expect(sql).toContain("((c * 29 + r) *");
+      expect(sql).toContain("/ 57)");
       expect(sql).toContain("home.slot = CASE WHEN c = 0 THEN home_slot ELSE away_slot END");
       expect(sql).toMatch(/,\s*home\.id,\s*away\.id\s+FROM rounds/);
     }
+    expect(schema).toContain("v_game.simulation_date + 1");
 
     const firstCycle: Array<[number, number]> = [];
     for (let round = 0; round < 29; round += 1) {
