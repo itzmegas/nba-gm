@@ -6,6 +6,7 @@ import { use, useEffect, useState } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useT } from "@/application/providers/I18nProvider";
 import { RosterTable } from "@/components/roster/roster-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +38,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
     teams?.find((team) => team.id === requestedTeamId)?.id ?? fallbackTeamId ?? null;
   const selectedTeam = teams?.find((team) => team.id === selectedTeamId);
   const { data: rosterPlayers, isLoading: isLoadingRoster } = useRoster(gameId, selectedTeamId);
+  const t = useT();
 
   useEffect(() => {
     if (!teams || !game || !selectedTeamId || requestedTeamId === selectedTeamId) return;
@@ -56,7 +58,9 @@ export default function LeaguePage({ params }: LeaguePageProps) {
   );
 
   if (isLoadingGame || isLoadingTeams || !game) {
-    return <div className="flex min-h-[50vh] items-center justify-center">Cargando liga...</div>;
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">{t("common", "loading")}</div>
+    );
   }
 
   return (
@@ -64,14 +68,14 @@ export default function LeaguePage({ params }: LeaguePageProps) {
       <div className="flex items-center gap-3">
         <Globe className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Liga</h1>
-          <p className="text-muted-foreground">Explorá los rosters de la temporada</p>
+          <h1 className="text-3xl font-black tracking-tight">{t("dashboard", "league")}</h1>
+          <p className="text-muted-foreground">{t("dashboard", "currentSeasonGames")}</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Seleccionar equipo</CardTitle>
+          <CardTitle>{t("dashboard", "selectTeam")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="relative">
@@ -79,7 +83,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
             <Input
               value={teamSearch}
               onChange={(event) => setTeamSearch(event.target.value)}
-              placeholder="Buscar por nombre, ciudad o abreviatura"
+              placeholder={t("dashboard", "searchTeam")}
               className="pl-9"
             />
           </div>
@@ -92,7 +96,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Seleccioná un equipo" />
+              <SelectValue placeholder={t("dashboard", "chooseTeam")} />
             </SelectTrigger>
             <SelectContent>
               {filteredTeams.map((team) => (
@@ -103,7 +107,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
             </SelectContent>
           </Select>
           {filteredTeams.length === 0 && (
-            <p className="text-sm text-muted-foreground">No hay equipos que coincidan.</p>
+            <p className="text-sm text-muted-foreground">{t("dashboard", "noMatchingTeams")}</p>
           )}
         </CardContent>
       </Card>
@@ -112,30 +116,36 @@ export default function LeaguePage({ params }: LeaguePageProps) {
         <CardHeader className="flex-row items-center justify-between">
           <div>
             <CardTitle>
-              {selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}` : "Roster"}
+              {selectedTeam
+                ? `${selectedTeam.city} ${selectedTeam.name}`
+                : t("dashboard", "rosterFallback")}
             </CardTitle>
-            <p className="text-sm text-muted-foreground">Temporada {game.seasonYear}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard", "season")} {game.seasonYear}
+            </p>
           </div>
-          <Badge variant="outline">{rosterPlayers?.length ?? 0} jugadores</Badge>
+          <Badge variant="outline">
+            {rosterPlayers?.length ?? 0} {t("dashboard", "playersCount")}
+          </Badge>
         </CardHeader>
         <CardContent className="space-y-4 p-0 pb-4">
           <div className="px-6">
             <Input
               value={playerSearch}
               onChange={(event) => setPlayerSearch(event.target.value)}
-              placeholder="Buscar jugador"
-              aria-label="Buscar jugador"
+              placeholder={t("dashboard", "rosterSearch")}
+              aria-label={t("dashboard", "rosterSearch")}
             />
           </div>
           {isLoadingRoster ? (
-            <p className="px-6 py-12 text-center text-muted-foreground">Cargando roster...</p>
+            <p className="px-6 py-12 text-center text-muted-foreground">{t("common", "loading")}</p>
           ) : !rosterPlayers?.length ? (
             <p className="px-6 py-12 text-center text-muted-foreground">
-              No hay jugadores en el roster.
+              {t("dashboard", "noPlayersRoster")}
             </p>
           ) : !filteredPlayers.length ? (
             <p className="px-6 py-12 text-center text-muted-foreground">
-              No hay jugadores que coincidan.
+              {t("dashboard", "noMatchingTeams")}
             </p>
           ) : (
             <RosterTable

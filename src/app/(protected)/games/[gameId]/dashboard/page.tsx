@@ -5,6 +5,7 @@ import { use } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useNextGame, useStandings } from "@/application/hooks/simulation";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 import { CapSpaceWidget } from "@/components/dashboard/cap-space-widget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,8 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
   const { data: teams, isLoading: isLoadingTeams } = useTeams();
   const { data: nextGame } = useNextGame(gameId, selectedTeamId, game?.simulationDate);
   const { data: standings } = useStandings(gameId);
+  const t = useT();
+  const locale = useLocale();
   const team = teams?.find((candidate) => candidate.id === selectedTeamId);
   const opponentId = nextGame
     ? nextGame.homeTeamId === selectedTeamId
@@ -41,9 +44,9 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-black tracking-tight">
-          Hola, GM de los {team?.name || "Lakers"}
+          {t("dashboard", "dashboard")} · GM {team?.name || t("dashboard", "teamFallback")}
         </h1>
-        <p className="text-muted-foreground text-lg">Este es el estado actual de tu franquicia.</p>
+        <p className="text-muted-foreground text-lg">{t("dashboard", "dashboardDescription")}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -59,7 +62,7 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <CalendarIcon className="h-5 w-5 text-primary" />
-              Próximo Partido
+              {t("dashboard", "nextGame")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -70,7 +73,9 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
                     {team?.abbreviation ?? "—"}
                   </div>
                 </div>
-                <div className="text-sm font-bold text-muted-foreground">VS</div>
+                <div className="text-sm font-bold text-muted-foreground">
+                  {t("dashboard", "versus")}
+                </div>
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
                     {opponent?.abbreviation ?? "—"}
@@ -78,13 +83,13 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
                 </div>
               </div>
               <div>
-                <p className="font-bold">{opponent?.name ?? "Sin próximo partido"}</p>
+                <p className="font-bold">{opponent?.name ?? t("dashboard", "noNextGame")}</p>
                 <p className="text-sm text-muted-foreground">
                   {nextGame
-                    ? new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(
-                        new Date(`${nextGame.date}T12:00:00`)
-                      )
-                    : "Calendario pendiente"}
+                    ? new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
+                        dateStyle: "medium",
+                      }).format(new Date(`${nextGame.date}T12:00:00`))
+                    : t("dashboard", "pendingCalendar")}
                 </p>
               </div>
             </div>
@@ -95,7 +100,7 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
-              Posiciones (Oeste)
+              {t("dashboard", "standingsWest")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -125,21 +130,21 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Newspaper className="h-5 w-5 text-blue-500" />
-              Noticias de la Liga
+              {t("dashboard", "leagueNews")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4 mt-2">
               <div className="space-y-1">
-                <h4 className="text-sm font-bold">Lesión importante</h4>
+                <h4 className="text-sm font-bold">{t("dashboard", "newsInjuryTitle")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  Joel Embiid fuera por 4 semanas debido a un esguince.
+                  {t("dashboard", "newsInjuryDescription")}
                 </p>
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-bold">Rumor de traspaso</h4>
+                <h4 className="text-sm font-bold">{t("dashboard", "newsTradeTitle")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  Los Bulls buscan mover el contrato de Zach LaVine antes del deadline.
+                  {t("dashboard", "newsTradeDescription")}
                 </p>
               </div>
             </div>

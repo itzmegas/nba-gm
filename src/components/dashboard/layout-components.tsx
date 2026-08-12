@@ -21,6 +21,7 @@ import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation";
 import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
 import { useCurrentTeamGame } from "@/application/hooks/simulation/useCurrentTeamGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useLocale, useT } from "@/application/providers/I18nProvider";
 import {
   BATCH_SIMULATION_MODE,
   type BatchSimulationMode,
@@ -60,27 +61,29 @@ import { SCHEDULED_GAME_STATUS } from "@/domain/entities/ScheduledGame";
 import { formatSeasonLabel } from "@/domain/entities/Season";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
-const simulationDateFormatter = new Intl.DateTimeFormat("es-ES", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+function getSimulationDateFormatter(locale: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 interface DashboardNavItem {
-  label: string;
+  key: "dashboard" | "roster" | "league" | "trades" | "freeAgency" | "calendar" | "settings";
   path: string;
   icon: ComponentType<{ className?: string }>;
 }
 
 const NAV_ITEMS: DashboardNavItem[] = [
-  { label: "Dashboard", path: "", icon: LayoutDashboard },
-  { label: "Roster", path: "/roster", icon: Users },
-  { label: "Liga", path: "/league", icon: Globe },
-  { label: "Traspasos", path: "/trades", icon: ArrowLeftRight },
-  { label: "Agencia Libre", path: "/free-agency", icon: DollarSign },
-  { label: "Calendario", path: "/schedule", icon: Calendar },
-  { label: "Ajustes", path: "/settings", icon: Settings },
+  { key: "dashboard", path: "", icon: LayoutDashboard },
+  { key: "roster", path: "/roster", icon: Users },
+  { key: "league", path: "/league", icon: Globe },
+  { key: "trades", path: "/trades", icon: ArrowLeftRight },
+  { key: "freeAgency", path: "/free-agency", icon: DollarSign },
+  { key: "calendar", path: "/schedule", icon: Calendar },
+  { key: "settings", path: "/settings", icon: Settings },
 ];
 
 interface DashboardSidebarProps {
@@ -97,6 +100,9 @@ export function DashboardSidebar({
   seasonYear,
 }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const t = useT();
+  const locale = useLocale();
+  const simulationDateFormatter = getSimulationDateFormatter(locale);
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
 
@@ -109,11 +115,7 @@ export function DashboardSidebar({
   const completedDays = useBatchSimulationStore((state) => state.completedDays);
   const totalDays = useBatchSimulationStore((state) => state.totalDays);
   const batchError = useBatchSimulationStore((state) => state.error);
-  const currentGame = useCurrentTeamGame(
-    gameId,
-    selectedTeamId,
-    simulationDate,
-  );
+  const currentGame = useCurrentTeamGame(gameId, selectedTeamId, simulationDate);
   const opponentId = currentGame.data
     ? currentGame.data.homeTeamId === selectedTeamId
       ? currentGame.data.awayTeamId
@@ -122,14 +124,11 @@ export function DashboardSidebar({
   const opponent = teams?.find((team) => team.id === opponentId);
   const matchup = currentGame.data
     ? `${currentGame.data.homeTeamId === selectedTeamId ? "vs" : "@"} ${opponent?.abbreviation ?? "---"}`
-    : "Día libre";
+    : t("dashboard", "freeDay");
   const monthEnd = getMonthEnd(simulationDate, seasonYear);
   const monthDays = Math.max(
     0,
-    Math.round(
-      (Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) /
-        86_400_000,
-    ),
+    Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
   );
   const startBatch = (mode: BatchSimulationMode) => {
     if (advanceDay.isPending) return;
@@ -141,22 +140,21 @@ export function DashboardSidebar({
 
   const labelSeason =
     batchMode === BATCH_SIMULATION_MODE.SEASON
-      ? "Simulando temporada…"
-      : "Simular Temporada";
+      ? t("dashboard", "simulatingSeason")
+      : t("dashboard", "simulateSeason");
 
   const labelMonth =
     batchMode === BATCH_SIMULATION_MODE.MONTH
-      ? "Simulando mes…"
-      : "Simular Mes";
+      ? t("dashboard", "simulatingMonth")
+      : t("dashboard", "simulateMonth");
 
-  const labelDay = advanceDay.isPending ? "Simulando…" : "Simular Día ▶";
+  const labelDay = advanceDay.isPending
+    ? t("dashboard", "simulatingDay")
+    : t("dashboard", "simulateDay");
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="px-4 py-2">
-        <Link
-          href={dashboardBasePath}
-          className="flex items-center gap-2 rounded-lg py-2"
-        >
+        <Link href={dashboardBasePath} className="flex items-center gap-2 rounded-lg py-2">
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
@@ -167,15 +165,15 @@ export function DashboardSidebar({
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
-              {selectedTeam?.abbreviation || "NBA"}
+              {selectedTeam?.abbreviation || t("dashboard", "nba")}
             </div>
           )}
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-semibold">
-              {selectedTeam?.name || "Equipo"}
+              {selectedTeam?.name || t("dashboard", "teamFallback")}
             </span>
             <span className="truncate text-xs text-sidebar-foreground/70">
-              {selectedTeam?.city || "Franquicia"}
+              {selectedTeam?.city || t("dashboard", "franchiseFallback")}
             </span>
           </div>
         </Link>
@@ -195,14 +193,10 @@ export function DashboardSidebar({
 
             return (
               <SidebarMenuItem key={href}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  tooltip={item.label}
-                >
+                <SidebarMenuButton asChild isActive={isActive} tooltip={t("dashboard", item.key)}>
                   <Link href={href}>
                     <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
+                    <span>{t("dashboard", item.key)}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -217,20 +211,14 @@ export function DashboardSidebar({
             <p className="font-medium capitalize">
               {simulationDateFormatter.format(simulationDate)}
             </p>
-            <p
-              className={
-                currentGame.isError
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }
-            >
+            <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
               {currentGame.isPending
-                ? "Cargando…"
+                ? t("common", "loading")
                 : currentGame.isError
-                  ? "No se pudo cargar el partido."
+                  ? t("dashboard", "unableToLoadGame")
                   : matchup}
               {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
-                ` · Final ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
+                ` · ${t("dashboard", "final")} ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
             </p>
           </div>
         </div>
@@ -240,14 +228,10 @@ export function DashboardSidebar({
               <Button
                 className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-                disabled={
-                  advanceDay.isPending || batchActive || advanceRange.isPending
-                }
+                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
                 <Calendar1 className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {labelDay}
-                </span>
+                <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
               </Button>
             </TooltipTrigger>
 
@@ -261,14 +245,10 @@ export function DashboardSidebar({
                 variant="ghost"
                 className="bg-amber-400 hover:bg-amber-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
-                disabled={
-                  advanceDay.isPending || batchActive || advanceRange.isPending
-                }
+                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
                 <CalendarDays className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {labelMonth}
-                </span>
+                <span className="group-data-[collapsible=icon]:hidden">{labelMonth}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>{labelMonth}</TooltipContent>
@@ -281,14 +261,10 @@ export function DashboardSidebar({
                 variant="ghost"
                 className="bg-red-400 hover:bg-red-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
-                disabled={
-                  advanceDay.isPending || batchActive || advanceRange.isPending
-                }
+                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
                 <Calendar className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {labelSeason}
-                </span>
+                <span className="group-data-[collapsible=icon]:hidden">{labelSeason}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>{labelSeason}</TooltipContent>
@@ -296,8 +272,8 @@ export function DashboardSidebar({
 
           <div className="space-y-1 py-4">
             <p className="text-center text-xs text-muted-foreground">
-              {completedDays} días completados
-              {totalDays === null ? "" : ` de ${totalDays}`}
+              {completedDays} {t("dashboard", "completedDays")}
+              {totalDays === null ? "" : ` ${t("dashboard", "ofDays")} ${totalDays}`}
             </p>
             <Button
               className="w-full"
@@ -306,14 +282,14 @@ export function DashboardSidebar({
               onClick={() => useBatchSimulationStore.getState().requestStop()}
               disabled={stopRequested}
             >
-              {stopRequested ? "Pausando…" : "Pausar simulación"}
+              {stopRequested
+                ? t("dashboard", "pausingSimulation")
+                : t("dashboard", "pauseSimulation")}
             </Button>
           </div>
 
           {(batchError || advanceDay.isError) && (
-            <p className="text-xs text-destructive">
-              No se pudo avanzar la simulación.
-            </p>
+            <p className="text-xs text-destructive">{t("dashboard", "unableToAdvance")}</p>
           )}
         </div>
       </SidebarFooter>
@@ -336,6 +312,7 @@ export function DashboardHeader({
   seasonYear,
 }: DashboardHeaderProps) {
   const pathname = usePathname();
+  const t = useT();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
 
@@ -357,22 +334,21 @@ export function DashboardHeader({
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <div className="flex flex-1 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <Separator
-          orientation="vertical"
-          className="mr-2 h-4 data-[orientation=vertical]:h-4"
-        />
+        <Separator orientation="vertical" className="mr-2 h-4 data-[orientation=vertical]:h-4" />
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href={dashboardBasePath}>GM</Link>
+                <Link href={dashboardBasePath}>{t("dashboard", "gm")}</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {!isHome && activeItem && (
               <>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{activeItem.label}</BreadcrumbPage>
+                  <BreadcrumbPage>
+                    {activeItem ? t("dashboard", activeItem.key) : null}
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             )}
@@ -383,10 +359,10 @@ export function DashboardHeader({
       <div className="flex items-center gap-3">
         <div className="hidden items-end sm:flex flex-col">
           <span className="text-xs text-muted-foreground">
-            Temporada {formatSeasonLabel(seasonYear)}
+            {t("dashboard", "season")} {formatSeasonLabel(seasonYear)}
           </span>
           <span className="text-xs font-medium leading-none">
-            {selectedTeam ? `GM · ${selectedTeam.city}` : "GM Invitado"}
+            {selectedTeam ? `GM · ${selectedTeam.city}` : t("dashboard", "guestGm")}
           </span>
         </div>
         <Separator
@@ -395,19 +371,17 @@ export function DashboardHeader({
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Menú de partida">
+            <Button variant="ghost" size="icon-sm" aria-label={t("dashboard", "gameMenu")}>
               <LogOut className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel className="truncate">
-              {gameName}
-            </DropdownMenuLabel>
+            <DropdownMenuLabel className="truncate">{gameName}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/">
                 <LogOut className="h-4 w-4" />
-                Salir y cambiar de partida
+                {t("dashboard", "exitChangeGame")}
               </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>

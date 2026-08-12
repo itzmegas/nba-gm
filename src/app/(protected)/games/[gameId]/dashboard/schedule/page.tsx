@@ -3,6 +3,7 @@
 import { CalendarDays } from "lucide-react";
 import { use } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
+import { useT } from "@/application/providers/I18nProvider";
 import { Calendar } from "@/components/games/Calendar";
 
 interface SchedulePageProps {
@@ -12,12 +13,13 @@ interface SchedulePageProps {
 export default function SchedulePage({ params }: SchedulePageProps) {
   const { gameId } = use(params);
   const game = useGame(gameId);
+  const t = useT();
 
   if (game.isLoading) {
     return (
       <output
         className="flex min-h-[50vh] items-center justify-center"
-        aria-label="Cargando partida"
+        aria-label={t("dashboard", "loadingGame")}
       >
         <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
       </output>
@@ -25,7 +27,9 @@ export default function SchedulePage({ params }: SchedulePageProps) {
   }
 
   if (game.isError || !game.data) {
-    return <p className="py-10 text-center text-destructive">No se pudo cargar la partida.</p>;
+    return (
+      <p className="py-10 text-center text-destructive">{t("dashboard", "unableToLoadGame")}</p>
+    );
   }
 
   return (
@@ -33,9 +37,9 @@ export default function SchedulePage({ params }: SchedulePageProps) {
       <div>
         <h1 className="flex items-center gap-3 text-3xl font-black tracking-tight">
           <CalendarDays className="h-8 w-8 text-primary" />
-          Calendario
+          {t("dashboard", "calendar")}
         </h1>
-        <p className="mt-1 text-muted-foreground">Partidos programados de la temporada.</p>
+        <p className="mt-1 text-muted-foreground">{t("dashboard", "currentSeasonGames")}</p>
       </div>
       <Calendar
         key={`${game.data.simulationDate.getUTCFullYear()}-${game.data.simulationDate.getUTCMonth()}`}

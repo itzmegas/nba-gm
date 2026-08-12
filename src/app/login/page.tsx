@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useT } from "@/application/providers/I18nProvider";
 import { LoginForm } from "@/components/login-form";
 import { createClient } from "@/infrastructure/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
@@ -50,7 +52,9 @@ export default function LoginPage() {
     <div className="flex min-h-svh w-full items-center justify-center bg-background p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <span className="text-3xl font-black tracking-tighter text-primary">THE ASSOCIATION</span>
+          <span className="text-3xl font-black tracking-tighter text-primary">
+            {t("auth", "appTagline").split(" — ")[0].toUpperCase()}
+          </span>
         </div>
         <LoginForm />
       </div>

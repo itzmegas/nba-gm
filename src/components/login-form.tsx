@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useT } from "@/application/providers/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -11,6 +12,7 @@ import { cn } from "@/utils/utils";
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const router = useRouter();
+  const t = useT();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +40,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           return;
         }
 
-        setSuccess("Cuenta creada. Revisá tu email para confirmar, o probá entrar directamente.");
+        setSuccess(t("auth", "accountCreated"));
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
@@ -62,16 +64,18 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">{isSignUp ? "Crear cuenta" : "Iniciar sesión"}</CardTitle>
+          <CardTitle className="text-xl">
+            {isSignUp ? t("auth", "signUp") : t("auth", "signIn")}
+          </CardTitle>
           <CardDescription>
-            {isSignUp ? "Registrate para empezar a simular" : "Entrá a tu cuenta de Basketball GM"}
+            {isSignUp ? t("auth", "signupDescription") : t("auth", "loginDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">{t("auth", "email")}</FieldLabel>
                 <Input
                   id="email"
                   type="email"
@@ -84,7 +88,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               </Field>
               <Field>
                 <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+                  <FieldLabel htmlFor="password">{t("auth", "password")}</FieldLabel>
                 </div>
                 <Input
                   id="password"
@@ -113,19 +117,19 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-background" />
-                    {isSignUp ? "Creando cuenta..." : "Entrando..."}
+                    {isSignUp ? t("auth", "creatingAccount") : t("auth", "signingIn")}
                   </span>
                 ) : isSignUp ? (
-                  "Crear cuenta"
+                  t("auth", "signUp")
                 ) : (
-                  "Iniciar sesión"
+                  t("auth", "signIn")
                 )}
               </Button>
 
               <FieldDescription className="text-center">
                 {isSignUp ? (
                   <>
-                    Ya tenés cuenta?{" "}
+                    {t("auth", "haveAccount")}{" "}
                     <button
                       type="button"
                       className="text-primary underline underline-offset-4 hover:text-primary/80"
@@ -135,12 +139,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         setSuccess(null);
                       }}
                     >
-                      Iniciar sesión
+                      {t("auth", "signIn")}
                     </button>
                   </>
                 ) : (
                   <>
-                    No tenés cuenta?{" "}
+                    {t("auth", "noAccount")}{" "}
                     <button
                       type="button"
                       className="text-primary underline underline-offset-4 hover:text-primary/80"
@@ -150,7 +154,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         setSuccess(null);
                       }}
                     >
-                      Crear cuenta
+                      {t("auth", "signUp")}
                     </button>
                   </>
                 )}
@@ -160,9 +164,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         </CardContent>
       </Card>
 
-      <p className="text-center text-xs text-muted-foreground">
-        The Association — NBA GM Simulator
-      </p>
+      <p className="text-center text-xs text-muted-foreground">{t("auth", "appTagline")}</p>
     </div>
   );
 }

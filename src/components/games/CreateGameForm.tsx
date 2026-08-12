@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCreateGame } from "@/application/hooks/games/useCreateGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useT } from "@/application/providers/I18nProvider";
 import {
   selectCreateError,
   selectIsCreating,
@@ -29,6 +30,7 @@ import {
 } from "@/domain/entities/SeasonEra";
 
 export function CreateGameForm() {
+  const t = useT();
   const router = useRouter();
   const [localError, setLocalError] = useState<string | null>(null);
   const [selectedSeasonEraId, setSelectedSeasonEraId] =
@@ -72,7 +74,7 @@ export function CreateGameForm() {
 
   const handleCreateGame = async () => {
     if (!pendingSelectedTeamId) {
-      setLocalError("Seleccioná una franquicia para crear una partida.");
+      setLocalError(t("games", "selectedFranchise"));
       return;
     }
 
@@ -92,7 +94,7 @@ export function CreateGameForm() {
       router.refresh();
     } catch (mutationError) {
       const message =
-        mutationError instanceof Error ? mutationError.message : "No se pudo crear la partida.";
+        mutationError instanceof Error ? mutationError.message : t("dashboard", "unableToLoadGame");
       failCreate(message);
     }
   };
@@ -101,7 +103,7 @@ export function CreateGameForm() {
     return (
       <div className="flex flex-col items-center justify-center min-h-100 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-        <p className="text-muted-foreground animate-pulse">Cargando franquicias NBA...</p>
+        <p className="text-muted-foreground animate-pulse">{t("games", "loadingFranchises")}</p>
       </div>
     );
   }
@@ -109,7 +111,7 @@ export function CreateGameForm() {
   if (error) {
     return (
       <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-center">
-        <h3 className="font-bold mb-2">Error de Conexión</h3>
+        <h3 className="font-bold mb-2">{t("games", "connectionError")}</h3>
         <p>{error.message}</p>
       </div>
     );
@@ -120,26 +122,24 @@ export function CreateGameForm() {
       <Card className="border-border/50 bg-card/50">
         <CardContent className="p-6 space-y-6">
           <div className="space-y-1">
-            <h2 className="text-xl font-bold tracking-tight">Configuración de Partida</h2>
-            <p className="text-sm text-muted-foreground">
-              Elegí un nombre opcional para identificar este universo de simulación.
-            </p>
+            <h2 className="text-xl font-bold tracking-tight">{t("games", "configuration")}</h2>
+            <p className="text-sm text-muted-foreground">{t("games", "optionalName")}</p>
           </div>
 
           <Input
             type="text"
             value={pendingGameName}
             onChange={(event) => setPendingGameName(event.target.value)}
-            placeholder={selectedTeam ? `${selectedTeam.name} Dynasty Save` : "Mi partida NBA"}
+            placeholder={
+              selectedTeam ? `${selectedTeam.name} Dynasty Save` : t("games", "gameNamePlaceholder")
+            }
             maxLength={80}
           />
 
           <div className="space-y-3">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold">Era de inicio</h3>
-              <p className="text-sm text-muted-foreground">
-                Elegí la fecha y temporada base para la partida.
-              </p>
+              <h3 className="text-sm font-semibold">{t("games", "startEra")}</h3>
+              <p className="text-sm text-muted-foreground">{t("games", "startEraDescription")}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -164,8 +164,8 @@ export function CreateGameForm() {
 
             <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-muted-foreground">
               {selectedSeasonEra.isHistoricalDatasetAvailable
-                ? "Esta era usa rosters históricos reales con contratos aproximados; el límite salarial y las reglas siguen siendo modernas."
-                : "Esta era usa el dataset canónico actual como referencia visual; todavía no incluye rosters, contratos, límite salarial ni reglas históricas precisas."}
+                ? t("games", "historicalEraNote")
+                : t("games", "currentEraNote")}
             </p>
           </div>
 
@@ -182,7 +182,7 @@ export function CreateGameForm() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Buscar franquicia (ej. Lakers, NYK)..."
+            placeholder={t("games", "searchFranchise")}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="pl-9 bg-background"
@@ -196,7 +196,7 @@ export function CreateGameForm() {
             size="sm"
             className="rounded-full"
           >
-            Toda la Liga
+            {t("games", "allLeague")}
           </Button>
           <Button
             variant={conferenceFilter === "east" ? "default" : "outline"}
@@ -204,7 +204,7 @@ export function CreateGameForm() {
             size="sm"
             className="rounded-full"
           >
-            Este
+            {t("games", "east")}
           </Button>
           <Button
             variant={conferenceFilter === "west" ? "default" : "outline"}
@@ -212,14 +212,14 @@ export function CreateGameForm() {
             size="sm"
             className="rounded-full"
           >
-            Oeste
+            {t("games", "west")}
           </Button>
         </div>
       </div>
 
       {filteredTeams.length === 0 ? (
         <div className="text-center py-24 text-muted-foreground">
-          No se encontraron franquicias con esos filtros.
+          {t("games", "noMatchingFranchises")}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -288,7 +288,7 @@ export function CreateGameForm() {
       >
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
-            <p className="text-sm text-muted-foreground">Franquicia seleccionada</p>
+            <p className="text-sm text-muted-foreground">{t("games", "selectedFranchise")}</p>
             <p className="font-bold">
               {selectedTeam?.city} {selectedTeam?.name}
             </p>
@@ -303,11 +303,11 @@ export function CreateGameForm() {
             {isCreating ? (
               <span className="flex items-center gap-2">
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-background" />
-                Creando partida...
+                {t("games", "creatingGame")}
               </span>
             ) : (
               <span className="flex items-center gap-2">
-                Crear Partida
+                {t("games", "createGame")}
                 <ChevronRight className="h-4 w-4" />
               </span>
             )}
@@ -323,7 +323,7 @@ export function CreateGameForm() {
           router.push("/");
         }}
       >
-        Volver al menú
+        {t("games", "backToMenu")}
       </Button>
     </div>
   );

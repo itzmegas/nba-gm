@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useT } from "@/application/providers/I18nProvider";
 import { useTeamStore } from "@/application/stores/useTeamStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export function TeamSelector() {
+  const t = useT();
   const router = useRouter();
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -30,7 +32,7 @@ export function TeamSelector() {
     return (
       <div className="flex flex-col items-center justify-center min-h-100 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        <p className="text-muted-foreground animate-pulse">Cargando franquicias NBA...</p>
+        <p className="text-muted-foreground animate-pulse">{t("games", "loadingFranchises")}</p>
       </div>
     );
   }
@@ -38,11 +40,9 @@ export function TeamSelector() {
   if (error) {
     return (
       <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-center">
-        <h3 className="font-bold mb-2">Error de Conexión</h3>
+        <h3 className="font-bold mb-2">{t("games", "connectionError")}</h3>
         <p>{error.message}</p>
-        <p className="text-sm mt-2 opacity-80">
-          Chequeá que Supabase esté configurado y corriendo con data.
-        </p>
+        <p className="text-sm mt-2 opacity-80">{t("games", "supabaseConfiguration")}</p>
       </div>
     );
   }
@@ -80,7 +80,7 @@ export function TeamSelector() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Buscar franquicia (ej. Lakers, NYK)..."
+            placeholder={t("games", "searchFranchise")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 bg-background"
@@ -94,7 +94,7 @@ export function TeamSelector() {
             size="sm"
             className="rounded-full"
           >
-            Toda la Liga
+            {t("games", "allLeague")}
           </Button>
           <Button
             variant={conferenceFilter === "east" ? "default" : "outline"}
@@ -102,7 +102,7 @@ export function TeamSelector() {
             size="sm"
             className="rounded-full"
           >
-            Este
+            {t("games", "east")}
           </Button>
           <Button
             variant={conferenceFilter === "west" ? "default" : "outline"}
@@ -110,7 +110,7 @@ export function TeamSelector() {
             size="sm"
             className="rounded-full"
           >
-            Oeste
+            {t("games", "west")}
           </Button>
         </div>
       </div>
@@ -118,7 +118,7 @@ export function TeamSelector() {
       {/* TEAMS GRID */}
       {filteredTeams.length === 0 ? (
         <div className="text-center py-24 text-muted-foreground">
-          No se encontraron franquicias con esos filtros.
+          {t("games", "noMatchingFranchises")}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -196,7 +196,7 @@ export function TeamSelector() {
       >
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
-            <p className="text-sm text-muted-foreground">Franquicia seleccionada</p>
+            <p className="text-sm text-muted-foreground">{t("games", "selectedFranchise")}</p>
             <p className="font-bold">
               {teams?.find((t) => t.id === selectedTeamId)?.city}{" "}
               {teams?.find((t) => t.id === selectedTeamId)?.name}
@@ -212,11 +212,11 @@ export function TeamSelector() {
             {isConfirming ? (
               <span className="flex items-center gap-2">
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-background"></span>
-                Iniciando...
+                {t("common", "loading")}
               </span>
             ) : (
               <span className="flex items-center gap-2">
-                Asumir como GM
+                {t("dashboard", "dashboard")}
                 <ChevronRight className="h-4 w-4" />
               </span>
             )}

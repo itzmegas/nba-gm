@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ReactQueryProvider } from "@/application/providers/ReactQueryProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { I18nRuntime } from "@/infrastructure/i18n/I18nRuntime";
+import { resolveLocale } from "@/infrastructure/i18n/request";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -21,17 +23,21 @@ export const metadata: Metadata = {
   description: "Advanced NBA General Manager Simulator. Take control of your franchise.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await resolveLocale();
+
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang={locale} className={inter.variable}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ReactQueryProvider>
-          <TooltipProvider>{children}</TooltipProvider>
-        </ReactQueryProvider>
+        <I18nRuntime locale={locale}>
+          <ReactQueryProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+          </ReactQueryProvider>
+        </I18nRuntime>
       </body>
     </html>
   );
