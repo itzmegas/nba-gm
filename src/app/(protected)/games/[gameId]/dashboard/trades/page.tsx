@@ -1,15 +1,17 @@
 "use client";
 
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, History } from "lucide-react";
 import { use, useState } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
+import { usePlayerStates } from "@/application/hooks/player-states/usePlayerStates";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useDraftPickInventory } from "@/application/hooks/trades/useDraftPickInventory";
 import { useTradeHistory } from "@/application/hooks/trades/useTradeHistory";
 import { useExecuteTrade, useSimulateTrade } from "@/application/hooks/trades/useTrades";
-import { Button } from "@/components/ui/button";
+import { TradeAssetPanel } from "@/components/trades/trade-asset-panel";
+import { TradeSummary } from "@/components/trades/trade-summary";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -18,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { PickInventory, TradeAsset, TradePackage } from "@/domain/entities/Trade";
+import type { TradeAsset, TradePackage } from "@/domain/entities/Trade";
 
 interface TradesPageProps {
   params: Promise<{ gameId: string }>;
@@ -26,11 +28,6 @@ interface TradesPageProps {
 
 function toggleSelection(current: string[], id: string): string[] {
   return current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
-}
-
-function formatPick(pick: PickInventory): string {
-  const protection = pick.pick.protection ? ` (${pick.pick.protection})` : "";
-  return `${pick.pick.draftYear} R${pick.pick.draftRound}${protection}`;
 }
 
 export default function TradesPage({ params }: TradesPageProps) {
@@ -53,6 +50,8 @@ export default function TradesPage({ params }: TradesPageProps) {
   const { data: opponentContracts = [] } = useTeamContracts(gameId, opponentId || null);
   const { data: inventory = [] } = useDraftPickInventory(gameId);
   const { data: history = [] } = useTradeHistory(gameId);
+  const { data: teamPlayerStates = [] } = usePlayerStates(gameId, teamId || null);
+  const { data: opponentPlayerStates = [] } = usePlayerStates(gameId, opponentId || null);
   const executeTrade = useExecuteTrade();
 
   const teamPicks = inventory.filter(
@@ -61,6 +60,12 @@ export default function TradesPage({ params }: TradesPageProps) {
   const opponentPicks = inventory.filter(
     ({ ownerTeamId, isTransferable }) => ownerTeamId === opponentId && isTransferable
   );
+
+  const pickById = new Map(inventory.map((pick) => [pick.id, pick]));
+  const playerStateByPlayerId = new Map(
+    [...teamPlayerStates, ...opponentPlayerStates].map((state) => [state.playerId, state])
+  );
+
   const assetsFor = (
     playerIds: string[],
     pickIds: string[],
@@ -95,7 +100,6 @@ export default function TradesPage({ params }: TradesPageProps) {
   }
 
   const simulation = useSimulateTrade(gameId, teamContracts, opponentContracts, packageA, packageB);
-  const hasAssets = Boolean(packageA?.outgoingAssets.length && packageB?.outgoingAssets.length);
 
   const submitTrade = async () => {
     if (!packageA || !packageB) return;
@@ -118,62 +122,12 @@ export default function TradesPage({ params }: TradesPageProps) {
   };
 
   if (isLoadingGame || !game) {
-    return <div className="flex min-h-[50vh] items-center justify-center">Loading trades...</div>;
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
+      </div>
+    );
   }
-
-  const renderAssets = (
-    roster: typeof teamRoster,
-    picks: PickInventory[],
-    selectedPlayers: string[],
-    selectedPicks: string[],
-    setPlayers: (ids: string[]) => void,
-    setPicks: (ids: string[]) => void
-  ) => (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Players</p>
-        {roster.map(({ player, contract }) => (
-          <label
-            key={player.id}
-            className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3"
-          >
-            <span>
-              <span className="block font-medium">{player.fullName}</span>
-              <span className="text-xs text-muted-foreground">
-                {contract ? `$${(contract.salaryY1 / 1_000_000).toFixed(1)}M` : "No contract"}
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={selectedPlayers.includes(player.id)}
-              disabled={!contract}
-              onChange={() => setPlayers(toggleSelection(selectedPlayers, player.id))}
-              className="size-4 accent-primary"
-            />
-          </label>
-        ))}
-      </div>
-      <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Draft picks
-        </p>
-        {picks.map((pick) => (
-          <label
-            key={pick.id}
-            className="flex cursor-pointer items-center justify-between rounded-xl border p-3"
-          >
-            <span>{formatPick(pick)}</span>
-            <input
-              type="checkbox"
-              checked={selectedPicks.includes(pick.id)}
-              onChange={() => setPicks(toggleSelection(selectedPicks, pick.id))}
-              className="size-4 accent-primary"
-            />
-          </label>
-        ))}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -209,77 +163,78 @@ export default function TradesPage({ params }: TradesPageProps) {
       {opponent && (
         <>
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {team?.city} {team?.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {renderAssets(
-                  teamRoster,
-                  teamPicks,
-                  teamPlayerIds,
-                  teamPickIds,
-                  setTeamPlayerIds,
-                  setTeamPickIds
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {opponent.city} {opponent.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {renderAssets(
-                  opponentRoster,
-                  opponentPicks,
-                  opponentPlayerIds,
-                  opponentPickIds,
-                  setOpponentPlayerIds,
-                  setOpponentPickIds
-                )}
-              </CardContent>
-            </Card>
+            <TradeAssetPanel
+              teamName={team ? `${team.city} ${team.name}` : "Your team"}
+              teamAbbreviation={team?.abbreviation}
+              roster={teamRoster}
+              picks={teamPicks}
+              playerStateByPlayerId={playerStateByPlayerId}
+              selectedPlayerIds={teamPlayerIds}
+              selectedPickIds={teamPickIds}
+              onTogglePlayer={(id) => setTeamPlayerIds(toggleSelection(teamPlayerIds, id))}
+              onTogglePick={(id) => setTeamPickIds(toggleSelection(teamPickIds, id))}
+              seasonYear={game.seasonYear}
+            />
+            <TradeAssetPanel
+              teamName={`${opponent.city} ${opponent.name}`}
+              teamAbbreviation={opponent.abbreviation}
+              roster={opponentRoster}
+              picks={opponentPicks}
+              playerStateByPlayerId={playerStateByPlayerId}
+              selectedPlayerIds={opponentPlayerIds}
+              selectedPickIds={opponentPickIds}
+              onTogglePlayer={(id) => setOpponentPlayerIds(toggleSelection(opponentPlayerIds, id))}
+              onTogglePick={(id) => setOpponentPickIds(toggleSelection(opponentPickIds, id))}
+              seasonYear={game.seasonYear}
+            />
           </div>
 
-          <Card>
-            <CardContent className="space-y-3 pt-1">
-              {simulation.data && !simulation.data.isValid && (
-                <div className="text-sm text-destructive">
-                  {simulation.data.errors.map((error) => error.message).join(" ")}
-                </div>
-              )}
-              {executionError && <div className="text-sm text-destructive">{executionError}</div>}
-              <Button
-                className="w-full"
-                size="lg"
-                disabled={!hasAssets || simulation.data?.isValid !== true || executeTrade.isPending}
-                onClick={submitTrade}
-              >
-                {executeTrade.isPending ? "Executing..." : "Execute trade"}
-              </Button>
-            </CardContent>
-          </Card>
+          {packageA && packageB && (
+            <TradeSummary
+              teamAName={packageA.teamName}
+              teamBName={packageB.teamName}
+              teamAAbbreviation={team?.abbreviation}
+              teamBAbbreviation={opponent.abbreviation}
+              packageA={packageA}
+              packageB={packageB}
+              pickById={pickById}
+              playerStateByPlayerId={playerStateByPlayerId}
+              simulation={simulation.data}
+              executionError={executionError}
+              isExecuting={executeTrade.isPending}
+              onExecute={submitTrade}
+              seasonYear={game.seasonYear}
+            />
+          )}
         </>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Trade history</CardTitle>
+      <Card className="border-border/50 bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <History className="size-5 text-primary" />
+            Trade history
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {history.length === 0 && <p className="text-muted-foreground">No trades recorded.</p>}
+          {history.length === 0 && (
+            <p className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+              No trades recorded yet.
+            </p>
+          )}
           {history.map((trade) => (
             <div
               key={trade.id}
-              className="flex flex-col gap-1 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-1 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
             >
-              <span>
-                {teams?.find(({ id }) => id === trade.teamAId)?.abbreviation ?? "Team"} ↔{" "}
-                {teams?.find(({ id }) => id === trade.teamBId)?.abbreviation ?? "Team"}
+              <span className="flex items-center gap-2 font-medium">
+                <span className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] font-black">
+                  {teams?.find(({ id }) => id === trade.teamAId)?.abbreviation ?? "—"}
+                </span>
+                <ArrowRightLeft className="size-3.5 text-muted-foreground" />
+                <span className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] font-black">
+                  {teams?.find(({ id }) => id === trade.teamBId)?.abbreviation ?? "—"}
+                </span>
               </span>
               <span className="text-xs text-muted-foreground">
                 {trade.assets.length} assets ·{" "}

@@ -111,13 +111,11 @@ export class TradeValidator {
       rosterSizeAfter,
       isOverCapAfter: newTotalSalary > NBA_RULES.SALARY_CAP,
       isOverHardCapAfter: newTotalSalary > NBA_RULES.SECOND_APRON,
-      newTotalSalary, // I'll add this to details to be able to know apron statuses
-    } as TeamTradeDetails & { newTotalSalary: number };
+      newTotalSalary,
+    };
   }
 
-  private validateSalaryMatching(
-    details: TeamTradeDetails & { newTotalSalary?: number }
-  ): DomainError[] {
+  private validateSalaryMatching(details: TeamTradeDetails): DomainError[] {
     const errors: DomainError[] = [];
 
     // Only care if we are taking in more salary than sending out
@@ -126,7 +124,7 @@ export class TradeValidator {
     }
 
     // Determine the max incoming based on team's post-trade salary
-    const postTradeSalary = details.newTotalSalary || 0;
+    const postTradeSalary = details.newTotalSalary;
     const outgoing = details.outgoingSalary;
     let maxIncoming = 0;
 

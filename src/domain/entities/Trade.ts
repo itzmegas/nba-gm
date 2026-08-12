@@ -134,4 +134,5 @@ export interface TeamTradeDetails {
   rosterSizeAfter: number;
   isOverCapAfter: boolean;
   isOverHardCapAfter: boolean;
+  newTotalSalary: number;
 }

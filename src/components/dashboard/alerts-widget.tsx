@@ -1,8 +1,10 @@
 "use client";
 
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
-import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
-import { usePlayersByTeam } from "@/application/hooks/players/usePlayers";
+import { AlertCircle, Bandage, CheckCircle, Clock } from "lucide-react";
+import { usePlayerStates } from "@/application/hooks/player-states/usePlayerStates";
+import { useRoster } from "@/application/hooks/roster/useRoster";
+import { formatSalary } from "@/components/trades/format";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AlertsWidgetProps {
@@ -11,13 +13,13 @@ interface AlertsWidgetProps {
   seasonYear: number;
 }
 
+const MAX_VISIBLE = 3;
+
 export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) {
-  const { data: contracts, isLoading: isLoadingContracts } = useTeamContracts(gameId, teamId);
-  const { data: players, isLoading: isLoadingPlayers } = usePlayersByTeam(teamId);
+  const { data: roster, isLoading: isLoadingRoster } = useRoster(gameId, teamId);
+  const { data: playerStates, isLoading: isLoadingStates } = usePlayerStates(gameId, teamId);
 
-  const currentYear = seasonYear;
-
-  if (isLoadingContracts || isLoadingPlayers) {
+  if (isLoadingRoster || isLoadingStates) {
     return (
       <Card className="h-full">
         <CardHeader>
@@ -25,16 +27,20 @@ export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) 
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-3">
-            <div className="h-10 bg-muted rounded-md w-full"></div>
-            <div className="h-10 bg-muted rounded-md w-full"></div>
+            <div className="h-10 bg-muted rounded-md w-full" />
+            <div className="h-10 bg-muted rounded-md w-full" />
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  const expiringContracts = contracts?.filter((c) => c.endYear === currentYear) || [];
-  const hasAlerts = expiringContracts.length > 0;
+  const expiring = (roster ?? []).filter(({ contract }) => contract?.endYear === seasonYear);
+  const injuredIds = new Set(
+    (playerStates ?? []).filter((state) => state.isInjured).map((state) => state.playerId)
+  );
+  const injured = (roster ?? []).filter(({ player }) => injuredIds.has(player.id));
+  const hasAlerts = expiring.length > 0 || injured.length > 0;
 
   return (
     <Card className="h-full border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all">
@@ -42,6 +48,11 @@ export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) 
         <CardTitle className="text-lg flex items-center gap-2">
           <AlertCircle className="h-5 w-5 text-orange-500" />
           Alertas de Roster
+          {hasAlerts && (
+            <Badge variant="secondary" className="ml-auto">
+              {expiring.length + injured.length}
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
 
@@ -52,34 +63,67 @@ export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) 
             <span>Todo en orden. No hay alertas críticas.</span>
           </div>
         ) : (
-          <div className="space-y-3">
-            {expiringContracts.length > 0 && (
+          <div className="space-y-4">
+            {injured.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Expiran este año
+                  <Bandage className="h-3 w-3 text-destructive" /> Lesionados
+                  <span className="ml-auto rounded-full bg-destructive/10 px-1.5 text-destructive">
+                    {injured.length}
+                  </span>
                 </h4>
                 <div className="space-y-2">
-                  {expiringContracts.slice(0, 3).map((contract) => {
-                    const player = players?.find((p) => p.id === contract.playerId);
-                    return (
-                      <div
-                        key={contract.id}
-                        className="flex justify-between items-center text-sm p-2 rounded-md bg-muted/50 border border-border/50"
-                      >
-                        <span className="font-medium">{player?.lastName || "Jugador"}</span>
-                        <span className="text-muted-foreground">
-                          {new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                            maximumFractionDigits: 0,
-                          }).format(contract.salaryY1)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {expiringContracts.length > 3 && (
+                  {injured.slice(0, MAX_VISIBLE).map(({ player }) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center gap-2.5 text-sm p-2 rounded-md bg-destructive/10 border border-destructive/20"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-[10px] font-medium text-muted-foreground">
+                        {player.firstName[0]}
+                        {player.lastName[0]}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{player.lastName}</span>
+                      <span className="rounded bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
+                        {player.position ?? "—"}
+                      </span>
+                    </div>
+                  ))}
+                  {injured.length > MAX_VISIBLE && (
                     <div className="text-xs text-center text-muted-foreground pt-1">
-                      + {expiringContracts.length - 3} jugadores más
+                      + {injured.length - MAX_VISIBLE} lesionados más
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {expiring.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-orange-500" /> Expiran este año
+                  <span className="ml-auto rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">
+                    {expiring.length}
+                  </span>
+                </h4>
+                <div className="space-y-2">
+                  {expiring.slice(0, MAX_VISIBLE).map(({ player, contract }) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center gap-2.5 text-sm p-2 rounded-md bg-orange-500/10 border border-orange-500/20"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-[10px] font-medium text-muted-foreground">
+                        {player.firstName[0]}
+                        {player.lastName[0]}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{player.lastName}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatSalary(contract?.salaryY1)}
+                      </span>
+                    </div>
+                  ))}
+                  {expiring.length > MAX_VISIBLE && (
+                    <div className="text-xs text-center text-muted-foreground pt-1">
+                      + {expiring.length - MAX_VISIBLE} jugadores más
                     </div>
                   )}
                 </div>
