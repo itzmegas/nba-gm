@@ -90,7 +90,7 @@ export const es: Messages = {
     simulatingSeason: "Simulando temporada…",
     simulateMonth: "Simular mes",
     simulatingMonth: "Simulando mes…",
-    simulateDay: "Simular día ▶",
+    simulateDay: "Simular día",
     simulatingDay: "Simulando…",
     completedDays: "días completados",
     ofDays: "de",

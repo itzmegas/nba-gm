@@ -10,6 +10,7 @@ import {
   Globe,
   LayoutDashboard,
   LogOut,
+  Pause,
   Settings,
   Users,
 } from "lucide-react";
@@ -151,17 +152,31 @@ export function DashboardSidebar({
   const labelDay = advanceDay.isPending
     ? t("dashboard", "simulatingDay")
     : t("dashboard", "simulateDay");
+
+  const labelBatch = batchMode === BATCH_SIMULATION_MODE.SEASON ? labelSeason : labelMonth;
+
+  const labelPause = stopRequested
+    ? t("dashboard", "pausingSimulation")
+    : t("dashboard", "pauseSimulation");
+
+  const progressPercent =
+    totalDays !== null && totalDays > 0
+      ? Math.min(100, Math.round((completedDays / totalDays) * 100))
+      : null;
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="px-4 py-2">
-        <Link href={dashboardBasePath} className="flex items-center gap-2 rounded-lg py-2">
+      <SidebarHeader className="px-4 py-2 group-data-[collapsible=icon]:px-0">
+        <Link
+          href={dashboardBasePath}
+          className="flex items-center gap-2 rounded-lg py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-0"
+        >
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
               alt="Logo"
               width={60}
               height={60}
-              className="rounded-full border object-cove bg-amber-300"
+              className="rounded-full border object-cover bg-amber-300 transition-[width,height] group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
@@ -224,9 +239,9 @@ export function DashboardSidebar({
         </div>
         <div className="flex flex-col gap-1">
           <Tooltip>
-            <TooltipTrigger>
+            <TooltipTrigger asChild>
               <Button
-                className="w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => advanceDay.mutate({ gameId, simulationDate })}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
@@ -234,16 +249,15 @@ export function DashboardSidebar({
                 <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
               </Button>
             </TooltipTrigger>
-
-            <TooltipContent>{labelDay}</TooltipContent>
+            <TooltipContent side="right">{labelDay}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
-            <TooltipTrigger>
+            <TooltipTrigger asChild>
               <Button
                 size="sm"
                 variant="ghost"
-                className="bg-amber-400 hover:bg-amber-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                className="bg-amber-400 text-amber-950 hover:bg-amber-300 w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
@@ -251,15 +265,15 @@ export function DashboardSidebar({
                 <span className="group-data-[collapsible=icon]:hidden">{labelMonth}</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{labelMonth}</TooltipContent>
+            <TooltipContent side="right">{labelMonth}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
-            <TooltipTrigger>
+            <TooltipTrigger asChild>
               <Button
                 size="sm"
                 variant="ghost"
-                className="bg-red-400 hover:bg-red-300 w-full justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
+                className="bg-red-400 text-red-950 hover:bg-red-300 w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
@@ -267,29 +281,61 @@ export function DashboardSidebar({
                 <span className="group-data-[collapsible=icon]:hidden">{labelSeason}</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{labelSeason}</TooltipContent>
+            <TooltipContent side="right">{labelSeason}</TooltipContent>
           </Tooltip>
 
-          <div className="space-y-1 py-4">
-            <p className="text-center text-xs text-muted-foreground">
-              {completedDays} {t("dashboard", "completedDays")}
-              {totalDays === null ? "" : ` ${t("dashboard", "ofDays")} ${totalDays}`}
-            </p>
-            <Button
-              className="w-full"
-              size="sm"
-              variant="secondary"
-              onClick={() => useBatchSimulationStore.getState().requestStop()}
-              disabled={stopRequested}
-            >
-              {stopRequested
-                ? t("dashboard", "pausingSimulation")
-                : t("dashboard", "pauseSimulation")}
-            </Button>
-          </div>
+          {batchActive && (
+            <div className="mt-2 flex flex-col gap-2 border-t pt-3 group-data-[collapsible=icon]:mt-1 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:pt-0">
+              <div className="flex items-center gap-2 text-xs group-data-[collapsible=icon]:hidden">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+                <span className="font-medium">{labelBatch}</span>
+              </div>
+
+              <p className="text-center text-xs text-muted-foreground tabular-nums group-data-[collapsible=icon]:hidden">
+                {completedDays} {t("dashboard", "completedDays")}
+                {totalDays === null ? "" : ` ${t("dashboard", "ofDays")} ${totalDays}`}
+              </p>
+
+              {totalDays !== null && totalDays > 0 && (
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-muted group-data-[collapsible=icon]:hidden"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={totalDays}
+                  aria-valuenow={completedDays}
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+                    onClick={() => useBatchSimulationStore.getState().requestStop()}
+                    disabled={stopRequested}
+                  >
+                    <Pause className="h-4 w-4" />
+                    <span className="group-data-[collapsible=icon]:hidden">{labelPause}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{labelPause}</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
 
           {(batchError || advanceDay.isError) && (
-            <p className="text-xs text-destructive">{t("dashboard", "unableToAdvance")}</p>
+            <p className="text-xs text-destructive group-data-[collapsible=icon]:hidden">
+              {t("dashboard", "unableToAdvance")}
+            </p>
           )}
         </div>
       </SidebarFooter>

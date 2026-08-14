@@ -86,7 +86,7 @@ export const en = {
     simulatingSeason: "Simulating season…",
     simulateMonth: "Simulate month",
     simulatingMonth: "Simulating month…",
-    simulateDay: "Simulate day ▶",
+    simulateDay: "Simulate day",
     simulatingDay: "Simulating…",
     completedDays: "days completed",
     ofDays: "of",
