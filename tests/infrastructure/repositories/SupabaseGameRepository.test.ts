@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { GAME_STATUS } from "@/domain/entities/Game";
+import { SEASON_ERA_IDS } from "@/domain/entities/SeasonEra";
 import { SupabaseGameRepository } from "@/infrastructure/repositories/SupabaseGameRepository";
 
 interface SupabaseQueryContext {
@@ -105,6 +106,7 @@ const baseGameRow = {
   name: "Asociación Test",
   selected_team_id: UUIDS.teamId,
   season_year: 2026,
+  season_era_id: SEASON_ERA_IDS.MODERN,
   simulation_date: "2026-10-01",
   status: GAME_STATUS.ACTIVE,
   deleted_at: null,
@@ -138,6 +140,7 @@ describe("SupabaseGameRepository", () => {
     expect(result?.userId).toBe(UUIDS.userId);
     expect(result?.selectedTeamId).toBe(UUIDS.teamId);
     expect(result?.seasonYear).toBe(2026);
+    expect(result?.seasonEraId).toBe(SEASON_ERA_IDS.MODERN);
     expect(result?.status).toBe(GAME_STATUS.ACTIVE);
     expect(result?.simulationDate).toBeInstanceOf(Date);
     expect(result?.simulationDate.toISOString().slice(0, 10)).toBe(baseGameRow.simulation_date);
@@ -222,6 +225,7 @@ describe("SupabaseGameRepository", () => {
       name: "Nueva Asociación",
       selectedTeamId: UUIDS.teamId,
       seasonYear: 2026,
+      seasonEraId: SEASON_ERA_IDS.LEBRON,
       simulationDate: new Date("2026-10-01T00:00:00.000Z"),
       status: GAME_STATUS.INITIALIZING,
       deletedAt: undefined,
@@ -235,6 +239,7 @@ describe("SupabaseGameRepository", () => {
       name: "Nueva Asociación",
       selected_team_id: UUIDS.teamId,
       season_year: 2026,
+      season_era_id: SEASON_ERA_IDS.LEBRON,
       simulation_date: "2026-10-01",
       status: GAME_STATUS.INITIALIZING,
     });
