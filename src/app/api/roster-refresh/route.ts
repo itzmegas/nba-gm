@@ -55,6 +55,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     if (result.status === ROSTER_REFRESH_STATUS.FAILED) {
+      console.error(
+        `[roster-refresh] run ${result.runId} failed (${result.teamCount} teams): ${result.error}`
+      );
       return NextResponse.json(
         { error: "Roster refresh failed", runId: result.runId, teamCount: result.teamCount },
         { status: 500 }

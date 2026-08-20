@@ -320,12 +320,21 @@ async function runRefresh(context: RunRefreshContext): Promise<RosterRefreshResu
       teamCount: teams.length,
     };
   } catch (error) {
-    await rollbackToSeed(context, runId);
+    await rollbackToSeed(context, runId, error);
     return buildFailedResult(runId, teams.length, error);
   }
 }
 
-async function rollbackToSeed(context: RunRefreshContext, runId: string): Promise<void> {
+async function rollbackToSeed(
+  context: RunRefreshContext,
+  runId: string,
+  cause: unknown
+): Promise<void> {
+  const causeMessage =
+    cause instanceof Error ? cause.message : "Roster refresh failed with an unknown error";
+
+  console.error(`[roster-refresh] run ${runId} failed: ${causeMessage}`);
+
   try {
     await context.authenticatedClient.rpc("seed_game_data", {
       p_game_id: context.gameId,
@@ -340,7 +349,7 @@ async function rollbackToSeed(context: RunRefreshContext, runId: string): Promis
       .from("roster_refresh_runs")
       .update({
         status: "failed",
-        error: "Refresh failed; rolled back to canonical seed",
+        error: causeMessage.slice(0, 500),
       })
       .eq("id", runId);
   } catch {
