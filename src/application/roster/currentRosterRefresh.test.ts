@@ -114,17 +114,19 @@ const UUIDS = {
 } as const;
 
 const TEAMS = [
-  { id: UUIDS.teamA, nba_id: 1 },
-  { id: UUIDS.teamB, nba_id: 2 },
+  { id: UUIDS.teamA, nba_id: 1, abbreviation: "AAA" },
+  { id: UUIDS.teamB, nba_id: 2, abbreviation: "BBB" },
 ] as const;
 
 const PLAYER_A: RosterEntry = {
-  nbaId: 101,
+  provider: "espn",
+  sourceId: 101,
   payload: { name: "Player A" },
 };
 
 const PLAYER_B: RosterEntry = {
-  nbaId: 102,
+  provider: "espn",
+  sourceId: 102,
   payload: { name: "Player B" },
 };
 
@@ -244,8 +246,8 @@ describe("currentRosterRefresh", () => {
       selectedTeamId: UUIDS.selectedTeamId,
       authenticatedClient: setup.authClient,
       serviceClient: setup.serviceClient,
-      fetchTeamRoster: (teamNbaId) => {
-        return teamNbaId === TEAMS[0].nba_id ? [PLAYER_A] : [];
+      fetchTeamRoster: (team) => {
+        return team.nbaId === TEAMS[0].nba_id ? [PLAYER_A] : [];
       },
     });
 
@@ -269,8 +271,8 @@ describe("currentRosterRefresh", () => {
       selectedTeamId: UUIDS.selectedTeamId,
       authenticatedClient: setup.authClient,
       serviceClient: setup.serviceClient,
-      fetchTeamRoster: (teamNbaId) => {
-        if (teamNbaId === TEAMS[0].nba_id) {
+      fetchTeamRoster: (team) => {
+        if (team.nbaId === TEAMS[0].nba_id) {
           return [PLAYER_A];
         }
         throw new Error("Network error");
@@ -288,7 +290,7 @@ describe("currentRosterRefresh", () => {
   it("retries team fetch up to maxRetries before failing", async () => {
     const singleTeamResolver = (context: SupabaseQueryContext): SupabaseQueryResult => {
       if (context.table === "teams" && context.operation === "select") {
-        return { data: [{ id: UUIDS.teamA, nba_id: 1 }], error: null };
+        return { data: [{ id: UUIDS.teamA, nba_id: 1, abbreviation: "AAA" }], error: null };
       }
 
       if (
@@ -307,7 +309,7 @@ describe("currentRosterRefresh", () => {
     };
 
     const setup = createTestSetup(singleTeamResolver);
-    const fetcher = vi.fn<(teamNbaId: number) => RosterEntry[]>();
+    const fetcher = vi.fn<(teamAbbreviation: string) => RosterEntry[]>();
     fetcher
       .mockRejectedValueOnce(new Error("Attempt 1"))
       .mockRejectedValueOnce(new Error("Attempt 2"))
@@ -318,7 +320,7 @@ describe("currentRosterRefresh", () => {
       selectedTeamId: UUIDS.selectedTeamId,
       authenticatedClient: setup.authClient,
       serviceClient: setup.serviceClient,
-      fetchTeamRoster: (teamNbaId) => fetcher(teamNbaId),
+      fetchTeamRoster: (team) => fetcher(team.abbreviation),
       maxRetries: 2,
     });
 

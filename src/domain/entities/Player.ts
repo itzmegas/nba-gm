@@ -10,7 +10,8 @@ export type Position = (typeof POSITION)[keyof typeof POSITION];
 
 export interface Player {
   id: string;
-  nbaId: number;
+  nbaId?: number;
+  espnId?: number;
   teamId?: string;
   firstName: string;
   lastName: string;

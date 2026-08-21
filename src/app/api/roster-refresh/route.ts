@@ -4,7 +4,7 @@ import {
   currentRosterRefresh,
   ROSTER_REFRESH_STATUS,
 } from "@/application/roster/currentRosterRefresh";
-import { fetchCurrentRosterForTeam } from "@/infrastructure/roster/nbaRosterSource";
+import { fetchCurrentRosterForTeam } from "@/infrastructure/roster/espnRosterSource";
 import { createClient } from "@/infrastructure/supabase/server";
 import { createServiceRoleClient } from "@/infrastructure/supabase/serviceRole";
 

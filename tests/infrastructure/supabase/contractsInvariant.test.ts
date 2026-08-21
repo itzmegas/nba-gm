@@ -6,6 +6,10 @@ const rosterMigration = readFileSync(
   new URL("../../../scripts/migrations/011_current_roster_refresh.sql", import.meta.url),
   "utf8"
 );
+const espnRosterMigration = readFileSync(
+  new URL("../../../scripts/migrations/012_espn_roster_source.sql", import.meta.url),
+  "utf8"
+);
 
 describe("contracts database invariants", () => {
   it("serializes one ownership contract per game and player", () => {
@@ -53,5 +57,14 @@ describe("contracts database invariants", () => {
         "REVOKE ALL ON TABLE roster_refresh_staging FROM PUBLIC, anon, authenticated"
       );
     }
+  });
+
+  it("keeps ESPN identity separate from official NBA identity", () => {
+    for (const source of [schema, espnRosterMigration]) {
+      expect(source).toContain("espn_id INTEGER UNIQUE");
+      expect(source).toContain("player_source_id");
+      expect(source).toContain("s.provider = 'espn'");
+    }
+    expect(espnRosterMigration).toContain("ALTER COLUMN player_source_id SET NOT NULL");
   });
 });

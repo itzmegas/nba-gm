@@ -63,10 +63,12 @@ export class SupabasePlayerRepository implements PlayerRepository {
   }
 
   private mapToEntity(row: Record<string, unknown>): Player {
-    const nbaId = row.nba_id as number;
+    const nbaId = row.nba_id as number | null;
+    const espnId = row.espn_id as number | null;
     return {
       id: row.id as string,
-      nbaId,
+      nbaId: nbaId ?? undefined,
+      espnId: espnId ?? undefined,
       teamId: row.team_id as string | undefined,
       firstName: row.first_name as string,
       lastName: row.last_name as string,
@@ -75,7 +77,11 @@ export class SupabasePlayerRepository implements PlayerRepository {
       height: row.height as string | undefined,
       weight: row.weight as string | undefined,
       jerseyNumber: row.jersey_number as string | undefined,
-      headshotUrl: `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaId}.png`,
+      headshotUrl: nbaId
+        ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaId}.png`
+        : espnId
+          ? `https://a.espncdn.com/i/headshots/nba/players/full/${espnId}.png`
+          : undefined,
       yearsOfExperience: row.years_of_experience as number,
       isActive: row.is_active as boolean,
       createdAt: new Date(row.created_at as string),
