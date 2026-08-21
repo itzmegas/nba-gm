@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Local Pi runtime state
+.atl/
+.pi/
+.pi-subagents/
+.codegraph/
+__pycache__/
+*.pyc

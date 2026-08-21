@@ -1,0 +1,103 @@
+"use client";
+
+import { FolderOpen, Plus } from "lucide-react";
+import Link from "next/link";
+import { useGames } from "@/application/hooks/games/useGames";
+import { useTeams } from "@/application/hooks/teams/useTeams";
+import { useT } from "@/application/providers/I18nProvider";
+import { GameList } from "@/components/games/GameList";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default function GameMenuPage() {
+  const { data: games, isLoading, error } = useGames();
+  const { data: teams } = useTeams();
+  const t = useT();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-lg w-full border-destructive/40 bg-destructive/10">
+          <CardContent className="py-6 text-sm text-destructive/90">
+            <p className="font-bold text-lg mb-2">{t("games", "menu")}</p>
+            <p>{error.message || t("dashboard", "unableToLoadGame")}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b bg-card/80 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto h-16 px-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-black tracking-tighter text-primary">GM SIMULATOR</span>
+            <span className="text-xs font-medium bg-muted px-2 py-1 rounded-full text-muted-foreground hidden sm:inline-block">
+              {t("games", "menu")}
+            </span>
+          </div>
+
+          <Link href="/games/new">
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              {t("games", "newGame")}
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-8 md:py-10 space-y-6">
+        {/* <Link href="/career" aria-label="Open Player Career">
+          <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10">
+            <CardContent className="py-4 flex items-center gap-3">
+              <UserRound className="text-primary" />
+              <div>
+                <p className="font-bold">Player Career</p>
+                <p className="text-sm text-muted-foreground">
+                  Build a career from college to retirement.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link> */}
+        <div className="space-y-1">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight">
+            {t("games", "simulations")}
+          </h1>
+          <p className="text-muted-foreground">{t("games", "simulationsDescription")}</p>
+        </div>
+
+        {!games || games.length === 0 ? (
+          <Card className="border-border/50 bg-card/50">
+            <CardContent className="py-16 flex flex-col items-center text-center gap-4">
+              <FolderOpen className="h-12 w-12 text-muted-foreground/60" />
+              <div className="space-y-1">
+                <p className="font-semibold">{t("games", "noSavedGames")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("games", "noSavedGamesDescription")}
+                </p>
+              </div>
+              <Link href="/games/new">
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  {t("games", "createFirstGame")}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <GameList games={games} teams={teams ?? []} />
+        )}
+      </main>
+    </div>
+  );
+}
