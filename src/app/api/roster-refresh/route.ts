@@ -4,7 +4,7 @@ import {
   currentRosterRefresh,
   ROSTER_REFRESH_STATUS,
 } from "@/application/roster/currentRosterRefresh";
-import { fetchCurrentRosterForTeam } from "@/infrastructure/roster/nbaRosterSource";
+import { fetchCurrentRosterForTeam } from "@/infrastructure/roster/espnRosterSource";
 import { createClient } from "@/infrastructure/supabase/server";
 import { createServiceRoleClient } from "@/infrastructure/supabase/serviceRole";
 
@@ -55,6 +55,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     if (result.status === ROSTER_REFRESH_STATUS.FAILED) {
+      console.error(
+        `[roster-refresh] run ${result.runId} failed (${result.teamCount} teams): ${result.error}`
+      );
       return NextResponse.json(
         { error: "Roster refresh failed", runId: result.runId, teamCount: result.teamCount },
         { status: 500 }

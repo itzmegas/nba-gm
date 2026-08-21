@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS teams (
 -- 2. Players Table
 CREATE TABLE IF NOT EXISTS players (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nba_id INTEGER UNIQUE NOT NULL, -- Official NBA ID from API
+    nba_id INTEGER UNIQUE, -- Official NBA ID when known
+    espn_id INTEGER UNIQUE,
     team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
@@ -162,9 +163,11 @@ CREATE TABLE IF NOT EXISTS roster_refresh_runs (
 CREATE TABLE IF NOT EXISTS roster_refresh_staging (
     run_id UUID REFERENCES roster_refresh_runs(id) ON DELETE CASCADE NOT NULL,
     team_id UUID REFERENCES teams(id) ON DELETE RESTRICT NOT NULL,
-    player_nba_id INTEGER NOT NULL,
+    provider TEXT NOT NULL CHECK (provider IN ('espn')),
+    player_source_id INTEGER NOT NULL,
     payload JSONB NOT NULL,
-    CONSTRAINT roster_refresh_staging_run_player_unique UNIQUE (run_id, player_nba_id)
+    CONSTRAINT roster_refresh_staging_run_player_unique
+      UNIQUE (run_id, provider, player_source_id)
 );
 
 CREATE TABLE IF NOT EXISTS career_saves (
@@ -510,14 +513,32 @@ BEGIN
        AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.id = s.team_id)) THEN
     RAISE EXCEPTION 'Roster refresh run does not contain the complete team set';
   END IF;
-  IF EXISTS (SELECT 1 FROM roster_refresh_staging s WHERE s.run_id = p_run_id
-    AND NOT EXISTS (SELECT 1 FROM players p WHERE p.nba_id = s.player_nba_id)) THEN
-    RAISE EXCEPTION 'Roster refresh contains an unknown player';
-  END IF;
+  UPDATE players p
+  SET espn_id = s.player_source_id, updated_at = now()
+  FROM roster_refresh_staging s
+  WHERE s.run_id = p_run_id AND s.provider = 'espn' AND p.espn_id IS NULL
+    AND lower(p.full_name) = lower(s.payload->>'full_name');
+  INSERT INTO players (
+    espn_id, team_id, first_name, last_name, full_name, position,
+    height, weight, jersey_number, is_active
+  )
+  SELECT
+    s.player_source_id, s.team_id, s.payload->>'first_name', s.payload->>'last_name',
+    s.payload->>'full_name', s.payload->>'position', s.payload->>'height',
+    s.payload->>'weight', s.payload->>'jersey_number', true
+  FROM roster_refresh_staging s
+  WHERE s.run_id = p_run_id AND s.provider = 'espn'
+    AND NOT EXISTS (SELECT 1 FROM players p WHERE p.espn_id = s.player_source_id);
   UPDATE players SET team_id = NULL, is_active = false, updated_at = now()
   WHERE team_id IS NOT NULL;
-  UPDATE players p SET team_id = s.team_id, is_active = true, updated_at = now()
-  FROM roster_refresh_staging s WHERE s.run_id = p_run_id AND p.nba_id = s.player_nba_id;
+  UPDATE players p SET team_id = s.team_id, is_active = true, updated_at = now(),
+    first_name = s.payload->>'first_name', last_name = s.payload->>'last_name',
+    full_name = s.payload->>'full_name', position = s.payload->>'position',
+    height = s.payload->>'height', weight = s.payload->>'weight',
+    jersey_number = s.payload->>'jersey_number'
+  FROM roster_refresh_staging s
+  WHERE s.run_id = p_run_id AND s.provider = 'espn'
+    AND p.espn_id = s.player_source_id;
   UPDATE roster_refresh_runs SET status = 'success', completed_team_count = v_staged_team_count,
     updated_at = now() WHERE id = p_run_id;
 END;

@@ -17,8 +17,14 @@ export interface RosterRefreshResult {
 }
 
 export interface RosterEntry {
-  nbaId: number;
+  provider: "espn";
+  sourceId: number;
   payload: Record<string, unknown>;
+}
+
+export interface RosterTeam {
+  nbaId: number;
+  abbreviation: string;
 }
 
 export interface RosterRefreshDependencies {
@@ -27,7 +33,7 @@ export interface RosterRefreshDependencies {
   authenticatedClient: SupabaseClient;
   serviceClient: SupabaseClient;
   fetchTeamRoster: (
-    teamNbaId: number,
+    team: RosterTeam,
     signal?: AbortSignal
   ) => Promise<RosterEntry[]> | RosterEntry[];
   teamTimeoutMs?: number;
@@ -43,7 +49,7 @@ const inputSchema = z.object({
 const TEAM_TIMEOUT_MS = 10_000;
 const MAX_RETRIES = 2;
 const OVERALL_TIMEOUT_MS = 90_000;
-const TEAM_FETCH_CONCURRENCY = 5;
+const TEAM_FETCH_CONCURRENCY = 1;
 const RETRY_BACKOFF_MS = 200;
 
 function assertNotAborted(signal: AbortSignal, label: string): void {
@@ -81,9 +87,9 @@ async function fetchWithRetry<T>(
 }
 
 async function fetchTeamRosterWithRetry(
-  teamNbaId: number,
+  team: RosterTeam,
   fetchTeamRoster: (
-    teamNbaId: number,
+    team: RosterTeam,
     signal?: AbortSignal
   ) => Promise<RosterEntry[]> | RosterEntry[],
   teamTimeoutMs: number,
@@ -92,7 +98,7 @@ async function fetchTeamRosterWithRetry(
 ): Promise<RosterEntry[]> {
   return fetchWithRetry(
     async () => {
-      assertNotAborted(signal, `Team ${teamNbaId} fetch`);
+      assertNotAborted(signal, `Team ${team.abbreviation} fetch`);
       const controller = new AbortController();
       const abortHandler = () => controller.abort();
 
@@ -105,14 +111,14 @@ async function fetchTeamRosterWithRetry(
       const timeoutId = setTimeout(() => controller.abort(), teamTimeoutMs);
 
       try {
-        return await fetchTeamRoster(teamNbaId, controller.signal);
+        return await fetchTeamRoster(team, controller.signal);
       } finally {
         signal.removeEventListener("abort", abortHandler);
         clearTimeout(timeoutId);
       }
     },
     maxRetries,
-    `Team ${teamNbaId}`
+    `Team ${team.abbreviation}`
   );
 }
 
@@ -192,12 +198,14 @@ export async function currentRosterRefresh(
 interface TeamRow {
   id: string;
   nba_id: number;
+  abbreviation: string;
 }
 
 interface StagingRow {
   run_id: string;
   team_id: string;
-  player_nba_id: number;
+  provider: RosterEntry["provider"];
+  player_source_id: number;
   payload: Record<string, unknown>;
 }
 
@@ -207,7 +215,7 @@ interface RunRefreshContext {
   authenticatedClient: SupabaseClient;
   serviceClient: SupabaseClient;
   fetchTeamRoster: (
-    teamNbaId: number,
+    team: RosterTeam,
     signal?: AbortSignal
   ) => Promise<RosterEntry[]> | RosterEntry[];
   teamTimeoutMs: number;
@@ -226,7 +234,7 @@ async function runRefresh(context: RunRefreshContext): Promise<RosterRefreshResu
     signal,
   } = context;
 
-  const teamsResult = await authenticatedClient.from("teams").select("id, nba_id");
+  const teamsResult = await authenticatedClient.from("teams").select("id, nba_id, abbreviation");
 
   if (teamsResult.error) {
     throw new Error(`Failed to load teams: ${teamsResult.error.message}`);
@@ -253,7 +261,7 @@ async function runRefresh(context: RunRefreshContext): Promise<RosterRefreshResu
   try {
     const teamRosters = await mapWithConcurrency(teams, TEAM_FETCH_CONCURRENCY, async (team) => {
       const roster = await fetchTeamRosterWithRetry(
-        team.nba_id,
+        { nbaId: team.nba_id, abbreviation: team.abbreviation },
         fetchTeamRoster,
         teamTimeoutMs,
         maxRetries,
@@ -269,7 +277,8 @@ async function runRefresh(context: RunRefreshContext): Promise<RosterRefreshResu
       roster.map((entry) => ({
         run_id: runId,
         team_id: teamId,
-        player_nba_id: entry.nbaId,
+        provider: entry.provider,
+        player_source_id: entry.sourceId,
         payload: entry.payload,
       }))
     );
@@ -320,12 +329,21 @@ async function runRefresh(context: RunRefreshContext): Promise<RosterRefreshResu
       teamCount: teams.length,
     };
   } catch (error) {
-    await rollbackToSeed(context, runId);
+    await rollbackToSeed(context, runId, error);
     return buildFailedResult(runId, teams.length, error);
   }
 }
 
-async function rollbackToSeed(context: RunRefreshContext, runId: string): Promise<void> {
+async function rollbackToSeed(
+  context: RunRefreshContext,
+  runId: string,
+  cause: unknown
+): Promise<void> {
+  const causeMessage =
+    cause instanceof Error ? cause.message : "Roster refresh failed with an unknown error";
+
+  console.error(`[roster-refresh] run ${runId} failed: ${causeMessage}`);
+
   try {
     await context.authenticatedClient.rpc("seed_game_data", {
       p_game_id: context.gameId,
@@ -340,7 +358,7 @@ async function rollbackToSeed(context: RunRefreshContext, runId: string): Promis
       .from("roster_refresh_runs")
       .update({
         status: "failed",
-        error: "Refresh failed; rolled back to canonical seed",
+        error: causeMessage.slice(0, 500),
       })
       .eq("id", runId);
   } catch {
