@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SEASON_ERA_IDS, type SeasonEraId } from "@/domain/entities/SeasonEra";
 
 export const GAME_STATUS = {
   INITIALIZING: "initializing",
@@ -15,6 +16,7 @@ export interface Game {
   name: string;
   selectedTeamId: string;
   seasonYear: number;
+  seasonEraId: SeasonEraId;
   simulationDate: Date;
   status: GameStatus;
   deletedAt?: Date;
@@ -23,6 +25,7 @@ export interface Game {
 }
 
 const gameStatusValues = Object.values(GAME_STATUS) as [GameStatus, ...GameStatus[]];
+const seasonEraIdValues = Object.values(SEASON_ERA_IDS) as [SeasonEraId, ...SeasonEraId[]];
 
 export const gameSchema = z
   .object({
@@ -31,6 +34,7 @@ export const gameSchema = z
     name: z.string({ error: "Game name is required" }).min(1).max(80),
     selectedTeamId: z.uuid(),
     seasonYear: z.number().int(),
+    seasonEraId: z.enum(seasonEraIdValues),
     simulationDate: z.date(),
     status: z.enum(gameStatusValues),
     deletedAt: z.date().optional(),

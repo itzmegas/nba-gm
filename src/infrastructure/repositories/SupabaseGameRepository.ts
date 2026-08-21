@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Game } from "@/domain/entities/Game";
 import { GAME_STATUS } from "@/domain/entities/Game";
-import type { GameRepository } from "@/domain/repositories/GameRepository";
+import type { CreateGameInput, GameRepository } from "@/domain/repositories/GameRepository";
 
 export class SupabaseGameRepository implements GameRepository {
   constructor(private readonly client: SupabaseClient) {}
@@ -27,7 +27,7 @@ export class SupabaseGameRepository implements GameRepository {
     return data.map(this.mapToEntity);
   }
 
-  async create(game: Omit<Game, "id" | "createdAt" | "updatedAt">): Promise<Game> {
+  async create(game: CreateGameInput): Promise<Game> {
     const row = this.mapToRow({
       ...game,
       status: game.status ?? GAME_STATUS.INITIALIZING,
@@ -74,6 +74,7 @@ export class SupabaseGameRepository implements GameRepository {
       name: row.name as string,
       selectedTeamId: row.selected_team_id as string,
       seasonYear: row.season_year as number,
+      seasonEraId: row.season_era_id as Game["seasonEraId"],
       simulationDate: new Date(row.simulation_date as string),
       status: row.status as Game["status"],
       deletedAt: row.deleted_at ? new Date(row.deleted_at as string) : undefined,
@@ -89,6 +90,7 @@ export class SupabaseGameRepository implements GameRepository {
     if (entity.name !== undefined) row.name = entity.name;
     if (entity.selectedTeamId !== undefined) row.selected_team_id = entity.selectedTeamId;
     if (entity.seasonYear !== undefined) row.season_year = entity.seasonYear;
+    if (entity.seasonEraId !== undefined) row.season_era_id = entity.seasonEraId;
     if (entity.simulationDate !== undefined) {
       row.simulation_date = formatDateOnly(entity.simulationDate);
     }

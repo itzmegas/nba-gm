@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GAME_STATUS, type GameStatus, gameSchema } from "@/domain/entities/Game";
+import { SEASON_ERA_IDS } from "@/domain/entities/SeasonEra";
 
 const UUIDS = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -13,6 +14,7 @@ const buildValidGameInput = () => ({
   name: "Mi Asociación",
   selectedTeamId: UUIDS.selectedTeamId,
   seasonYear: 2026,
+  seasonEraId: SEASON_ERA_IDS.MODERN,
   simulationDate: new Date("2026-10-01T00:00:00.000Z"),
   status: GAME_STATUS.ACTIVE,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -91,6 +93,24 @@ describe("Game entity", () => {
       const result = gameSchema.safeParse({
         ...buildValidGameInput(),
         selectedTeamId: "invalid-uuid",
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts a persisted historical season era", () => {
+      const result = gameSchema.safeParse({
+        ...buildValidGameInput(),
+        seasonEraId: SEASON_ERA_IDS.LEBRON,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("fails when seasonEraId is not a configured era", () => {
+      const result = gameSchema.safeParse({
+        ...buildValidGameInput(),
+        seasonEraId: "future",
       });
 
       expect(result.success).toBe(false);
