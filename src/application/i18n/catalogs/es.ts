@@ -53,7 +53,9 @@ export const es: Messages = {
     historicalEraNote:
       "Esta era usa rosters históricos reales con contratos aproximados; el límite salarial y las reglas siguen siendo modernas.",
     currentEraNote:
-      "Esta era usa el dataset canónico actual como referencia visual; todavía no incluye rosters, contratos, límite salarial ni reglas históricas precisas.",
+      "Esta era comienza con el dataset canónico de pretemporada 2026-27; los rosters actuales se actualizan desde el tracker oficial en vivo, mientras que no se incluyen rosters, contratos, límite salarial ni reglas históricas.",
+    currentEraLabel: "Temporada actual (26-27)",
+    currentEraDescription: "Comienza con el dataset canónico de pretemporada 2026-27.",
     searchFranchise: "Buscar franquicia (ej. Lakers, NYK)...",
     allLeague: "Toda la liga",
     east: "Este",

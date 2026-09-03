@@ -24,6 +24,11 @@ describe("internationalization foundation", () => {
     expect(createT(LOCALE.ES)("common", "loading")).toBe("Cargando...");
   });
 
+  it("exposes localized current-season era labels in both catalogs", () => {
+    expect(en.games.currentEraLabel).toBe("Current season (26-27)");
+    expect(es.games.currentEraLabel).toBe("Temporada actual (26-27)");
+  });
+
   it("uses the requested key as a visible missing-message fallback", () => {
     expect(createT(LOCALE.ES)("common", "missing" as "error")).toBe("missing");
   });

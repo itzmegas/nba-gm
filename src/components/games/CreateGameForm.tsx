@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import {
   DEFAULT_SEASON_ERA_ID,
   getSeasonEraById,
+  SEASON_ERA_IDS,
   SEASON_ERAS,
   type SeasonEraId,
 } from "@/domain/entities/SeasonEra";
@@ -154,9 +155,13 @@ export function CreateGameForm() {
                     onClick={() => setSelectedSeasonEraId(era.id)}
                     className={`rounded-lg border p-4 text-left transition-all hover:border-primary/50 ${isSelected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border bg-background/50"}`}
                   >
-                    <span className="block font-semibold">{era.name}</span>
+                    <span className="block font-semibold">
+                      {era.id === SEASON_ERA_IDS.MODERN ? t("games", "currentEraLabel") : era.name}
+                    </span>
                     <span className="mt-1 block text-sm text-muted-foreground">
-                      {era.description}
+                      {era.id === SEASON_ERA_IDS.MODERN
+                        ? t("games", "currentEraDescription")
+                        : era.description}
                     </span>
                   </button>
                 );

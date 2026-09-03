@@ -22,10 +22,10 @@ export const DEFAULT_SEASON_ERA_ID = SEASON_ERA_IDS.MODERN;
 export const SEASON_ERAS = [
   {
     id: SEASON_ERA_IDS.MODERN,
-    name: `Base actual (${formatSeasonLabel(2025)})`,
-    description: "Inicia con el dataset canónico actual.",
-    seasonYear: 2025,
-    initialSimulationDate: "2025-10-22T00:00:00.000Z",
+    name: `Current season (${formatSeasonLabel(2026)})`,
+    description: "Starts from the canonical 2026-27 preseason dataset.",
+    seasonYear: 2026,
+    initialSimulationDate: "2026-10-15T00:00:00.000Z",
     isHistoricalDatasetAvailable: false,
   },
   {

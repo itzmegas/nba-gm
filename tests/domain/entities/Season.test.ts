@@ -60,6 +60,17 @@ describe("Season era catalog", () => {
     expect(SEASON_ERAS).toContain(defaultEra);
   });
 
+  it("configures the Modern era for the live 2026-27 preseason dataset", () => {
+    const modernEra = getSeasonEraById(SEASON_ERA_IDS.MODERN);
+
+    expect(modernEra.seasonYear).toBe(2026);
+    expect(modernEra.initialSimulationDate).toBe("2026-10-15T00:00:00.000Z");
+    expect(new Date(modernEra.initialSimulationDate).getUTCFullYear()).toBe(2026);
+    expect(new Date(modernEra.initialSimulationDate).getTime()).toBeLessThan(
+      new Date("2026-10-22T00:00:00.000Z").getTime()
+    );
+  });
+
   it("marks the LeBron era as a historical dataset", () => {
     expect(getSeasonEraById(SEASON_ERA_IDS.LEBRON).isHistoricalDatasetAvailable).toBe(true);
   });

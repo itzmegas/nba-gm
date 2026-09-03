@@ -49,7 +49,9 @@ export const en = {
     historicalEraNote:
       "This era uses real historical rosters with approximate contracts; the salary cap and rules remain modern.",
     currentEraNote:
-      "This era uses the canonical current dataset as a visual reference; historical rosters, contracts, salary cap, and rules are not yet included.",
+      "This era starts from the canonical 2026-27 preseason dataset; current rosters are refreshed from the live official tracker, while historical rosters, contracts, salary cap, and rules are not included.",
+    currentEraLabel: "Current season (26-27)",
+    currentEraDescription: "Starts from the canonical 2026-27 preseason dataset.",
     searchFranchise: "Search franchise (e.g. Lakers, NYK)...",
     allLeague: "Entire league",
     east: "East",
