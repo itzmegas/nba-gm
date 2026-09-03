@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { ReactQueryProvider } from "@/application/providers/ReactQueryProvider";
+import { TeamThemeApplier } from "@/components/theme/team-theme-applier";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nRuntime } from "@/infrastructure/i18n/I18nRuntime";
 import { resolveLocale } from "@/infrastructure/i18n/request";
@@ -43,6 +44,7 @@ export default async function RootLayout({
           <I18nRuntime locale={locale}>
             <ReactQueryProvider>
               <TooltipProvider>
+                <TeamThemeApplier />
                 {children}
               </TooltipProvider>
             </ReactQueryProvider>

@@ -4,8 +4,8 @@ import {
   ArrowLeftRight,
   Bell,
   Calendar,
-  Calendar1,
   CalendarDays,
+  CalendarRange,
   DollarSign,
   Globe,
   LayoutDashboard,
@@ -28,6 +28,8 @@ import {
   type BatchSimulationMode,
   useBatchSimulationStore,
 } from "@/application/stores/useBatchSimulationStore";
+import { TeamThemeSelector } from "@/components/theme/team-theme-selector";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -176,7 +178,7 @@ export function DashboardSidebar({
               alt="Logo"
               width={60}
               height={60}
-              className="rounded-full border object-cover bg-amber-300 transition-[width,height] group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
+              className="rounded-full border border-primary/30 object-cover transition-[width,height] group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
@@ -241,11 +243,12 @@ export function DashboardSidebar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                variant="ghost"
                 className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => advanceDay.mutate({ gameId, simulationDate })}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <Calendar1 className="h-4 w-4" />
+                <CalendarDays className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
               </Button>
             </TooltipTrigger>
@@ -255,13 +258,12 @@ export function DashboardSidebar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                size="sm"
                 variant="ghost"
-                className="bg-amber-400 text-amber-950 hover:bg-amber-300 w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <CalendarDays className="h-4 w-4" />
+                <Calendar className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelMonth}</span>
               </Button>
             </TooltipTrigger>
@@ -271,13 +273,12 @@ export function DashboardSidebar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                size="sm"
                 variant="ghost"
-                className="bg-red-400 text-red-950 hover:bg-red-300 w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <Calendar className="h-4 w-4" />
+                <CalendarRange className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelSeason}</span>
               </Button>
             </TooltipTrigger>
@@ -415,6 +416,8 @@ export function DashboardHeader({
           orientation="vertical"
           className="hidden sm:block h-4 data-[orientation=vertical]:h-4"
         />
+        <TeamThemeSelector />
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={t("dashboard", "gameMenu")}>
