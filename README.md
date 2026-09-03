@@ -14,6 +14,12 @@ pnpm dev
 bun dev
 ```
 
+## Disposable database schema
+
+For a fresh disposable Supabase project, run `scripts/schema.sql`. For an existing disposable
+project that already has migrations 013-015, apply `scripts/migrations/016_rollback_seed_game_data.sql`.
+Do not run either instruction against the main database; this change has not performed live writes.
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
