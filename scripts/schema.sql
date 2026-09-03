@@ -4,6 +4,8 @@
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Migrations 013-017 are included in this canonical schema.
+
 -- 1. Teams Table
 CREATE TABLE IF NOT EXISTS teams (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,6 +33,7 @@ CREATE TABLE IF NOT EXISTS players (
     height TEXT,
     weight TEXT,
     jersey_number TEXT,
+    years_of_experience SMALLINT CHECK (years_of_experience IS NULL OR years_of_experience BETWEEN 0 AND 99),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -169,6 +172,150 @@ CREATE TABLE IF NOT EXISTS roster_refresh_staging (
     CONSTRAINT roster_refresh_staging_run_player_unique
       UNIQUE (run_id, provider, player_source_id)
 );
+
+-- Canonical schema mirror for migration 013. Keep byte-identical below.
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS contract_source_snapshot_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL CHECK (char_length(trim(source)) > 0),
+  team TEXT NOT NULL CHECK (team ~ '^[A-Z]{2,3}$'),
+  season TEXT NOT NULL CHECK (season ~ '^\d{4}-\d{2}$'),
+  source_url TEXT NOT NULL CHECK (source_url ~ '^https://'),
+  observed_at TIMESTAMPTZ NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL,
+  stored_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  content_hash TEXT NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT contract_source_snapshot_versions_content_unique
+    UNIQUE (source, team, season, content_hash),
+  CONSTRAINT contract_source_snapshot_versions_identity_id_unique
+    UNIQUE (id, source, team, season)
+);
+
+CREATE TABLE IF NOT EXISTS current_contract_source_snapshots (
+  source TEXT NOT NULL,
+  team TEXT NOT NULL,
+  season TEXT NOT NULL,
+  version_id UUID NOT NULL,
+  revalidated_at TIMESTAMPTZ NOT NULL,
+  revalidation_revision BIGINT NOT NULL CHECK (revalidation_revision > 0),
+  PRIMARY KEY (source, team, season),
+  CONSTRAINT current_contract_source_snapshots_version_identity_fkey
+    FOREIGN KEY (version_id, source, team, season)
+    REFERENCES contract_source_snapshot_versions(id, source, team, season)
+    ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_contract_source_snapshot_versions_identity_observed
+  ON contract_source_snapshot_versions(source, team, season, observed_at DESC);
+
+ALTER TABLE contract_source_snapshot_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE current_contract_source_snapshots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE contract_source_snapshot_versions FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE current_contract_source_snapshots FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE contract_source_snapshot_versions TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE current_contract_source_snapshots TO service_role;
+
+CREATE SEQUENCE IF NOT EXISTS contract_snapshot_revalidation_revision_seq;
+REVOKE ALL ON SEQUENCE contract_snapshot_revalidation_revision_seq FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION reserve_contract_snapshot_revalidation(
+  p_source TEXT,
+  p_team TEXT,
+  p_season TEXT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF char_length(trim(p_source)) = 0 OR p_team !~ '^[A-Z]{2,3}$' OR p_season !~ '^\d{4}-\d{2}$' THEN
+    RAISE EXCEPTION 'Invalid contract snapshot identity';
+  END IF;
+  RETURN nextval('contract_snapshot_revalidation_revision_seq');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION reserve_contract_snapshot_revalidation(TEXT, TEXT, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION reserve_contract_snapshot_revalidation(TEXT, TEXT, TEXT)
+  TO service_role;
+
+CREATE OR REPLACE FUNCTION store_contract_source_snapshot(
+  p_source TEXT,
+  p_team TEXT,
+  p_season TEXT,
+  p_source_url TEXT,
+  p_observed_at TIMESTAMPTZ,
+  p_fetched_at TIMESTAMPTZ,
+  p_revalidation_revision BIGINT,
+  p_content_hash TEXT,
+  p_payload JSONB
+)
+RETURNS TABLE (
+  version_id UUID,
+  source TEXT,
+  team TEXT,
+  season TEXT,
+  content_hash TEXT,
+  observed_at TIMESTAMPTZ,
+  stored_at TIMESTAMPTZ,
+  revalidated_at TIMESTAMPTZ,
+  payload JSONB
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_version_id UUID;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_source || ':' || p_team || ':' || p_season, 0));
+
+  INSERT INTO contract_source_snapshot_versions (
+    source, team, season, source_url, observed_at, fetched_at, content_hash, payload
+  ) VALUES (
+    p_source, p_team, p_season, p_source_url, p_observed_at, p_fetched_at, p_content_hash, p_payload
+  )
+  ON CONFLICT (source, team, season, content_hash) DO NOTHING
+  RETURNING id INTO v_version_id;
+
+  IF v_version_id IS NULL THEN
+    SELECT v.id INTO v_version_id
+    FROM contract_source_snapshot_versions v
+    WHERE v.source = p_source AND v.team = p_team AND v.season = p_season
+      AND v.content_hash = p_content_hash;
+  END IF;
+
+  INSERT INTO current_contract_source_snapshots (
+    source, team, season, version_id, revalidated_at, revalidation_revision
+  )
+  VALUES (p_source, p_team, p_season, v_version_id, p_fetched_at, p_revalidation_revision)
+  ON CONFLICT (source, team, season) DO UPDATE SET
+    version_id = EXCLUDED.version_id,
+    revalidated_at = EXCLUDED.revalidated_at,
+    revalidation_revision = EXCLUDED.revalidation_revision
+  WHERE EXCLUDED.revalidation_revision > current_contract_source_snapshots.revalidation_revision;
+
+  RETURN QUERY
+  SELECT v.id, v.source, v.team, v.season, v.content_hash, v.observed_at, v.stored_at,
+    c.revalidated_at, v.payload
+  FROM current_contract_source_snapshots c
+  JOIN contract_source_snapshot_versions v ON v.id = c.version_id
+  WHERE c.source = p_source AND c.team = p_team AND c.season = p_season;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION store_contract_source_snapshot(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, BIGINT, TEXT, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION store_contract_source_snapshot(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, BIGINT, TEXT, JSONB)
+  TO service_role;
+
+COMMIT;
+
+-- End canonical schema mirror for migration 013.
 
 CREATE TABLE IF NOT EXISTS career_saves (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -520,12 +667,13 @@ BEGIN
     AND lower(p.full_name) = lower(s.payload->>'full_name');
   INSERT INTO players (
     espn_id, team_id, first_name, last_name, full_name, position,
-    height, weight, jersey_number, is_active
+    height, weight, jersey_number, years_of_experience, is_active
   )
   SELECT
     s.player_source_id, s.team_id, s.payload->>'first_name', s.payload->>'last_name',
     s.payload->>'full_name', s.payload->>'position', s.payload->>'height',
-    s.payload->>'weight', s.payload->>'jersey_number', true
+    s.payload->>'weight', s.payload->>'jersey_number',
+    NULLIF(s.payload->>'years_of_experience', '')::SMALLINT, true
   FROM roster_refresh_staging s
   WHERE s.run_id = p_run_id AND s.provider = 'espn'
     AND NOT EXISTS (SELECT 1 FROM players p WHERE p.espn_id = s.player_source_id);
@@ -535,7 +683,8 @@ BEGIN
     first_name = s.payload->>'first_name', last_name = s.payload->>'last_name',
     full_name = s.payload->>'full_name', position = s.payload->>'position',
     height = s.payload->>'height', weight = s.payload->>'weight',
-    jersey_number = s.payload->>'jersey_number'
+    jersey_number = s.payload->>'jersey_number',
+    years_of_experience = NULLIF(s.payload->>'years_of_experience', '')::SMALLINT
   FROM roster_refresh_staging s
   WHERE s.run_id = p_run_id AND s.provider = 'espn'
     AND p.espn_id = s.player_source_id;
@@ -864,3 +1013,964 @@ END;
 $$;
 REVOKE ALL ON FUNCTION advance_simulation_day(UUID, DATE) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION advance_simulation_day(UUID, DATE) TO authenticated;
+
+-- Canonical schema mirror for work unit 5. Keep byte-identical with migration 014 below.
+BEGIN;
+
+-- Game-owned copies of global source snapshots. Source payloads stay immutable and
+-- are never queried by gameplay after this one initialization transaction.
+ALTER TABLE game_player_states
+  ADD CONSTRAINT game_player_states_game_player_team_unique UNIQUE (game_id, player_id, team_id);
+
+CREATE TABLE game_contract_materializations (
+  game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  season TEXT NOT NULL CHECK (season ~ '^\d{4}-\d{2}$'),
+  source_version_ids UUID[] NOT NULL CHECK (cardinality(source_version_ids) = 30),
+  materialized_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE game_contract_identities (
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
+  resolution_status TEXT NOT NULL CHECK (resolution_status IN ('observed-standard', 'official-two-way', 'estimated-minimum', 'inactive-excluded', 'unclassified')),
+  contract_type TEXT CHECK (contract_type IS NULL OR contract_type IN ('standard', 'two-way')),
+  provenance_quality TEXT CHECK (provenance_quality IS NULL OR provenance_quality IN ('observed', 'official', 'estimated')),
+  source_method TEXT,
+  estimated BOOLEAN NOT NULL DEFAULT false,
+  cap_treatment TEXT NOT NULL CHECK (cap_treatment IN ('standard-cap-and-matching', 'excluded-two-way', 'excluded-inactive')),
+  exclusion_evidence JSONB CHECK (exclusion_evidence IS NULL OR jsonb_typeof(exclusion_evidence) = 'object'),
+  source_player_id TEXT,
+  source_snapshot_version_id UUID REFERENCES contract_source_snapshot_versions(id) ON DELETE RESTRICT,
+  match_method TEXT CHECK (match_method IS NULL OR match_method IN ('exact-provider-record', 'curated-exception')),
+  match_evidence JSONB CHECK (match_evidence IS NULL OR jsonb_typeof(match_evidence) = 'object'),
+  PRIMARY KEY (game_id, player_id),
+  FOREIGN KEY (game_id, player_id, team_id)
+    REFERENCES game_player_states(game_id, player_id, team_id) ON DELETE RESTRICT,
+  CHECK (
+    resolution_status <> 'unclassified'
+  )
+);
+
+CREATE TABLE game_contract_agreements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
+  start_season_label TEXT CHECK (start_season_label IS NULL OR start_season_label ~ '^\d{4}-\d{2}$'),
+  end_season_label TEXT CHECK (end_season_label IS NULL OR end_season_label ~ '^\d{4}-\d{2}$'),
+  remaining_guaranteed_amount BIGINT CHECK (remaining_guaranteed_amount IS NULL OR remaining_guaranteed_amount >= 0),
+  contract_type TEXT NOT NULL CHECK (contract_type IN ('standard', 'two-way')),
+  provenance_quality TEXT NOT NULL CHECK (provenance_quality IN ('observed', 'official', 'estimated')),
+  source_method TEXT NOT NULL,
+  estimated BOOLEAN NOT NULL DEFAULT false,
+  cap_treatment TEXT NOT NULL CHECK (cap_treatment IN ('standard-cap-and-matching', 'excluded-two-way')),
+  UNIQUE (game_id, player_id),
+  UNIQUE (id, game_id),
+  FOREIGN KEY (game_id, player_id, team_id)
+    REFERENCES game_player_states(game_id, player_id, team_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE game_contract_seasons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agreement_id UUID NOT NULL,
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  season_label TEXT NOT NULL CHECK (season_label ~ '^\d{4}-\d{2}$'),
+  start_year INTEGER NOT NULL,
+  end_year INTEGER NOT NULL CHECK (end_year = start_year + 1),
+  salary_amount BIGINT CHECK (salary_amount IS NULL OR salary_amount >= 0),
+  option_kind TEXT NOT NULL CHECK (option_kind IN ('none', 'player', 'team', 'unknown')),
+  guarantee_kind TEXT NOT NULL CHECK (guarantee_kind IN ('guaranteed', 'not-guaranteed', 'partially-guaranteed', 'unknown')),
+  UNIQUE (agreement_id, season_label),
+  CONSTRAINT game_contract_seasons_agreement_game_fkey FOREIGN KEY (agreement_id, game_id)
+    REFERENCES game_contract_agreements(id, game_id) ON DELETE CASCADE
+);
+
+CREATE TABLE game_contract_provenance (
+  agreement_id UUID PRIMARY KEY,
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  source_url TEXT NOT NULL CHECK (source_url ~ '^https://'),
+  source_player_id TEXT NOT NULL,
+  source_snapshot_version_id UUID NOT NULL REFERENCES contract_source_snapshot_versions(id) ON DELETE RESTRICT,
+  observed_at TIMESTAMPTZ NOT NULL,
+  notes JSONB CHECK (notes IS NULL OR jsonb_typeof(notes) = 'array'),
+  CONSTRAINT game_contract_provenance_agreement_game_fkey FOREIGN KEY (agreement_id, game_id)
+    REFERENCES game_contract_agreements(id, game_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_game_contract_identities_game_team ON game_contract_identities(game_id, team_id);
+CREATE INDEX idx_game_contract_agreements_game_team ON game_contract_agreements(game_id, team_id);
+CREATE INDEX idx_game_contract_seasons_game_season ON game_contract_seasons(game_id, season_label);
+CREATE INDEX idx_game_contract_provenance_source_version ON game_contract_provenance(source_snapshot_version_id);
+
+ALTER TABLE game_contract_materializations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_contract_identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_contract_agreements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_contract_seasons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_contract_provenance ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY game_contract_materializations_owner_read ON game_contract_materializations FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM games g WHERE g.id = game_id AND g.user_id = auth.uid()));
+CREATE POLICY game_contract_identities_owner_read ON game_contract_identities FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM games g WHERE g.id = game_id AND g.user_id = auth.uid()));
+CREATE POLICY game_contract_agreements_owner_read ON game_contract_agreements FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM games g WHERE g.id = game_id AND g.user_id = auth.uid()));
+CREATE POLICY game_contract_seasons_owner_read ON game_contract_seasons FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM games g WHERE g.id = game_id AND g.user_id = auth.uid()));
+CREATE POLICY game_contract_provenance_owner_read ON game_contract_provenance FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM games g WHERE g.id = game_id AND g.user_id = auth.uid()));
+
+REVOKE ALL ON game_contract_materializations, game_contract_identities, game_contract_agreements,
+  game_contract_seasons, game_contract_provenance FROM PUBLIC, anon;
+GRANT SELECT ON game_contract_materializations, game_contract_identities, game_contract_agreements,
+  game_contract_seasons, game_contract_provenance TO authenticated;
+GRANT SELECT, INSERT ON game_contract_materializations, game_contract_identities, game_contract_agreements,
+  game_contract_seasons, game_contract_provenance TO service_role;
+
+CREATE FUNCTION enforce_game_contract_copy_immutability() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE v_game_id UUID;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN RAISE EXCEPTION 'Game contract snapshots are immutable'; END IF;
+  v_game_id := NEW.game_id;
+  IF NOT EXISTS (SELECT 1 FROM games WHERE id = v_game_id AND status = 'initializing' AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'Game contract snapshots may only be inserted while the game is initializing';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER game_contract_materializations_immutable BEFORE INSERT OR UPDATE OR DELETE ON game_contract_materializations
+  FOR EACH ROW EXECUTE FUNCTION enforce_game_contract_copy_immutability();
+CREATE TRIGGER game_contract_identities_immutable BEFORE INSERT OR UPDATE OR DELETE ON game_contract_identities
+  FOR EACH ROW EXECUTE FUNCTION enforce_game_contract_copy_immutability();
+CREATE TRIGGER game_contract_agreements_immutable BEFORE INSERT OR UPDATE OR DELETE ON game_contract_agreements
+  FOR EACH ROW EXECUTE FUNCTION enforce_game_contract_copy_immutability();
+CREATE TRIGGER game_contract_seasons_immutable BEFORE INSERT OR UPDATE OR DELETE ON game_contract_seasons
+  FOR EACH ROW EXECUTE FUNCTION enforce_game_contract_copy_immutability();
+CREATE TRIGGER game_contract_provenance_immutable BEFORE INSERT OR UPDATE OR DELETE ON game_contract_provenance
+  FOR EACH ROW EXECUTE FUNCTION enforce_game_contract_copy_immutability();
+
+CREATE OR REPLACE FUNCTION materialize_game_contract_snapshots(
+  p_game_id UUID,
+  p_user_id UUID,
+  p_source TEXT,
+  p_season TEXT,
+  p_version_ids UUID[],
+  p_identity_crosswalk JSONB,
+  p_contract_classifications JSONB
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_existing UUID[];
+  v_roster_count INTEGER;
+  v_identity_count INTEGER;
+  v_agreement_count INTEGER;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id FOR UPDATE;
+  IF NOT FOUND OR v_game.user_id <> p_user_id OR v_game.status <> 'initializing'
+     OR v_game.season_era_id <> 'modern' OR v_game.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Contract materialization requires an owned initializing modern game';
+  END IF;
+  IF p_season <> format('%s-%s', v_game.season_year, right((v_game.season_year + 1)::TEXT, 2)) THEN
+    RAISE EXCEPTION 'Contract snapshot season does not match game season';
+  END IF;
+  IF jsonb_typeof(p_identity_crosswalk) <> 'array' THEN RAISE EXCEPTION 'Identity crosswalk must be an array'; END IF;
+  IF jsonb_typeof(p_contract_classifications) <> 'array' THEN RAISE EXCEPTION 'Contract classifications must be an array'; END IF;
+
+  SELECT source_version_ids INTO v_existing FROM game_contract_materializations WHERE game_id = p_game_id;
+  IF FOUND THEN
+    IF v_existing = p_version_ids THEN
+      RETURN jsonb_build_object('status', 'already-materialized', 'agreementCount',
+        (SELECT count(*) FROM game_contract_agreements WHERE game_id = p_game_id));
+    END IF;
+    RAISE EXCEPTION 'Game was already materialized from different source versions';
+  END IF;
+
+  IF cardinality(p_version_ids) <> 30 OR cardinality(ARRAY(SELECT DISTINCT unnest(p_version_ids))) <> 30 THEN
+    RAISE EXCEPTION 'Exactly 30 distinct source snapshot versions are required';
+  END IF;
+  IF (SELECT count(*) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)
+      AND v.source = p_source AND v.season = p_season) <> 30
+     OR (SELECT count(DISTINCT v.team) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)) <> 30 THEN
+    RAISE EXCEPTION 'Source snapshot version set is incomplete or inconsistent';
+  END IF;
+  IF ARRAY(SELECT DISTINCT v.team FROM contract_source_snapshot_versions v
+      WHERE v.id = ANY(p_version_ids) ORDER BY v.team)
+     <> ARRAY['ATL','BOS','BRK','CHI','CHO','CLE','DAL','DEN','DET','GSW','HOU','IND','LAC','LAL','MEM',
+       'MIA','MIL','MIN','NOP','NYK','OKC','ORL','PHI','PHO','POR','SAC','SAS','TOR','UTA','WAS'] THEN
+    RAISE EXCEPTION 'Source snapshot versions do not cover the canonical 30-team set';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'sourcePlayerId' HAVING count(*) > 1)
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'targetPlayerId' HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'Identity crosswalk source and target identities must be unique';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x WHERE
+    x->>'matchMethod' NOT IN ('exact-provider-record', 'curated-exception')
+    OR jsonb_typeof(x->'evidence') <> 'object') THEN
+    RAISE EXCEPTION 'Identity crosswalk contains unvalidated records';
+  END IF;
+
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id;
+  IF v_roster_count = 0 THEN RAISE EXCEPTION 'Modern roster must be seeded before contract materialization'; END IF;
+
+  INSERT INTO game_contract_materializations(game_id, source, season, source_version_ids)
+  VALUES (p_game_id, p_source, p_season, p_version_ids);
+
+  WITH source_contracts AS (
+    SELECT v.id version_id, v.observed_at, c.contract
+    FROM contract_source_snapshot_versions v
+    CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+    WHERE v.id = ANY(p_version_ids)
+  ), crosswalk AS (
+    SELECT x->>'sourcePlayerId' source_player_id, (x->>'targetPlayerId')::UUID target_player_id,
+      x->>'matchMethod' match_method, x->'evidence' evidence
+    FROM jsonb_array_elements(p_identity_crosswalk) x
+  ), matched AS (
+    SELECT gps.player_id, gps.team_id, sc.version_id, sc.observed_at, sc.contract,
+      sc.contract->>'playerSlug' source_player_id, cw.match_method, cw.evidence
+    FROM source_contracts sc
+    JOIN crosswalk cw ON cw.source_player_id = sc.contract->>'playerSlug'
+    JOIN game_player_states gps ON gps.game_id = p_game_id AND gps.player_id = cw.target_player_id
+    JOIN teams t ON t.id = gps.team_id AND t.abbreviation = (cw.evidence->>'nbaTeam')
+    WHERE sc.contract->>'teamAbbreviation' = (cw.evidence->>'sourceTeam')
+  )
+  INSERT INTO game_contract_identities(game_id, player_id, team_id, resolution_status, contract_type,
+    provenance_quality, source_method, estimated, cap_treatment, exclusion_evidence, source_player_id,
+    source_snapshot_version_id, match_method, match_evidence)
+  SELECT p_game_id, gps.player_id, gps.team_id,
+    CASE
+      WHEN c.resolution->>'status' = 'excluded' THEN 'inactive-excluded'
+      WHEN c.resolution->>'contractType' = 'two-way' THEN 'official-two-way'
+      WHEN (c.resolution->>'estimated')::BOOLEAN THEN 'estimated-minimum'
+      WHEN c.resolution->>'status' = 'resolved' THEN 'observed-standard'
+      ELSE 'unclassified'
+    END,
+    c.resolution->>'contractType', c.resolution->>'quality', c.resolution->>'method',
+    COALESCE((c.resolution->>'estimated')::BOOLEAN, false), c.resolution->>'capTreatment',
+    c.resolution->'evidence',
+    m.source_player_id, m.version_id, m.match_method, m.evidence
+  FROM game_player_states gps
+  LEFT JOIN matched m ON m.player_id = gps.player_id
+  LEFT JOIN LATERAL (
+    SELECT x->'resolution' resolution FROM jsonb_array_elements(p_contract_classifications) x
+    WHERE (x->>'targetPlayerId')::UUID = gps.player_id
+  ) c ON true
+  WHERE gps.game_id = p_game_id;
+
+  WITH source_contracts AS (
+    SELECT v.id version_id, v.observed_at, c.contract
+    FROM contract_source_snapshot_versions v
+    CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+    WHERE v.id = ANY(p_version_ids)
+  ), crosswalk AS (
+    SELECT x->>'sourcePlayerId' source_player_id, (x->>'targetPlayerId')::UUID target_player_id
+    FROM jsonb_array_elements(p_identity_crosswalk) x
+  ), matched AS (
+    SELECT gps.player_id, gps.team_id, sc.version_id, sc.observed_at, sc.contract,
+      sc.contract->>'playerSlug' source_player_id
+    FROM source_contracts sc
+    JOIN crosswalk cw ON cw.source_player_id = sc.contract->>'playerSlug'
+    JOIN game_player_states gps ON gps.game_id = p_game_id AND gps.player_id = cw.target_player_id
+  ), inserted AS (
+    INSERT INTO game_contract_agreements(game_id, player_id, team_id, start_season_label,
+      end_season_label, remaining_guaranteed_amount, contract_type, provenance_quality, source_method,
+      estimated, cap_treatment)
+    SELECT p_game_id, player_id, team_id, NULL, NULL,
+      NULLIF(contract->>'remainingGuaranteedAmount', '')::BIGINT, 'standard',
+      CASE WHEN (c->'resolution'->>'estimated')::BOOLEAN THEN 'estimated' ELSE 'observed' END,
+      c->'resolution'->>'method', COALESCE((c->'resolution'->>'estimated')::BOOLEAN, false),
+      'standard-cap-and-matching'
+    FROM matched
+    JOIN LATERAL (SELECT x c FROM jsonb_array_elements(p_contract_classifications) x
+      WHERE (x->>'targetPlayerId')::UUID = matched.player_id
+        AND x->'resolution'->>'contractType' = 'standard') classified ON true
+    RETURNING id, player_id
+  )
+  INSERT INTO game_contract_provenance(agreement_id, game_id, source, source_url, source_player_id,
+    source_snapshot_version_id, observed_at, notes)
+  SELECT i.id, p_game_id, p_source, m.contract->>'playerUrl', m.source_player_id,
+    m.version_id, m.observed_at, m.contract->'contractNotes'
+  FROM inserted i JOIN matched m USING (player_id);
+
+  INSERT INTO game_contract_seasons(agreement_id, game_id, season_label, start_year, end_year,
+    salary_amount, option_kind, guarantee_kind)
+  SELECT a.id, p_game_id, s.value->>'season', split_part(s.value->>'season', '-', 1)::INTEGER,
+    split_part(s.value->>'season', '-', 1)::INTEGER + 1,
+    NULLIF(s.value->>'amount', '')::BIGINT, s.value->>'optionKind', 'unknown'
+  FROM game_contract_agreements a
+  JOIN game_contract_provenance pr ON pr.agreement_id = a.id
+  JOIN contract_source_snapshot_versions v ON v.id = pr.source_snapshot_version_id
+  CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+  CROSS JOIN LATERAL jsonb_array_elements(c.contract->'salaries') s(value)
+  WHERE a.game_id = p_game_id AND c.contract->>'playerSlug' = pr.source_player_id;
+
+  SELECT count(*) INTO v_identity_count FROM game_contract_identities WHERE game_id = p_game_id;
+  SELECT count(*) INTO v_agreement_count FROM game_contract_agreements WHERE game_id = p_game_id;
+  IF v_identity_count <> v_roster_count THEN RAISE EXCEPTION 'Every roster identity must be classified'; END IF;
+  IF EXISTS (SELECT 1 FROM game_contract_identities WHERE game_id = p_game_id AND resolution_status = 'unclassified') OR EXISTS (
+    SELECT 1 FROM game_contract_agreements a LEFT JOIN game_contract_seasons s
+      ON s.agreement_id = a.id AND s.start_year = v_game.season_year
+    WHERE a.game_id = p_game_id AND s.salary_amount IS NULL
+  ) THEN RAISE EXCEPTION 'Contract coverage is insufficient; game activation is blocked'; END IF;
+  RETURN jsonb_build_object('status', 'materialized', 'rosterCount', v_roster_count,
+    'agreementCount', v_agreement_count, 'unmatchedCount', v_roster_count - v_agreement_count);
+END;
+$$;
+REVOKE ALL ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  TO service_role;
+
+-- Historical games retain the exact legacy template path. Modern games only seed
+-- roster state here; canonical seasonal contracts are materialized by the service RPC.
+CREATE OR REPLACE FUNCTION seed_game_data(p_game_id UUID, p_team_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_game games%ROWTYPE; v_roster_count INTEGER; v_contract_count INTEGER;
+BEGIN
+  SELECT * INTO v_game FROM games g WHERE g.id = p_game_id AND g.selected_team_id = p_team_id
+    AND g.user_id = auth.uid() AND g.status = 'initializing' FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'seed_game_data aborted: game is not initializing, not owned by the caller, or selected team does not match'; END IF;
+  IF v_game.season_era_id <> 'modern' THEN
+    IF NOT EXISTS (SELECT 1 FROM historical_roster_templates WHERE season_year = v_game.season_year) THEN
+      RAISE EXCEPTION 'seed_game_data aborted: historical templates for season % are not loaded', v_game.season_year;
+    END IF;
+    INSERT INTO game_player_states(game_id, player_id, team_id, is_active)
+      SELECT p_game_id, player_id, team_id, is_active FROM historical_roster_templates
+      WHERE season_year = v_game.season_year ON CONFLICT (game_id, player_id) DO NOTHING;
+    INSERT INTO contracts(game_id, player_id, team_id, start_year, end_year, salary_y1, salary_y2,
+      salary_y3, salary_y4, salary_y5, is_player_option, is_team_option, is_guaranteed)
+      SELECT p_game_id, player_id, team_id, start_year, end_year, salary_y1, salary_y2, salary_y3,
+        salary_y4, salary_y5, is_player_option, is_team_option, is_guaranteed
+      FROM historical_contract_templates WHERE season_year = v_game.season_year
+      ON CONFLICT (game_id, player_id) DO NOTHING;
+    SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id;
+    SELECT count(*) INTO v_contract_count FROM contracts WHERE game_id = p_game_id;
+    IF v_roster_count = 0 OR v_contract_count <> v_roster_count THEN
+      RAISE EXCEPTION 'seed_game_data aborted: incomplete historical snapshot';
+    END IF;
+  ELSE
+    INSERT INTO game_player_states(game_id, player_id, team_id)
+      SELECT p_game_id, id, team_id FROM players WHERE team_id IS NOT NULL
+      ON CONFLICT (game_id, player_id) DO NOTHING;
+    IF EXISTS (SELECT 1 FROM contracts WHERE game_id = p_game_id) THEN
+      RAISE EXCEPTION 'seed_game_data refuses legacy contracts for modern games';
+    END IF;
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION seed_game_data(UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION seed_game_data(UUID, UUID) TO authenticated;
+
+COMMIT;
+
+-- Canonical schema mirror for migration 015. Keep byte-identical below.
+BEGIN;
+
+ALTER TABLE players
+  ADD COLUMN IF NOT EXISTS years_of_experience SMALLINT
+  CHECK (years_of_experience IS NULL OR years_of_experience BETWEEN 0 AND 99);
+
+CREATE OR REPLACE FUNCTION promote_current_roster(p_run_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_expected_team_count INTEGER; v_staged_team_count INTEGER;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('current-roster', 0));
+  SELECT expected_team_count INTO v_expected_team_count FROM roster_refresh_runs
+    WHERE id = p_run_id AND status = 'pending' FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Roster refresh run is missing or not pending'; END IF;
+  SELECT count(DISTINCT team_id) INTO v_staged_team_count FROM roster_refresh_staging WHERE run_id = p_run_id;
+  IF v_staged_team_count <> v_expected_team_count
+    OR EXISTS (SELECT 1 FROM teams t WHERE NOT EXISTS
+      (SELECT 1 FROM roster_refresh_staging s WHERE s.run_id = p_run_id AND s.team_id = t.id))
+    OR EXISTS (SELECT 1 FROM roster_refresh_staging s WHERE s.run_id = p_run_id
+      AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.id = s.team_id))
+  THEN RAISE EXCEPTION 'Roster refresh run does not contain the complete team set'; END IF;
+  UPDATE players p SET espn_id = s.player_source_id, updated_at = now()
+    FROM roster_refresh_staging s WHERE s.run_id = p_run_id AND s.provider = 'espn'
+    AND p.espn_id IS NULL AND lower(p.full_name) = lower(s.payload->>'full_name');
+  INSERT INTO players (espn_id, team_id, first_name, last_name, full_name, position,
+    height, weight, jersey_number, years_of_experience, is_active)
+  SELECT s.player_source_id, s.team_id, s.payload->>'first_name', s.payload->>'last_name',
+    s.payload->>'full_name', s.payload->>'position', s.payload->>'height', s.payload->>'weight',
+    s.payload->>'jersey_number', NULLIF(s.payload->>'years_of_experience', '')::SMALLINT, true
+  FROM roster_refresh_staging s WHERE s.run_id = p_run_id AND s.provider = 'espn'
+    AND NOT EXISTS (SELECT 1 FROM players p WHERE p.espn_id = s.player_source_id);
+  UPDATE players SET team_id = NULL, is_active = false, updated_at = now() WHERE team_id IS NOT NULL;
+  UPDATE players p SET team_id = s.team_id, is_active = true, updated_at = now(),
+    first_name = s.payload->>'first_name', last_name = s.payload->>'last_name',
+    full_name = s.payload->>'full_name', position = s.payload->>'position',
+    height = s.payload->>'height', weight = s.payload->>'weight',
+    jersey_number = s.payload->>'jersey_number',
+    years_of_experience = NULLIF(s.payload->>'years_of_experience', '')::SMALLINT
+  FROM roster_refresh_staging s WHERE s.run_id = p_run_id AND s.provider = 'espn'
+    AND p.espn_id = s.player_source_id;
+  UPDATE roster_refresh_runs SET status = 'success', completed_team_count = v_staged_team_count,
+    updated_at = now() WHERE id = p_run_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION promote_current_roster(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION promote_current_roster(UUID) TO service_role;
+
+COMMIT;
+
+-- Canonical schema mirror for migration 016. Keep byte-identical below.
+BEGIN;
+
+-- Contract copy tables are immutable during normal operation, but an owned
+-- initializing game may be safely compensated after a failed initialization.
+CREATE OR REPLACE FUNCTION enforce_game_contract_copy_immutability()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_game_id UUID;
+BEGIN
+  v_game_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.game_id ELSE NEW.game_id END;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM games
+    WHERE id = v_game_id
+      AND status = 'initializing'
+      AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Game contract snapshots may only be changed while the game is initializing';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  IF TG_OP <> 'INSERT' THEN
+    RAISE EXCEPTION 'Game contract snapshots are immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION rollback_seed_game_data(p_game_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_game games%ROWTYPE;
+BEGIN
+  SELECT * INTO v_game
+  FROM games
+  WHERE id = p_game_id
+    AND user_id = auth.uid()
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'rollback_seed_game_data aborted: game % is not owned by the caller', p_game_id;
+  END IF;
+  IF v_game.status <> 'initializing' OR v_game.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'rollback_seed_game_data aborted: game % is not initializing', p_game_id;
+  END IF;
+
+  -- Delete only game-owned initialization state. Canonical players, teams,
+  -- roster promotion rows, and global source snapshots remain untouched.
+  DELETE FROM game_contract_provenance WHERE game_id = p_game_id;
+  DELETE FROM game_contract_seasons WHERE game_id = p_game_id;
+  DELETE FROM game_contract_identities WHERE game_id = p_game_id;
+  DELETE FROM game_contract_agreements WHERE game_id = p_game_id;
+  DELETE FROM game_contract_materializations WHERE game_id = p_game_id;
+  DELETE FROM contracts WHERE game_id = p_game_id;
+  DELETE FROM game_player_states WHERE game_id = p_game_id;
+  DELETE FROM game_pick_inventory WHERE game_id = p_game_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION rollback_seed_game_data(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION rollback_seed_game_data(UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 016.
+
+-- Canonical schema mirror for migration 017. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION store_contract_source_snapshot(
+  p_source TEXT,
+  p_team TEXT,
+  p_season TEXT,
+  p_source_url TEXT,
+  p_observed_at TIMESTAMPTZ,
+  p_fetched_at TIMESTAMPTZ,
+  p_revalidation_revision BIGINT,
+  p_content_hash TEXT,
+  p_payload JSONB
+)
+RETURNS TABLE (
+  version_id UUID,
+  source TEXT,
+  team TEXT,
+  season TEXT,
+  content_hash TEXT,
+  observed_at TIMESTAMPTZ,
+  stored_at TIMESTAMPTZ,
+  revalidated_at TIMESTAMPTZ,
+  payload JSONB
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_version_id UUID;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_source || ':' || p_team || ':' || p_season, 0));
+
+  INSERT INTO contract_source_snapshot_versions (
+    source, team, season, source_url, observed_at, fetched_at, content_hash, payload
+  ) VALUES (
+    p_source, p_team, p_season, p_source_url, p_observed_at, p_fetched_at, p_content_hash, p_payload
+  )
+  ON CONFLICT ON CONSTRAINT contract_source_snapshot_versions_content_unique DO NOTHING
+  RETURNING id INTO v_version_id;
+
+  IF v_version_id IS NULL THEN
+    SELECT v.id INTO v_version_id
+    FROM contract_source_snapshot_versions v
+    WHERE v.source = p_source AND v.team = p_team AND v.season = p_season
+      AND v.content_hash = p_content_hash;
+  END IF;
+
+  INSERT INTO current_contract_source_snapshots (
+    source, team, season, version_id, revalidated_at, revalidation_revision
+  )
+  VALUES (p_source, p_team, p_season, v_version_id, p_fetched_at, p_revalidation_revision)
+  ON CONFLICT ON CONSTRAINT current_contract_source_snapshots_pkey DO UPDATE SET
+    version_id = EXCLUDED.version_id,
+    revalidated_at = EXCLUDED.revalidated_at,
+    revalidation_revision = EXCLUDED.revalidation_revision
+  WHERE EXCLUDED.revalidation_revision > current_contract_source_snapshots.revalidation_revision;
+
+  RETURN QUERY
+  SELECT v.id, v.source, v.team, v.season, v.content_hash, v.observed_at, v.stored_at,
+    c.revalidated_at, v.payload
+  FROM current_contract_source_snapshots c
+  JOIN contract_source_snapshot_versions v ON v.id = c.version_id
+  WHERE c.source = p_source AND c.team = p_team AND c.season = p_season;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION store_contract_source_snapshot(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, BIGINT, TEXT, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION store_contract_source_snapshot(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, BIGINT, TEXT, JSONB)
+  TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 017.
+
+-- Canonical schema mirror for migration 018. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION materialize_game_contract_snapshots(
+  p_game_id UUID,
+  p_user_id UUID,
+  p_source TEXT,
+  p_season TEXT,
+  p_version_ids UUID[],
+  p_identity_crosswalk JSONB,
+  p_contract_classifications JSONB
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_existing UUID[];
+  v_roster_count INTEGER;
+  v_identity_count INTEGER;
+  v_agreement_count INTEGER;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id FOR UPDATE;
+  IF NOT FOUND OR v_game.user_id <> p_user_id OR v_game.status <> 'initializing'
+     OR v_game.season_era_id <> 'modern' OR v_game.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Contract materialization requires an owned initializing modern game';
+  END IF;
+  IF p_season <> format('%s-%s', v_game.season_year, right((v_game.season_year + 1)::TEXT, 2)) THEN
+    RAISE EXCEPTION 'Contract snapshot season does not match game season';
+  END IF;
+  IF jsonb_typeof(p_identity_crosswalk) <> 'array' THEN RAISE EXCEPTION 'Identity crosswalk must be an array'; END IF;
+  IF jsonb_typeof(p_contract_classifications) <> 'array' THEN RAISE EXCEPTION 'Contract classifications must be an array'; END IF;
+
+  SELECT source_version_ids INTO v_existing FROM game_contract_materializations WHERE game_id = p_game_id;
+  IF FOUND THEN
+    IF v_existing = p_version_ids THEN
+      RETURN jsonb_build_object('status', 'already-materialized', 'agreementCount',
+        (SELECT count(*) FROM game_contract_agreements WHERE game_id = p_game_id));
+    END IF;
+    RAISE EXCEPTION 'Game was already materialized from different source versions';
+  END IF;
+
+  IF cardinality(p_version_ids) <> 30 OR cardinality(ARRAY(SELECT DISTINCT unnest(p_version_ids))) <> 30 THEN
+    RAISE EXCEPTION 'Exactly 30 distinct source snapshot versions are required';
+  END IF;
+  IF (SELECT count(*) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)
+      AND v.source = p_source AND v.season = p_season) <> 30
+     OR (SELECT count(DISTINCT v.team) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)) <> 30 THEN
+    RAISE EXCEPTION 'Source snapshot version set is incomplete or inconsistent';
+  END IF;
+  IF ARRAY(SELECT DISTINCT v.team FROM contract_source_snapshot_versions v
+      WHERE v.id = ANY(p_version_ids) ORDER BY v.team)
+     <> ARRAY['ATL','BOS','BRK','CHI','CHO','CLE','DAL','DEN','DET','GSW','HOU','IND','LAC','LAL','MEM',
+       'MIA','MIL','MIN','NOP','NYK','OKC','ORL','PHI','PHO','POR','SAC','SAS','TOR','UTA','WAS'] THEN
+    RAISE EXCEPTION 'Source snapshot versions do not cover the canonical 30-team set';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'sourcePlayerId' HAVING count(*) > 1)
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'targetPlayerId' HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'Identity crosswalk source and target identities must be unique';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x WHERE
+    x->>'matchMethod' NOT IN ('exact-provider-record', 'curated-exception')
+    OR jsonb_typeof(x->'evidence') <> 'object') THEN
+    RAISE EXCEPTION 'Identity crosswalk contains unvalidated records';
+  END IF;
+
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id;
+  IF v_roster_count = 0 THEN RAISE EXCEPTION 'Modern roster must be seeded before contract materialization'; END IF;
+
+  INSERT INTO game_contract_materializations(game_id, source, season, source_version_ids)
+  VALUES (p_game_id, p_source, p_season, p_version_ids);
+
+  WITH source_contracts AS (
+    SELECT v.id version_id, v.observed_at, c.contract
+    FROM contract_source_snapshot_versions v
+    CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+    WHERE v.id = ANY(p_version_ids)
+  ), crosswalk AS (
+    SELECT x->>'sourcePlayerId' source_player_id, (x->>'targetPlayerId')::UUID target_player_id,
+      x->>'matchMethod' match_method, x->'evidence' evidence
+    FROM jsonb_array_elements(p_identity_crosswalk) x
+  ), matched AS (
+    SELECT gps.player_id, gps.team_id, sc.version_id, sc.observed_at, sc.contract,
+      sc.contract->>'playerSlug' source_player_id, cw.match_method, cw.evidence
+    FROM source_contracts sc
+    JOIN crosswalk cw ON cw.source_player_id = sc.contract->>'playerSlug'
+    JOIN game_player_states gps ON gps.game_id = p_game_id AND gps.player_id = cw.target_player_id
+    JOIN teams t ON t.id = gps.team_id AND t.abbreviation = (cw.evidence->>'nbaTeam')
+    WHERE sc.contract->>'teamAbbreviation' = (cw.evidence->>'sourceTeam')
+  )
+  INSERT INTO game_contract_identities(game_id, player_id, team_id, resolution_status, contract_type,
+    provenance_quality, source_method, estimated, cap_treatment, exclusion_evidence, source_player_id,
+    source_snapshot_version_id, match_method, match_evidence)
+  SELECT p_game_id, gps.player_id, gps.team_id,
+    CASE
+      WHEN c.resolution->>'status' = 'excluded' THEN 'inactive-excluded'
+      WHEN c.resolution->>'contractType' = 'two-way' THEN 'official-two-way'
+      WHEN (c.resolution->>'estimated')::BOOLEAN THEN 'estimated-minimum'
+      WHEN c.resolution->>'status' = 'resolved' THEN 'observed-standard'
+      ELSE 'unclassified'
+    END,
+    c.resolution->>'contractType', c.resolution->>'quality', c.resolution->>'method',
+    COALESCE((c.resolution->>'estimated')::BOOLEAN, false), c.resolution->>'capTreatment',
+    c.resolution->'evidence',
+    m.source_player_id, m.version_id, m.match_method, m.evidence
+  FROM game_player_states gps
+  LEFT JOIN matched m ON m.player_id = gps.player_id
+  LEFT JOIN LATERAL (
+    SELECT x->'resolution' resolution FROM jsonb_array_elements(p_contract_classifications) x
+    WHERE (x->>'targetPlayerId')::UUID = gps.player_id
+  ) c ON true
+  WHERE gps.game_id = p_game_id;
+
+  WITH source_contracts AS (
+    SELECT v.id version_id, v.observed_at, c.contract
+    FROM contract_source_snapshot_versions v
+    CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+    WHERE v.id = ANY(p_version_ids)
+  ), crosswalk AS (
+    SELECT x->>'sourcePlayerId' source_player_id, (x->>'targetPlayerId')::UUID target_player_id
+    FROM jsonb_array_elements(p_identity_crosswalk) x
+  ), matched AS (
+    SELECT gps.player_id, gps.team_id, sc.version_id, sc.observed_at, sc.contract,
+      sc.contract->>'playerSlug' source_player_id
+    FROM source_contracts sc
+    JOIN crosswalk cw ON cw.source_player_id = sc.contract->>'playerSlug'
+    JOIN game_player_states gps ON gps.game_id = p_game_id AND gps.player_id = cw.target_player_id
+  ), inserted AS (
+    INSERT INTO game_contract_agreements(game_id, player_id, team_id, start_season_label,
+      end_season_label, remaining_guaranteed_amount, contract_type, provenance_quality, source_method,
+      estimated, cap_treatment)
+    SELECT p_game_id, player_id, team_id, NULL, NULL,
+      NULLIF(contract->>'remainingGuaranteedAmount', '')::BIGINT, 'standard',
+      CASE WHEN (c->'resolution'->>'estimated')::BOOLEAN THEN 'estimated' ELSE 'observed' END,
+      c->'resolution'->>'method', COALESCE((c->'resolution'->>'estimated')::BOOLEAN, false),
+      'standard-cap-and-matching'
+    FROM matched
+    JOIN LATERAL (SELECT x c FROM jsonb_array_elements(p_contract_classifications) x
+      WHERE (x->>'targetPlayerId')::UUID = matched.player_id
+        AND x->'resolution'->>'contractType' = 'standard'
+        AND COALESCE((x->'resolution'->>'estimated')::BOOLEAN, false) = false) classified ON true
+    RETURNING id, player_id
+  )
+  INSERT INTO game_contract_provenance(agreement_id, game_id, source, source_url, source_player_id,
+    source_snapshot_version_id, observed_at, notes)
+  SELECT i.id, p_game_id, p_source, m.contract->>'playerUrl', m.source_player_id,
+    m.version_id, m.observed_at, m.contract->'contractNotes'
+  FROM inserted i JOIN matched m USING (player_id);
+
+  INSERT INTO game_contract_agreements(game_id, player_id, team_id, start_season_label,
+    end_season_label, remaining_guaranteed_amount, contract_type, provenance_quality, source_method,
+    estimated, cap_treatment)
+  SELECT p_game_id, gps.player_id, gps.team_id, p_season, p_season, NULL, 'standard', 'estimated',
+    c.resolution->>'method', true, 'standard-cap-and-matching'
+  FROM game_player_states gps
+  JOIN LATERAL (
+    SELECT x->'resolution' resolution
+    FROM jsonb_array_elements(p_contract_classifications) x
+    WHERE (x->>'targetPlayerId')::UUID = gps.player_id
+  ) c ON true
+  WHERE gps.game_id = p_game_id
+    AND c.resolution->>'status' = 'resolved'
+    AND c.resolution->>'contractType' = 'standard'
+    AND (c.resolution->>'estimated')::BOOLEAN = true;
+
+  INSERT INTO game_contract_seasons(agreement_id, game_id, season_label, start_year, end_year,
+    salary_amount, option_kind, guarantee_kind)
+  SELECT a.id, p_game_id, s.value->>'season', split_part(s.value->>'season', '-', 1)::INTEGER,
+    split_part(s.value->>'season', '-', 1)::INTEGER + 1,
+    NULLIF(s.value->>'amount', '')::BIGINT, s.value->>'optionKind', 'unknown'
+  FROM game_contract_agreements a
+  JOIN game_contract_provenance pr ON pr.agreement_id = a.id
+  JOIN contract_source_snapshot_versions v ON v.id = pr.source_snapshot_version_id
+  CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+  CROSS JOIN LATERAL jsonb_array_elements(c.contract->'salaries') s(value)
+  WHERE a.game_id = p_game_id AND c.contract->>'playerSlug' = pr.source_player_id;
+
+  INSERT INTO game_contract_seasons(agreement_id, game_id, season_label, start_year, end_year,
+    salary_amount, option_kind, guarantee_kind)
+  SELECT a.id, p_game_id, p_season, v_game.season_year, v_game.season_year + 1,
+    (c.resolution->>'salaryAmount')::BIGINT, 'none', 'unknown'
+  FROM game_contract_agreements a
+  JOIN LATERAL (
+    SELECT x->'resolution' resolution
+    FROM jsonb_array_elements(p_contract_classifications) x
+    WHERE (x->>'targetPlayerId')::UUID = a.player_id
+  ) c ON true
+  WHERE a.game_id = p_game_id
+    AND a.estimated = true
+    AND c.resolution->>'status' = 'resolved'
+    AND c.resolution->>'contractType' = 'standard'
+    AND (c.resolution->>'estimated')::BOOLEAN = true;
+
+  SELECT count(*) INTO v_identity_count FROM game_contract_identities WHERE game_id = p_game_id;
+  SELECT count(*) INTO v_agreement_count FROM game_contract_agreements WHERE game_id = p_game_id;
+  IF v_identity_count <> v_roster_count THEN RAISE EXCEPTION 'Every roster identity must be classified'; END IF;
+  IF EXISTS (SELECT 1 FROM game_contract_identities WHERE game_id = p_game_id AND resolution_status = 'unclassified') OR EXISTS (
+    SELECT 1 FROM game_contract_agreements a LEFT JOIN game_contract_seasons s
+      ON s.agreement_id = a.id AND s.start_year = v_game.season_year
+    WHERE a.game_id = p_game_id AND s.salary_amount IS NULL
+  ) THEN RAISE EXCEPTION 'Contract coverage is insufficient; game activation is blocked'; END IF;
+  RETURN jsonb_build_object('status', 'materialized', 'rosterCount', v_roster_count,
+    'agreementCount', v_agreement_count, 'unmatchedCount', v_roster_count - v_agreement_count);
+END;
+$$;
+REVOKE ALL ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 018.
+
+-- Canonical schema mirror for migration 019. Keep byte-identical below.
+BEGIN;
+
+-- Migration order: 013 creates the source snapshot tables and 014 creates the
+-- game contract copy tables. Migrations 015-018 may be applied in normal order,
+-- but 018 is not a prerequisite for this complete function replacement.
+-- Applying 019 after 014 (or after the already-applied 018) is sufficient.
+CREATE OR REPLACE FUNCTION materialize_game_contract_snapshots(
+  p_game_id UUID,
+  p_user_id UUID,
+  p_source TEXT,
+  p_season TEXT,
+  p_version_ids UUID[],
+  p_identity_crosswalk JSONB,
+  p_contract_classifications JSONB
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_existing UUID[];
+  v_roster_count INTEGER;
+  v_identity_count INTEGER;
+  v_agreement_count INTEGER;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id FOR UPDATE;
+  IF NOT FOUND OR v_game.user_id <> p_user_id OR v_game.status <> 'initializing'
+     OR v_game.season_era_id <> 'modern' OR v_game.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Contract materialization requires an owned initializing modern game';
+  END IF;
+  IF p_season <> format('%s-%s', v_game.season_year, right((v_game.season_year + 1)::TEXT, 2)) THEN
+    RAISE EXCEPTION 'Contract snapshot season does not match game season';
+  END IF;
+  IF jsonb_typeof(p_identity_crosswalk) <> 'array' THEN RAISE EXCEPTION 'Identity crosswalk must be an array'; END IF;
+  IF jsonb_typeof(p_contract_classifications) <> 'array' THEN RAISE EXCEPTION 'Contract classifications must be an array'; END IF;
+
+  SELECT source_version_ids INTO v_existing FROM game_contract_materializations WHERE game_id = p_game_id;
+  IF FOUND THEN
+    IF v_existing = p_version_ids THEN
+      RETURN jsonb_build_object('status', 'already-materialized', 'agreementCount',
+        (SELECT count(*) FROM game_contract_agreements WHERE game_id = p_game_id));
+    END IF;
+    RAISE EXCEPTION 'Game was already materialized from different source versions';
+  END IF;
+
+  IF cardinality(p_version_ids) <> 30 OR cardinality(ARRAY(SELECT DISTINCT unnest(p_version_ids))) <> 30 THEN
+    RAISE EXCEPTION 'Exactly 30 distinct source snapshot versions are required';
+  END IF;
+  IF (SELECT count(*) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)
+      AND v.source = p_source AND v.season = p_season) <> 30
+     OR (SELECT count(DISTINCT v.team) FROM contract_source_snapshot_versions v WHERE v.id = ANY(p_version_ids)) <> 30 THEN
+    RAISE EXCEPTION 'Source snapshot version set is incomplete or inconsistent';
+  END IF;
+  IF ARRAY(SELECT DISTINCT v.team FROM contract_source_snapshot_versions v
+      WHERE v.id = ANY(p_version_ids) ORDER BY v.team)
+     <> ARRAY['ATL','BOS','BRK','CHI','CHO','CLE','DAL','DEN','DET','GSW','HOU','IND','LAC','LAL','MEM',
+       'MIA','MIL','MIN','NOP','NYK','OKC','ORL','PHI','PHO','POR','SAC','SAS','TOR','UTA','WAS'] THEN
+    RAISE EXCEPTION 'Source snapshot versions do not cover the canonical 30-team set';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'sourcePlayerId' HAVING count(*) > 1)
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x
+    GROUP BY x->>'targetPlayerId' HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'Identity crosswalk source and target identities must be unique';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_identity_crosswalk) x WHERE
+    x->>'matchMethod' NOT IN ('exact-provider-record', 'curated-exception')
+    OR jsonb_typeof(x->'evidence') <> 'object') THEN
+    RAISE EXCEPTION 'Identity crosswalk contains unvalidated records';
+  END IF;
+
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id;
+  IF v_roster_count = 0 THEN RAISE EXCEPTION 'Modern roster must be seeded before contract materialization'; END IF;
+
+  -- This sentinel remains the first game-owned write. The complete transaction
+  -- rolls back if any copy row or coverage invariant below fails.
+  INSERT INTO game_contract_materializations(game_id, source, season, source_version_ids)
+  VALUES (p_game_id, p_source, p_season, p_version_ids);
+
+  -- One materialized classification lookup and one materialized source-contract
+  -- lookup feed every copy operation in this statement. In particular, seasons
+  -- join the already-keyed source row before expanding only that player's salaries.
+  WITH classifications AS MATERIALIZED (
+    SELECT (x->>'targetPlayerId')::UUID AS target_player_id, x->'resolution' AS resolution
+    FROM jsonb_array_elements(p_contract_classifications) x
+  ), crosswalk AS MATERIALIZED (
+    SELECT x->>'sourcePlayerId' AS source_player_id, (x->>'targetPlayerId')::UUID AS target_player_id,
+      x->>'matchMethod' AS match_method, x->'evidence' AS evidence
+    FROM jsonb_array_elements(p_identity_crosswalk) x
+  ), source_contracts AS MATERIALIZED (
+    SELECT v.id AS source_snapshot_version_id, v.observed_at, c.contract,
+      c.contract->>'playerSlug' AS source_player_id
+    FROM contract_source_snapshot_versions v
+    CROSS JOIN LATERAL jsonb_array_elements(v.payload->'contracts') c(contract)
+    WHERE v.id = ANY(p_version_ids)
+  ), matched AS MATERIALIZED (
+    SELECT gps.player_id, gps.team_id, sc.source_snapshot_version_id, sc.observed_at, sc.contract,
+      sc.source_player_id, cw.match_method, cw.evidence
+    FROM source_contracts sc
+    JOIN crosswalk cw ON cw.source_player_id = sc.source_player_id
+    JOIN game_player_states gps ON gps.game_id = p_game_id AND gps.player_id = cw.target_player_id
+    JOIN teams t ON t.id = gps.team_id AND t.abbreviation = (cw.evidence->>'nbaTeam')
+    WHERE sc.contract->>'teamAbbreviation' = (cw.evidence->>'sourceTeam')
+  ), inserted_identities AS (
+    INSERT INTO game_contract_identities(game_id, player_id, team_id, resolution_status, contract_type,
+      provenance_quality, source_method, estimated, cap_treatment, exclusion_evidence, source_player_id,
+      source_snapshot_version_id, match_method, match_evidence)
+    SELECT p_game_id, gps.player_id, gps.team_id,
+      CASE
+        WHEN c.resolution->>'status' = 'excluded' THEN 'inactive-excluded'
+        WHEN c.resolution->>'contractType' = 'two-way' THEN 'official-two-way'
+        WHEN (c.resolution->>'estimated')::BOOLEAN THEN 'estimated-minimum'
+        WHEN c.resolution->>'status' = 'resolved' THEN 'observed-standard'
+        ELSE 'unclassified'
+      END,
+      c.resolution->>'contractType', c.resolution->>'quality', c.resolution->>'method',
+      COALESCE((c.resolution->>'estimated')::BOOLEAN, false), c.resolution->>'capTreatment',
+      c.resolution->'evidence', m.source_player_id, m.source_snapshot_version_id, m.match_method, m.evidence
+    FROM game_player_states gps
+    LEFT JOIN matched m ON m.player_id = gps.player_id
+    LEFT JOIN classifications c ON c.target_player_id = gps.player_id
+    WHERE gps.game_id = p_game_id
+  ), inserted_observed_agreements AS (
+    INSERT INTO game_contract_agreements(game_id, player_id, team_id, start_season_label,
+      end_season_label, remaining_guaranteed_amount, contract_type, provenance_quality, source_method,
+      estimated, cap_treatment)
+    SELECT p_game_id, m.player_id, m.team_id, NULL, NULL,
+      NULLIF(m.contract->>'remainingGuaranteedAmount', '')::BIGINT, 'standard',
+      c.resolution->>'quality', c.resolution->>'method', false, 'standard-cap-and-matching'
+    FROM matched m
+    JOIN classifications c ON c.target_player_id = m.player_id
+    WHERE c.resolution->>'contractType' = 'standard'
+      AND COALESCE((c.resolution->>'estimated')::BOOLEAN, false) = false
+    RETURNING id, player_id
+  ), inserted_estimated_agreements AS (
+    INSERT INTO game_contract_agreements(game_id, player_id, team_id, start_season_label,
+      end_season_label, remaining_guaranteed_amount, contract_type, provenance_quality, source_method,
+      estimated, cap_treatment)
+    SELECT p_game_id, gps.player_id, gps.team_id, p_season, p_season, NULL, 'standard', 'estimated',
+      c.resolution->>'method', true, 'standard-cap-and-matching'
+    FROM game_player_states gps
+    JOIN classifications c ON c.target_player_id = gps.player_id
+    WHERE gps.game_id = p_game_id
+      AND c.resolution->>'status' = 'resolved'
+      AND c.resolution->>'contractType' = 'standard'
+      AND (c.resolution->>'estimated')::BOOLEAN = true
+    RETURNING id, player_id
+  ), inserted_provenance AS (
+    INSERT INTO game_contract_provenance(agreement_id, game_id, source, source_url, source_player_id,
+      source_snapshot_version_id, observed_at, notes)
+    SELECT i.id, p_game_id, p_source, m.contract->>'playerUrl', m.source_player_id,
+      m.source_snapshot_version_id, m.observed_at, m.contract->'contractNotes'
+    FROM inserted_observed_agreements i
+    JOIN matched m ON m.player_id = i.player_id
+  ), inserted_estimated_seasons AS (
+    INSERT INTO game_contract_seasons(agreement_id, game_id, season_label, start_year, end_year,
+      salary_amount, option_kind, guarantee_kind)
+    SELECT a.id, p_game_id, p_season, v_game.season_year, v_game.season_year + 1,
+      (c.resolution->>'salaryAmount')::BIGINT, 'none', 'unknown'
+    FROM inserted_estimated_agreements a
+    JOIN classifications c ON c.target_player_id = a.player_id
+    RETURNING agreement_id
+  )
+  INSERT INTO game_contract_seasons(agreement_id, game_id, season_label, start_year, end_year,
+    salary_amount, option_kind, guarantee_kind)
+  SELECT a.id, p_game_id, s.value->>'season', split_part(s.value->>'season', '-', 1)::INTEGER,
+    split_part(s.value->>'season', '-', 1)::INTEGER + 1,
+    NULLIF(s.value->>'amount', '')::BIGINT, s.value->>'optionKind', 'unknown'
+  FROM inserted_observed_agreements a
+  JOIN matched m ON m.player_id = a.player_id
+  JOIN source_contracts sc
+    ON sc.source_snapshot_version_id = m.source_snapshot_version_id
+   AND sc.source_player_id = m.source_player_id
+  CROSS JOIN LATERAL jsonb_array_elements(sc.contract->'salaries') s(value);
+
+  SELECT count(*) INTO v_identity_count FROM game_contract_identities WHERE game_id = p_game_id;
+  SELECT count(*) INTO v_agreement_count FROM game_contract_agreements WHERE game_id = p_game_id;
+  IF v_identity_count <> v_roster_count THEN RAISE EXCEPTION 'Every roster identity must be classified'; END IF;
+  IF EXISTS (SELECT 1 FROM game_contract_identities WHERE game_id = p_game_id AND resolution_status = 'unclassified') OR EXISTS (
+    SELECT 1 FROM game_contract_agreements a LEFT JOIN game_contract_seasons s
+      ON s.agreement_id = a.id AND s.start_year = v_game.season_year
+    WHERE a.game_id = p_game_id AND s.salary_amount IS NULL
+  ) THEN RAISE EXCEPTION 'Contract coverage is insufficient; game activation is blocked'; END IF;
+  RETURN jsonb_build_object('status', 'materialized', 'rosterCount', v_roster_count,
+    'agreementCount', v_agreement_count, 'unmatchedCount', v_roster_count - v_agreement_count);
+END;
+$$;
+REVOKE ALL ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, TEXT, UUID[], JSONB, JSONB)
+  TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 019.
