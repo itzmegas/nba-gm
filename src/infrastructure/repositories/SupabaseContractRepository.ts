@@ -1,11 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contract } from "@/domain/entities/Contract";
 import type { ContractRepository } from "@/domain/repositories/ContractRepository";
+import { SupabaseGameContractRepository } from "@/infrastructure/contracts/SupabaseGameContractRepository";
 
 export class SupabaseContractRepository implements ContractRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async getAll(gameId: string): Promise<Contract[]> {
+    const modern = await this.getModernContracts(gameId);
+    if (modern !== null) return modern;
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -18,6 +21,8 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getById(gameId: string, id: string): Promise<Contract | null> {
+    const modern = await this.getModernContracts(gameId);
+    if (modern !== null) return modern.find((contract) => contract.id === id) ?? null;
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -31,6 +36,8 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getByPlayerId(gameId: string, playerId: string): Promise<Contract | null> {
+    const modern = await this.getModernContracts(gameId);
+    if (modern !== null) return modern.find((contract) => contract.playerId === playerId) ?? null;
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -44,6 +51,14 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getByTeamId(gameId: string, teamId: string): Promise<Contract[]> {
+    const game = await this.getGameContext(gameId);
+    if (game.seasonEraId === "modern") {
+      const seasonal = await new SupabaseGameContractRepository(this.client).getByTeam(
+        gameId,
+        teamId
+      );
+      if (seasonal.length > 0) return this.projectSeasonal(gameId, game.seasonYear, seasonal);
+    }
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -57,7 +72,10 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getActiveContracts(gameId: string): Promise<Contract[]> {
-    const seasonYear = await this.getGameSeasonYear(gameId);
+    const game = await this.getGameContext(gameId);
+    const modern = await this.getModernContracts(gameId, game);
+    if (modern !== null) return modern.filter(({ endYear }) => endYear >= game.seasonYear);
+    const seasonYear = game.seasonYear;
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -71,6 +89,8 @@ export class SupabaseContractRepository implements ContractRepository {
   }
 
   async getExpiringContracts(gameId: string, seasonYear: number): Promise<Contract[]> {
+    const modern = await this.getModernContracts(gameId);
+    if (modern !== null) return modern.filter(({ endYear }) => endYear === seasonYear);
     const { data, error } = await this.client
       .from("contracts")
       .select("*")
@@ -116,16 +136,61 @@ export class SupabaseContractRepository implements ContractRepository {
     if (error) throw new Error(error.message);
   }
 
-  private async getGameSeasonYear(gameId: string): Promise<number> {
+  private async getModernContracts(
+    gameId: string,
+    context?: { seasonYear: number; seasonEraId: string }
+  ): Promise<Contract[] | null> {
+    const game = context ?? (await this.getGameContext(gameId));
+    if (game.seasonEraId !== "modern") return null;
+    const states = await new SupabaseGameContractRepository(this.client).getAll(gameId);
+    if (states.length === 0) return null; // Explicit fallback for unmigrated modern saves.
+    return this.projectSeasonal(gameId, game.seasonYear, states);
+  }
+
+  private projectSeasonal(
+    gameId: string,
+    seasonYear: number,
+    states: Awaited<ReturnType<SupabaseGameContractRepository["getAll"]>>
+  ): Contract[] {
+    return states.flatMap(({ agreement }) => {
+      if (!agreement || agreement.seasons.length === 0) return [];
+      const current = agreement.seasons.find(({ startYear }) => startYear === seasonYear);
+      if (!current || current.salaryAmount === null) return [];
+      const years = agreement.seasons.map(({ startYear }) => startYear);
+      return [
+        {
+          id: agreement.id,
+          gameId,
+          playerId: agreement.playerId,
+          teamId: agreement.teamId,
+          startYear: Math.min(...years),
+          endYear: Math.max(...years),
+          salaryY1: current.salaryAmount,
+          isPlayerOption: current.optionKind === "player",
+          isTeamOption: current.optionKind === "team",
+          isGuaranteed:
+            current.guaranteeKind === "unknown" ? null : current.guaranteeKind === "guaranteed",
+          compatibilityProjection: "observed-season-coverage" as const,
+          createdAt: new Date(0),
+          updatedAt: new Date(0),
+        },
+      ];
+    });
+  }
+
+  private async getGameContext(
+    gameId: string
+  ): Promise<{ seasonYear: number; seasonEraId: string }> {
     const { data, error } = await this.client
       .from("games")
-      .select("season_year")
+      .select("season_year, season_era_id")
       .eq("id", gameId)
       .single();
 
     if (error) throw new Error(error.message);
 
-    return (data as Record<string, unknown>).season_year as number;
+    const row = data as Record<string, unknown>;
+    return { seasonYear: row.season_year as number, seasonEraId: row.season_era_id as string };
   }
 
   private mapToEntity(row: Record<string, unknown>): Contract {

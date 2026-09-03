@@ -14,7 +14,9 @@ export interface Contract {
   salaryY5?: number;
   isPlayerOption: boolean;
   isTeamOption: boolean;
-  isGuaranteed: boolean;
+  isGuaranteed: boolean | null;
+  /** Derived read-only view over canonical game seasons; never persisted as canonical data. */
+  compatibilityProjection?: "observed-season-coverage";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,7 +35,7 @@ export const contractSchema = z.object({
   salaryY5: z.number().int().nonnegative().optional(),
   isPlayerOption: z.boolean(),
   isTeamOption: z.boolean(),
-  isGuaranteed: z.boolean(),
+  isGuaranteed: z.boolean().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

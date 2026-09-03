@@ -136,7 +136,7 @@ describe("Contract hooks repository integration", () => {
     expect(result).toHaveLength(1);
     expect(result[0].gameId).toBe(UUIDS.gameId);
     expect(result[0].salaryY1).toBe(0);
-    expect(mock.calls[0].filters).toContainEqual({
+    expect(mock.calls.flatMap(({ filters }) => filters)).toContainEqual({
       column: "game_id",
       value: UUIDS.gameId,
       operator: "eq",
@@ -154,7 +154,7 @@ describe("Contract hooks repository integration", () => {
     const secondRepository = new SupabaseContractRepository(secondMock.client);
     await secondRepository.getByTeamId(UUIDS.gameId, UUIDS.teamId);
 
-    expect(mock.calls[0].filters).toContainEqual({
+    expect(mock.calls.flatMap(({ filters }) => filters)).toContainEqual({
       column: "game_id",
       value: UUIDS.gameId,
       operator: "eq",
@@ -164,7 +164,7 @@ describe("Contract hooks repository integration", () => {
       value: UUIDS.gameId,
       operator: "eq",
     });
-    expect(secondMock.calls[0].filters).toContainEqual({
+    expect(secondMock.calls.flatMap(({ filters }) => filters)).toContainEqual({
       column: "game_id",
       value: UUIDS.gameId,
       operator: "eq",

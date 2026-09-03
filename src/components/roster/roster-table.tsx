@@ -4,18 +4,58 @@ import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { Badge } from "@/components/ui/badge";
+import { CONTRACT_UI_CLASSIFICATION } from "@/domain/contracts/ContractClassification";
+import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
 import {
   formatSalarySeasonLabel,
   getSalarySeasonYears,
   getYearsRemaining,
 } from "@/domain/entities/Season";
 
-function formatSalary(amount: number | null | undefined): string {
-  if (!amount) return "—";
+export function formatRosterSalary(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return "Unknown";
   if (amount >= 1_000_000) {
     return `$${(amount / 1_000_000).toFixed(1)}M`;
   }
   return `$${amount.toLocaleString()}`;
+}
+
+export function getRosterContractClassification(rosterPlayer: RosterPlayer): {
+  label: string;
+  title: string;
+} {
+  const state = rosterPlayer.gameContract;
+  if (state?.contractType === "two-way")
+    return {
+      label: CONTRACT_UI_CLASSIFICATION.TWO_WAY,
+      title: "Official NBA G League two-way classification",
+    };
+  if (state?.estimated)
+    return {
+      label: CONTRACT_UI_CLASSIFICATION.ESTIMATED,
+      title: "Estimated from the verified experience minimum",
+    };
+  if (
+    state?.resolutionStatus === CONTRACT_IDENTITY_RESOLUTION_STATUS.OBSERVED_STANDARD &&
+    state.contractType === "standard" &&
+    state.provenanceQuality === "observed"
+  ) {
+    return {
+      label: CONTRACT_UI_CLASSIFICATION.STANDARD,
+      title: "Observed standard NBA contract",
+    };
+  }
+  return {
+    label: CONTRACT_UI_CLASSIFICATION.UNKNOWN,
+    title: "Contract classification is unavailable or unrecognized",
+  };
+}
+
+export function shouldRenderRosterPlayer(rosterPlayer: RosterPlayer): boolean {
+  return (
+    rosterPlayer.gameContract?.resolutionStatus !==
+    CONTRACT_IDENTITY_RESOLUTION_STATUS.INACTIVE_EXCLUDED
+  );
 }
 
 function getContractYearsLeft(baseSeasonYear: number, endYear: number): number {
@@ -78,7 +118,7 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
 
   const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
 
-  const sorted = [...players].sort((a, b) => {
+  const sorted = players.filter(shouldRenderRosterPlayer).sort((a, b) => {
     const sa = a.contract?.salaryY1 ?? 0;
     const sb = b.contract?.salaryY1 ?? 0;
     return sb - sa;
@@ -108,8 +148,10 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
           </tr>
         </thead>
         <tbody>
-          {sorted.map(({ player, contract }, idx) => {
-            const status = getContractStatus({ player, contract }, seasonYear);
+          {sorted.map((rosterPlayer, idx) => {
+            const { player, contract } = rosterPlayer;
+            const status = getContractStatus(rosterPlayer, seasonYear);
+            const classification = getRosterContractClassification(rosterPlayer);
             const StatusIcon = status.icon;
             const isEven = idx % 2 === 0;
 
@@ -142,7 +184,12 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
                         </span>
                       )}
                     </div>
-                    <span className="font-semibold whitespace-nowrap">{player.fullName}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold whitespace-nowrap">{player.fullName}</span>
+                      <Badge variant="outline" title={classification.title}>
+                        {classification.label}
+                      </Badge>
+                    </div>
                   </div>
                 </td>
 
@@ -160,12 +207,12 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
 
                 {/* Salario Y1 */}
                 <td className="py-3 px-4 text-right font-mono font-semibold">
-                  {formatSalary(contract?.salaryY1)}
+                  {formatRosterSalary(contract?.salaryY1)}
                 </td>
 
                 {/* Salario Y2 */}
                 <td className="py-3 px-4 text-right font-mono text-muted-foreground hidden lg:table-cell">
-                  {formatSalary(contract?.salaryY2)}
+                  {formatRosterSalary(contract?.salaryY2)}
                 </td>
 
                 {/* Barra de años */}
