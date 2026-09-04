@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { Badge } from "@/components/ui/badge";
 import { CONTRACT_UI_CLASSIFICATION } from "@/domain/contracts/ContractClassification";
 import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
@@ -173,16 +174,12 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
                 {/* Nombre y Foto */}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
-                      {player.headshotUrl ? (
-                        // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
-                        <img src={player.headshotUrl} alt={player.fullName} loading="lazy" />
-                      ) : (
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {player.firstName[0]}
-                          {player.lastName[0]}
-                        </span>
-                      )}
+                    <div className="h-16 w-16 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                      <PlayerHeadshot
+                        src={player.headshotUrl}
+                        alt={player.fullName}
+                        className="h-full w-full object-cover object-top"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold whitespace-nowrap">{player.fullName}</span>

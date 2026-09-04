@@ -15,6 +15,7 @@ import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts
 import { useGame } from "@/application/hooks/games/useGame";
 import { usePlayer } from "@/application/hooks/players/usePlayers";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,16 +95,12 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
 
       <div className="flex flex-col md:flex-row gap-8 items-start md:items-center">
         <div className="relative shrink-0 w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden bg-muted/30 border-4 border-background shadow-lg flex items-center justify-center">
-          {player.headshotUrl ? (
-            // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
-            <img
-              src={player.headshotUrl}
-              alt={player.fullName}
-              className="w-full h-full object-cover object-top"
-            />
-          ) : (
-            <UserIcon className="h-16 w-16 text-muted-foreground opacity-30" />
-          )}
+          <PlayerHeadshot
+            src={player.headshotUrl}
+            alt={player.fullName}
+            className="h-full w-full object-cover object-top"
+            loading="eager"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
