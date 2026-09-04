@@ -110,8 +110,6 @@ export const es: Messages = {
     themeLight: "Claro",
     themeDark: "Oscuro",
     themeSystem: "Sistema",
-    teamTheme: "Tema de equipo",
-    teamThemeDefault: "Tema predeterminado",
     exitChangeGame: "Salir y cambiar de partida",
     currentSeasonGames: "Partidos programados de la temporada.",
     noGamesThisMonth: "No hay partidos programados en este mes.",

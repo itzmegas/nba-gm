@@ -1039,3 +1039,15 @@
   --chart-2: #E31837;
   --chart-3: #C4926C;
 }
+
+[data-team] {
+  --sidebar: color-mix(in oklch, var(--primary) 10%, var(--background));
+  --sidebar-accent: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --sidebar-border: color-mix(in oklch, var(--primary) 24%, var(--background));
+}
+
+.dark[data-team] {
+  --sidebar: color-mix(in oklch, var(--primary) 14%, var(--background));
+  --sidebar-accent: color-mix(in oklch, var(--primary) 20%, var(--background));
+  --sidebar-border: color-mix(in oklch, var(--primary) 28%, var(--background));
+}

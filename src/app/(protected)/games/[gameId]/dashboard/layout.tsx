@@ -3,8 +3,10 @@
 import { use } from "react";
 import { GameIdProvider } from "@/application/context/GameContext";
 import { useGame } from "@/application/hooks/games/useGame";
+import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useT } from "@/application/providers/I18nProvider";
 import { DashboardHeader, DashboardSidebar } from "@/components/dashboard/layout-components";
+import { TeamThemeApplier } from "@/components/theme/team-theme-applier";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 interface GameDashboardLayoutProps {
@@ -15,6 +17,7 @@ interface GameDashboardLayoutProps {
 export default function GameDashboardLayout({ children, params }: GameDashboardLayoutProps) {
   const { gameId } = use(params);
   const { data: game, isLoading } = useGame(gameId);
+  const { data: teams } = useTeams();
   const t = useT();
 
   if (isLoading || !game) {
@@ -28,8 +31,11 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
     );
   }
 
+  const selectedTeam = teams?.find((team) => team.id === game.selectedTeamId);
+
   return (
     <GameIdProvider gameId={gameId}>
+      <TeamThemeApplier teamAbbreviation={selectedTeam?.abbreviation} />
       <SidebarProvider>
         <DashboardSidebar
           gameId={gameId}

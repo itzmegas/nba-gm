@@ -2,22 +2,14 @@
  * Official team brand colors for the 30 NBA franchises.
  *
  * These values are consumed by `TeamThemeApplier` to scope a per-team CSS
- * variable override via `data-team="<ABBREV>"` on <html>, and by
- * `TeamThemeSelector` to render color swatches. The matching CSS token
- * overrides live in `src/app/globals.css`.
+ * variable override via `data-team="<ABBREV>"` on <html>. The matching CSS
+ * token overrides live in `src/app/globals.css`.
  */
 
 interface TeamBrandColor {
   primary: string;
   secondary: string;
   accent: string;
-}
-
-interface TeamMetadata {
-  city: string;
-  name: string;
-  /** Primary brand color, reused for swatch previews in selectors. */
-  color: string;
 }
 
 export const TEAM_COLORS: Record<string, TeamBrandColor> = Object.freeze({
@@ -52,42 +44,6 @@ export const TEAM_COLORS: Record<string, TeamBrandColor> = Object.freeze({
   UTA: { primary: "#002B5C", secondary: "#F9A01B", accent: "#00471B" },
   WAS: { primary: "#002B5C", secondary: "#E31837", accent: "#C4926C" },
 });
-
-export const TEAM_METADATA: Record<string, TeamMetadata> = Object.freeze({
-  ATL: { city: "Atlanta", name: "Hawks", color: "#E03A3E" },
-  BOS: { city: "Boston", name: "Celtics", color: "#007A33" },
-  BKN: { city: "Brooklyn", name: "Nets", color: "#000000" },
-  CHA: { city: "Charlotte", name: "Hornets", color: "#00788C" },
-  CHI: { city: "Chicago", name: "Bulls", color: "#CE1141" },
-  CLE: { city: "Cleveland", name: "Cavaliers", color: "#860038" },
-  DAL: { city: "Dallas", name: "Mavericks", color: "#00538C" },
-  DEN: { city: "Denver", name: "Nuggets", color: "#0E2240" },
-  DET: { city: "Detroit", name: "Pistons", color: "#C8102E" },
-  GSW: { city: "Golden State", name: "Warriors", color: "#1D428A" },
-  HOU: { city: "Houston", name: "Rockets", color: "#CE1141" },
-  IND: { city: "Indiana", name: "Pacers", color: "#002D62" },
-  LAC: { city: "Los Angeles", name: "Clippers", color: "#C8102E" },
-  LAL: { city: "Los Angeles", name: "Lakers", color: "#552583" },
-  MEM: { city: "Memphis", name: "Grizzlies", color: "#5D76A9" },
-  MIA: { city: "Miami", name: "Heat", color: "#98002E" },
-  MIL: { city: "Milwaukee", name: "Bucks", color: "#00471B" },
-  MIN: { city: "Minnesota", name: "Timberwolves", color: "#0C2340" },
-  NOP: { city: "New Orleans", name: "Pelicans", color: "#0C2340" },
-  NYK: { city: "New York", name: "Knicks", color: "#006BB6" },
-  OKC: { city: "Oklahoma City", name: "Thunder", color: "#007AC1" },
-  ORL: { city: "Orlando", name: "Magic", color: "#0077C0" },
-  PHI: { city: "Philadelphia", name: "76ers", color: "#006BB6" },
-  PHX: { city: "Phoenix", name: "Suns", color: "#1D1160" },
-  POR: { city: "Portland", name: "Trail Blazers", color: "#E03A3E" },
-  SAC: { city: "Sacramento", name: "Kings", color: "#5A2D81" },
-  SAS: { city: "San Antonio", name: "Spurs", color: "#000000" },
-  TOR: { city: "Toronto", name: "Raptors", color: "#CE1141" },
-  UTA: { city: "Utah", name: "Jazz", color: "#002B5C" },
-  WAS: { city: "Washington", name: "Wizards", color: "#002B5C" },
-});
-
-/** Sorted list of team abbreviations for stable, deterministic rendering. */
-export const TEAM_ABBREVIATIONS: readonly string[] = Object.freeze(Object.keys(TEAM_COLORS).sort());
 
 /** Type guard: true when the given abbreviation has a known theme. */
 export function isKnownTeamAbbreviation(abbreviation: string): boolean {

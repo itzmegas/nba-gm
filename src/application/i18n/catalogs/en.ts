@@ -106,8 +106,6 @@ export const en = {
     themeLight: "Light",
     themeDark: "Dark",
     themeSystem: "System",
-    teamTheme: "Team theme",
-    teamThemeDefault: "Default theme",
     exitChangeGame: "Exit and change game",
     currentSeasonGames: "Scheduled games for the season.",
     noGamesThisMonth: "No games are scheduled this month.",

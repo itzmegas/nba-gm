@@ -28,7 +28,6 @@ import {
   type BatchSimulationMode,
   useBatchSimulationStore,
 } from "@/application/stores/useBatchSimulationStore";
-import { TeamThemeSelector } from "@/components/theme/team-theme-selector";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import {
   Breadcrumb,
@@ -170,15 +169,15 @@ export function DashboardSidebar({
       <SidebarHeader className="px-4 py-2 group-data-[collapsible=icon]:px-0">
         <Link
           href={dashboardBasePath}
-          className="flex items-center gap-2 rounded-lg py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-0"
+          className="flex items-center gap-2 rounded-lg py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-1"
         >
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
               alt="Logo"
-              width={60}
-              height={60}
-              className="rounded-full border border-primary/30 object-cover transition-[width,height] group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
+              width={90}
+              height={90}
+              className="rounded-full object-cover transition-[width,height] group-data-[collapsible=icon]:h-16 group-data-[collapsible=icon]:w-16"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
@@ -209,11 +208,21 @@ export function DashboardSidebar({
             const Icon = item.icon;
 
             return (
-              <SidebarMenuItem key={href}>
-                <SidebarMenuButton asChild isActive={isActive} tooltip={t("dashboard", item.key)}>
+              <SidebarMenuItem
+                key={href}
+                className="w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
+              >
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={t("dashboard", item.key)}
+                  className="group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
+                >
                   <Link href={href}>
-                    <Icon className="h-4 w-4" />
-                    <span>{t("dashboard", item.key)}</span>
+                    <Icon className="h-4 w-4 group-data-[collapsible=icon]:h-5 group-data-[collapsible=icon]:w-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {t("dashboard", item.key)}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -248,7 +257,7 @@ export function DashboardSidebar({
                 onClick={() => advanceDay.mutate({ gameId, simulationDate })}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <CalendarDays className="h-4 w-4" />
+                <CalendarDays className="size-5" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
               </Button>
             </TooltipTrigger>
@@ -263,7 +272,7 @@ export function DashboardSidebar({
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <Calendar className="h-4 w-4" />
+                <Calendar className="size-5" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelMonth}</span>
               </Button>
             </TooltipTrigger>
@@ -278,7 +287,7 @@ export function DashboardSidebar({
                 onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
                 disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
               >
-                <CalendarRange className="h-4 w-4" />
+                <CalendarRange className="size-5" />
                 <span className="group-data-[collapsible=icon]:hidden">{labelSeason}</span>
               </Button>
             </TooltipTrigger>
@@ -416,7 +425,6 @@ export function DashboardHeader({
           orientation="vertical"
           className="hidden sm:block h-4 data-[orientation=vertical]:h-4"
         />
-        <TeamThemeSelector />
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
