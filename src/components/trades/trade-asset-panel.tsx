@@ -1,7 +1,9 @@
 "use client";
 
 import { Bandage, Check, Ticket, Users } from "lucide-react";
+import Image from "next/image";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlayerState } from "@/domain/entities/PlayerState";
@@ -12,7 +14,7 @@ import { formatPick, formatSalary } from "./format";
 
 interface TradeAssetPanelProps {
   teamName: string;
-  teamAbbreviation?: string;
+  teamLogoUrl?: string;
   roster: RosterPlayer[];
   picks: PickInventory[];
   playerStateByPlayerId: Map<string, PlayerState>;
@@ -25,7 +27,7 @@ interface TradeAssetPanelProps {
 
 export function TradeAssetPanel({
   teamName,
-  teamAbbreviation,
+  teamLogoUrl,
   roster,
   picks,
   playerStateByPlayerId,
@@ -41,8 +43,12 @@ export function TradeAssetPanel({
     <Card className="border-border/50 bg-card/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-black text-primary">
-            {teamAbbreviation ?? <Users className="size-5" />}
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
+            {teamLogoUrl ? (
+              <Image src={teamLogoUrl} alt={`${teamName} logo`} width={40} height={40} />
+            ) : (
+              <Users className="size-5" />
+            )}
           </span>
           <span className="min-w-0 flex-1 truncate">{teamName}</span>
           {selectedCount > 0 && (
@@ -84,15 +90,11 @@ export function TradeAssetPanel({
                 )}
               >
                 <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                  {player.headshotUrl ? (
-                    // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
-                    <img src={player.headshotUrl} alt={player.fullName} loading="lazy" />
-                  ) : (
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {player.firstName[0]}
-                      {player.lastName[0]}
-                    </span>
-                  )}
+                  <PlayerHeadshot
+                    src={player.headshotUrl}
+                    alt={player.fullName}
+                    className="size-full object-cover"
+                  />
                 </span>
 
                 <span className="min-w-0 flex-1">

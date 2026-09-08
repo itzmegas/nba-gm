@@ -1,6 +1,8 @@
 "use client";
 
 import { AlertTriangle, Info, Scale, ShieldCheck, XCircle } from "lucide-react";
+import Image from "next/image";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,8 +50,8 @@ function pickAssets(assets: TradeAsset[]) {
 interface TradeSummaryProps {
   teamAName: string;
   teamBName: string;
-  teamAAbbreviation?: string;
-  teamBAbbreviation?: string;
+  teamALogoUrl?: string;
+  teamBLogoUrl?: string;
   packageA: TradePackage;
   packageB: TradePackage;
   pickById: Map<string, PickInventory>;
@@ -64,8 +66,8 @@ interface TradeSummaryProps {
 export function TradeSummary({
   teamAName,
   teamBName,
-  teamAAbbreviation,
-  teamBAbbreviation,
+  teamALogoUrl,
+  teamBLogoUrl,
   packageA,
   packageB,
   pickById,
@@ -160,15 +162,18 @@ export function TradeSummary({
                   <th className="py-2.5 px-4 text-left font-medium text-muted-foreground">
                     Cap impact
                   </th>
-                  {[teamAAbbreviation, teamBAbbreviation].map((abbr, index) => (
-                    <th key={abbr ?? index} className="py-2.5 px-4 text-right font-medium">
+                  {[
+                    { teamName: teamAName, logoUrl: teamALogoUrl },
+                    { teamName: teamBName, logoUrl: teamBLogoUrl },
+                  ].map(({ teamName, logoUrl }) => (
+                    <th key={teamName} className="py-2.5 px-4 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-2">
-                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                          {abbr ?? "—"}
+                        <span className="flex size-6 items-center justify-center overflow-hidden rounded-full bg-primary/10">
+                          {logoUrl && (
+                            <Image src={logoUrl} alt={`${teamName} logo`} width={24} height={24} />
+                          )}
                         </span>
-                        <span className="hidden sm:inline">
-                          {index === 0 ? teamAName : teamBName}
-                        </span>
+                        <span className="hidden sm:inline">{teamName}</span>
                       </span>
                     </th>
                   ))}
@@ -345,15 +350,11 @@ function GroupSection({ group, pickById, playerStateByPlayerId, seasonYear }: Gr
             <td className="py-2.5 px-4">
               <span className="flex items-center gap-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                  {player.headshotUrl ? (
-                    // biome-ignore lint/performance/noImgElement: no config next.config.js for remote patterns
-                    <img src={player.headshotUrl} alt={player.fullName} loading="lazy" />
-                  ) : (
-                    <span className="text-[10px] font-medium text-muted-foreground">
-                      {player.firstName[0]}
-                      {player.lastName[0]}
-                    </span>
-                  )}
+                  <PlayerHeadshot
+                    src={player.headshotUrl}
+                    alt={player.fullName}
+                    className="size-full object-cover"
+                  />
                 </span>
                 <span className="whitespace-nowrap font-medium">{player.fullName}</span>
               </span>
