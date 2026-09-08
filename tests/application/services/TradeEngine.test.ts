@@ -31,8 +31,8 @@ describe("TradeEngine", () => {
 
     const result = await new TradeEngine(repository).executeTrade(
       IDS[1],
-      [],
-      [],
+      { contracts: [], rosterSize: 0 },
+      { contracts: [], rosterSize: 0 },
       packageA,
       packageB,
       false

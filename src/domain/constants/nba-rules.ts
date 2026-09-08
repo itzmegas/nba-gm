@@ -37,3 +37,25 @@ export const NBA_RULES = {
     OFFSEASON_MAX: 21,
   },
 } as const;
+
+export interface SalaryCapThresholds {
+  salaryCap: number;
+  luxuryTax: number;
+  firstApron: number;
+  secondApron: number;
+}
+
+const BASE_SALARY_CAP_SEASON = 2024;
+const MAX_ANNUAL_CAP_GROWTH = 1.1;
+
+export function getSalaryCapThresholds(seasonYear: number): SalaryCapThresholds {
+  const seasonsAfterBase = Math.max(0, seasonYear - BASE_SALARY_CAP_SEASON);
+  const growth = MAX_ANNUAL_CAP_GROWTH ** seasonsAfterBase;
+
+  return {
+    salaryCap: Math.round(NBA_RULES.SALARY_CAP * growth),
+    luxuryTax: Math.round(NBA_RULES.LUXURY_TAX * growth),
+    firstApron: Math.round(NBA_RULES.FIRST_APRON * growth),
+    secondApron: Math.round(NBA_RULES.SECOND_APRON * growth),
+  };
+}

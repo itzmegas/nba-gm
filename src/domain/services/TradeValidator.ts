@@ -1,6 +1,10 @@
-import { NBA_RULES } from "../constants/nba-rules";
-import type { Contract } from "../entities/Contract";
-import type { TeamTradeDetails, TradePackage, TradeValidationResult } from "../entities/Trade";
+import { getSalaryCapThresholds, NBA_RULES } from "../constants/nba-rules";
+import type {
+  TeamTradeDetails,
+  TradePackage,
+  TradeTeamSnapshot,
+  TradeValidationResult,
+} from "../entities/Trade";
 import { type DomainError, HardCapError, RosterSizeError, SalaryMatchingError } from "../errors";
 import { SalaryCapCalculator } from "./SalaryCapCalculator";
 
@@ -8,40 +12,41 @@ export class TradeValidator {
   private salaryCapCalc = new SalaryCapCalculator();
 
   validateTrade(
-    teamAContracts: Contract[],
-    teamBContracts: Contract[],
+    teamA: TradeTeamSnapshot,
+    teamB: TradeTeamSnapshot,
     packageA: TradePackage,
     packageB: TradePackage,
-    currentYear: number = new Date().getFullYear()
+    currentYear: number = 2024
   ): TradeValidationResult {
     const errors: DomainError[] = [];
     const warnings: string[] = [];
 
-    const detailsA = this.calculateTradeDetails(teamAContracts, packageA, packageB, currentYear);
-    const detailsB = this.calculateTradeDetails(teamBContracts, packageB, packageA, currentYear);
+    const detailsA = this.calculateTradeDetails(teamA, packageA, packageB, currentYear);
+    const detailsB = this.calculateTradeDetails(teamB, packageB, packageA, currentYear);
 
     // 2. Validar Salary Matching
-    const salaryMatchErrorsA = this.validateSalaryMatching(detailsA);
-    const salaryMatchErrorsB = this.validateSalaryMatching(detailsB);
+    const thresholds = getSalaryCapThresholds(currentYear);
+    const salaryMatchErrorsA = this.validateSalaryMatching(detailsA, thresholds);
+    const salaryMatchErrorsB = this.validateSalaryMatching(detailsB, thresholds);
     errors.push(...salaryMatchErrorsA, ...salaryMatchErrorsB);
 
     // 3. Validar Roster Size
-    const rosterErrorsA = this.validateRosterSize(detailsA.teamId, detailsA.rosterSizeAfter);
-    const rosterErrorsB = this.validateRosterSize(detailsB.teamId, detailsB.rosterSizeAfter);
+    const rosterErrorsA = this.validateRosterSize(detailsA.teamName, detailsA.rosterSizeAfter);
+    const rosterErrorsB = this.validateRosterSize(detailsB.teamName, detailsB.rosterSizeAfter);
     errors.push(...rosterErrorsA, ...rosterErrorsB);
 
     // 4. Validar Hard Cap
     if (detailsA.isOverHardCapAfter) {
       errors.push(
         new HardCapError(
-          `${packageA.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+          `${packageA.teamName} would exceed its hard cap ($${detailsA.hardCapLimit?.toLocaleString()}) after this trade`
         )
       );
     }
     if (detailsB.isOverHardCapAfter) {
       errors.push(
         new HardCapError(
-          `${packageB.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+          `${packageB.teamName} would exceed its hard cap ($${detailsB.hardCapLimit?.toLocaleString()}) after this trade`
         )
       );
     }
@@ -76,13 +81,13 @@ export class TradeValidator {
   }
 
   private calculateTradeDetails(
-    currentContracts: Contract[],
+    team: TradeTeamSnapshot,
     outgoingPackage: TradePackage,
     incomingPackage: TradePackage,
-    _currentYear: number
+    currentYear: number
   ): TeamTradeDetails {
     const teamId = outgoingPackage.teamId;
-    const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(currentContracts);
+    const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(team.contracts);
 
     const outgoingSalary = outgoingPackage.outgoingAssets
       .filter((asset) => asset.type === "player" && asset.contract)
@@ -93,29 +98,34 @@ export class TradeValidator {
       .reduce((sum, asset) => sum + (asset.contract?.salaryY1 || 0), 0);
 
     const newTotalSalary = currentTotalSalary - outgoingSalary + incomingSalary;
+    const thresholds = getSalaryCapThresholds(currentYear);
 
-    const currentRosterSize = currentContracts.length;
     const outgoingPlayers = outgoingPackage.outgoingAssets.filter(
       (a) => a.type === "player"
     ).length;
     const incomingPlayers = incomingPackage.outgoingAssets.filter(
       (a) => a.type === "player"
     ).length;
-    const rosterSizeAfter = currentRosterSize - outgoingPlayers + incomingPlayers;
+    const rosterSizeAfter = team.rosterSize - outgoingPlayers + incomingPlayers;
 
     return {
       teamId,
+      teamName: outgoingPackage.teamName,
       outgoingSalary,
       incomingSalary,
       salaryDelta: incomingSalary - outgoingSalary,
       rosterSizeAfter,
-      isOverCapAfter: newTotalSalary > NBA_RULES.SALARY_CAP,
-      isOverHardCapAfter: newTotalSalary > NBA_RULES.SECOND_APRON,
+      isOverCapAfter: newTotalSalary > thresholds.salaryCap,
+      isOverHardCapAfter: team.hardCapLimit !== undefined && newTotalSalary > team.hardCapLimit,
+      hardCapLimit: team.hardCapLimit,
       newTotalSalary,
     };
   }
 
-  private validateSalaryMatching(details: TeamTradeDetails): DomainError[] {
+  private validateSalaryMatching(
+    details: TeamTradeDetails,
+    thresholds: ReturnType<typeof getSalaryCapThresholds>
+  ): DomainError[] {
     const errors: DomainError[] = [];
 
     // Only care if we are taking in more salary than sending out
@@ -129,13 +139,13 @@ export class TradeValidator {
     let maxIncoming = 0;
 
     // Check aprons
-    if (postTradeSalary > NBA_RULES.SECOND_APRON) {
+    if (postTradeSalary > thresholds.secondApron) {
       // Second Apron: Dollar for dollar (incoming <= outgoing)
       maxIncoming =
         outgoing * NBA_RULES.MATCHING_TIERS.SECOND_APRON.incomingMultiplier +
         NBA_RULES.MATCHING_TIERS.SECOND_APRON.flatBonus;
-    } else if (postTradeSalary > NBA_RULES.FIRST_APRON) {
-      // First Apron
+    } else if (postTradeSalary > thresholds.luxuryTax) {
+      // Taxpayer: this branch starts at the luxury-tax line
       maxIncoming =
         outgoing * NBA_RULES.MATCHING_TIERS.TAXPAYER.incomingMultiplier +
         NBA_RULES.MATCHING_TIERS.TAXPAYER.flatBonus;
@@ -157,7 +167,7 @@ export class TradeValidator {
     if (details.incomingSalary > maxIncoming) {
       errors.push(
         new SalaryMatchingError(
-          `${details.teamId}: Incoming salary ($${details.incomingSalary.toLocaleString()}) exceeds allowed maximum ($${maxIncoming.toLocaleString()}) based on their tax bracket`
+          `${details.teamName}: Incoming salary ($${details.incomingSalary.toLocaleString()}) exceeds allowed maximum ($${maxIncoming.toLocaleString()}) based on their tax bracket`
         )
       );
     }
@@ -165,13 +175,13 @@ export class TradeValidator {
     return errors;
   }
 
-  private validateRosterSize(teamId: string, rosterSize: number): DomainError[] {
+  private validateRosterSize(teamName: string, rosterSize: number): DomainError[] {
     const errors: DomainError[] = [];
 
     if (rosterSize < NBA_RULES.ROSTER_LIMITS.IN_SEASON_MIN) {
       errors.push(
         new RosterSizeError(
-          `${teamId}: Roster size (${rosterSize}) below minimum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MIN})`
+          `${teamName}: Roster size (${rosterSize}) below minimum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MIN})`
         )
       );
     }
@@ -179,7 +189,7 @@ export class TradeValidator {
     if (rosterSize > NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX) {
       errors.push(
         new RosterSizeError(
-          `${teamId}: Roster size (${rosterSize}) exceeds maximum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX})`
+          `${teamName}: Roster size (${rosterSize}) exceeds maximum (${NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX})`
         )
       );
     }
@@ -188,12 +198,13 @@ export class TradeValidator {
   }
 
   canExecuteTrade(
-    teamAContracts: Contract[],
-    teamBContracts: Contract[],
+    teamA: TradeTeamSnapshot,
+    teamB: TradeTeamSnapshot,
     packageA: TradePackage,
-    packageB: TradePackage
+    packageB: TradePackage,
+    seasonYear: number = 2024
   ): boolean {
-    const result = this.validateTrade(teamAContracts, teamBContracts, packageA, packageB);
+    const result = this.validateTrade(teamA, teamB, packageA, packageB, seasonYear);
     return result.isValid;
   }
 }

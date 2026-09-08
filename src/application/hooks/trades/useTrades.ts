@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TradeEngine } from "@/application/services/TradeEngine";
-import type { Contract } from "@/domain/entities/Contract";
-import type { TradePackage } from "@/domain/entities/Trade";
+import type { TradePackage, TradeTeamSnapshot } from "@/domain/entities/Trade";
 import { SupabaseTradeRepository } from "@/infrastructure/repositories/SupabaseTradeRepository";
 import { createClient } from "@/infrastructure/supabase/client";
 
@@ -13,26 +12,28 @@ const getTradeEngine = () => {
 // Hook para simular un trade (validación sin ejecutar)
 export function useSimulateTrade(
   gameId: string | null,
-  teamAContracts: Contract[],
-  teamBContracts: Contract[],
+  teamA: TradeTeamSnapshot | null,
+  teamB: TradeTeamSnapshot | null,
   packageA: TradePackage | null,
-  packageB: TradePackage | null
+  packageB: TradePackage | null,
+  seasonYear: number
 ) {
   return useQuery({
-    queryKey: ["games", gameId, "trade-simulation", packageA, packageB],
+    queryKey: ["games", gameId, "trade-simulation", seasonYear, teamA, teamB, packageA, packageB],
     queryFn: async () => {
-      if (!gameId || !packageA || !packageB) {
-        throw new Error("Both trade packages are required");
+      if (!gameId || !teamA || !teamB || !packageA || !packageB) {
+        throw new Error("Both trade teams and packages are required");
       }
       const engine = getTradeEngine();
-      return engine.simulateTrade(gameId, teamAContracts, teamBContracts, packageA, packageB);
+      return engine.simulateTrade(gameId, teamA, teamB, packageA, packageB, seasonYear);
     },
     enabled:
       !!gameId &&
+      !!teamA &&
+      !!teamB &&
       !!packageA &&
       !!packageB &&
-      teamAContracts.length > 0 &&
-      teamBContracts.length > 0,
+      hasBilateralTradeAssets(packageA, packageB),
   });
 }
 
@@ -43,19 +44,21 @@ export function useExecuteTrade() {
   return useMutation({
     mutationFn: async ({
       gameId,
-      teamAContracts,
-      teamBContracts,
+      teamA,
+      teamB,
       packageA,
       packageB,
+      seasonYear,
     }: {
       gameId: string;
-      teamAContracts: Contract[];
-      teamBContracts: Contract[];
+      teamA: TradeTeamSnapshot;
+      teamB: TradeTeamSnapshot;
       packageA: TradePackage;
       packageB: TradePackage;
+      seasonYear: number;
     }) => {
       const engine = getTradeEngine();
-      return engine.executeTrade(gameId, teamAContracts, teamBContracts, packageA, packageB);
+      return engine.executeTrade(gameId, teamA, teamB, packageA, packageB, true, seasonYear);
     },
     onSuccess: async (result, variables) => {
       if (!result.success) return;
@@ -76,4 +79,11 @@ export function useExecuteTrade() {
       ]);
     },
   });
+}
+
+export function hasBilateralTradeAssets(
+  packageA: TradePackage | null,
+  packageB: TradePackage | null
+): boolean {
+  return Boolean(packageA?.outgoingAssets.length && packageB?.outgoingAssets.length);
 }
