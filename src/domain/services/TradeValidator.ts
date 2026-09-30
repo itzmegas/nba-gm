@@ -1,8 +1,17 @@
-import { NBA_RULES } from "../constants/nba-rules";
-import type { Contract } from "../entities/Contract";
-import type { TeamTradeDetails, TradePackage, TradeValidationResult } from "../entities/Trade";
-import { type DomainError, HardCapError, RosterSizeError, SalaryMatchingError } from "../errors";
-import { SalaryCapCalculator } from "./SalaryCapCalculator";
+import { getSalaryCapThresholds, NBA_RULES } from "@/domain/constants/nba-rules";
+import type { Contract } from "@/domain/entities/Contract";
+import type {
+  TeamTradeDetails,
+  TradePackage,
+  TradeValidationResult,
+} from "@/domain/entities/Trade";
+import {
+  type DomainError,
+  HardCapError,
+  RosterSizeError,
+  SalaryMatchingError,
+} from "@/domain/errors";
+import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 export class TradeValidator {
   private salaryCapCalc = new SalaryCapCalculator();
@@ -12,7 +21,7 @@ export class TradeValidator {
     teamBContracts: Contract[],
     packageA: TradePackage,
     packageB: TradePackage,
-    currentYear: number = new Date().getFullYear()
+    currentYear: number = 2024
   ): TradeValidationResult {
     const errors: DomainError[] = [];
     const warnings: string[] = [];
@@ -21,8 +30,9 @@ export class TradeValidator {
     const detailsB = this.calculateTradeDetails(teamBContracts, packageB, packageA, currentYear);
 
     // 2. Validar Salary Matching
-    const salaryMatchErrorsA = this.validateSalaryMatching(detailsA);
-    const salaryMatchErrorsB = this.validateSalaryMatching(detailsB);
+    const thresholds = getSalaryCapThresholds(currentYear);
+    const salaryMatchErrorsA = this.validateSalaryMatching(detailsA, thresholds);
+    const salaryMatchErrorsB = this.validateSalaryMatching(detailsB, thresholds);
     errors.push(...salaryMatchErrorsA, ...salaryMatchErrorsB);
 
     // 3. Validar Roster Size
@@ -34,14 +44,14 @@ export class TradeValidator {
     if (detailsA.isOverHardCapAfter) {
       errors.push(
         new HardCapError(
-          `${packageA.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+          `${packageA.teamName} would exceed the Second Apron / Hard Cap ($${thresholds.secondApron.toLocaleString()}) after this trade`
         )
       );
     }
     if (detailsB.isOverHardCapAfter) {
       errors.push(
         new HardCapError(
-          `${packageB.teamName} would exceed the Second Apron / Hard Cap ($${NBA_RULES.SECOND_APRON.toLocaleString()}) after this trade`
+          `${packageB.teamName} would exceed the Second Apron / Hard Cap ($${thresholds.secondApron.toLocaleString()}) after this trade`
         )
       );
     }
@@ -79,7 +89,7 @@ export class TradeValidator {
     currentContracts: Contract[],
     outgoingPackage: TradePackage,
     incomingPackage: TradePackage,
-    _currentYear: number
+    currentYear: number
   ): TeamTradeDetails {
     const teamId = outgoingPackage.teamId;
     const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(currentContracts);
@@ -93,6 +103,7 @@ export class TradeValidator {
       .reduce((sum, asset) => sum + (asset.contract?.salaryY1 || 0), 0);
 
     const newTotalSalary = currentTotalSalary - outgoingSalary + incomingSalary;
+    const thresholds = getSalaryCapThresholds(currentYear);
 
     const currentRosterSize = currentContracts.length;
     const outgoingPlayers = outgoingPackage.outgoingAssets.filter(
@@ -109,13 +120,16 @@ export class TradeValidator {
       incomingSalary,
       salaryDelta: incomingSalary - outgoingSalary,
       rosterSizeAfter,
-      isOverCapAfter: newTotalSalary > NBA_RULES.SALARY_CAP,
-      isOverHardCapAfter: newTotalSalary > NBA_RULES.SECOND_APRON,
+      isOverCapAfter: newTotalSalary > thresholds.salaryCap,
+      isOverHardCapAfter: newTotalSalary > thresholds.secondApron,
       newTotalSalary,
     };
   }
 
-  private validateSalaryMatching(details: TeamTradeDetails): DomainError[] {
+  private validateSalaryMatching(
+    details: TeamTradeDetails,
+    thresholds: ReturnType<typeof getSalaryCapThresholds>
+  ): DomainError[] {
     const errors: DomainError[] = [];
 
     // Only care if we are taking in more salary than sending out
@@ -129,13 +143,13 @@ export class TradeValidator {
     let maxIncoming = 0;
 
     // Check aprons
-    if (postTradeSalary > NBA_RULES.SECOND_APRON) {
+    if (postTradeSalary > thresholds.secondApron) {
       // Second Apron: Dollar for dollar (incoming <= outgoing)
       maxIncoming =
         outgoing * NBA_RULES.MATCHING_TIERS.SECOND_APRON.incomingMultiplier +
         NBA_RULES.MATCHING_TIERS.SECOND_APRON.flatBonus;
-    } else if (postTradeSalary > NBA_RULES.FIRST_APRON) {
-      // First Apron
+    } else if (postTradeSalary > thresholds.luxuryTax) {
+      // Taxpayer matching begins above the luxury-tax line.
       maxIncoming =
         outgoing * NBA_RULES.MATCHING_TIERS.TAXPAYER.incomingMultiplier +
         NBA_RULES.MATCHING_TIERS.TAXPAYER.flatBonus;
@@ -191,9 +205,16 @@ export class TradeValidator {
     teamAContracts: Contract[],
     teamBContracts: Contract[],
     packageA: TradePackage,
-    packageB: TradePackage
+    packageB: TradePackage,
+    seasonYear: number = 2024
   ): boolean {
-    const result = this.validateTrade(teamAContracts, teamBContracts, packageA, packageB);
+    const result = this.validateTrade(
+      teamAContracts,
+      teamBContracts,
+      packageA,
+      packageB,
+      seasonYear
+    );
     return result.isValid;
   }
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { NBA_RULES } from "../../../src/domain/constants/nba-rules";
-import type { Contract } from "../../../src/domain/entities/Contract";
-import type { TradeAsset, TradePackage } from "../../../src/domain/entities/Trade";
-import { TradeValidator } from "../../../src/domain/services/TradeValidator";
+import { getSalaryCapThresholds, NBA_RULES } from "@/domain/constants/nba-rules";
+import type { Contract } from "@/domain/entities/Contract";
+import type { TradeAsset, TradePackage } from "@/domain/entities/Trade";
+import { TradeValidator } from "@/domain/services/TradeValidator";
 
 describe("TradeValidator", () => {
   const validator = new TradeValidator();
@@ -115,9 +115,8 @@ describe("TradeValidator", () => {
     });
 
     it("should enforce taxpayer matching rules (incoming <= 125% + 100k)", () => {
-      // First Apron is ~178M, Second is ~188M.
-      // 180M starting salary puts us firmly in taxpayer territory.
-      const teamAContracts = generateRoster(NBA_RULES.FIRST_APRON + 5_000_000);
+      // Payroll remains between the luxury-tax line and the first apron after the trade.
+      const teamAContracts = generateRoster(NBA_RULES.LUXURY_TAX + 1_000_000);
       const teamBContracts = generateRoster(100_000_000);
 
       const pkgA: TradePackage = {
@@ -128,7 +127,7 @@ describe("TradeValidator", () => {
       };
 
       // 20M * 1.25 + 100k = 25.1M max.
-      // New salary = 183.1M - 20M + 25.1M = 188.2M (still under 188.9M Second Apron)
+      // A first-apron boundary would reject 25.1M as above the non-taxpayer 25M limit.
       const pkgB: TradePackage = {
         teamId: "B",
         teamName: "Team B",
@@ -138,6 +137,7 @@ describe("TradeValidator", () => {
 
       const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
       expect(result.isValid).toBe(true);
+      expect(result.details.teamA.newTotalSalary).toBeLessThan(NBA_RULES.FIRST_APRON);
 
       const pkgB_Invalid: TradePackage = {
         teamId: "B",
@@ -154,6 +154,41 @@ describe("TradeValidator", () => {
       );
       expect(resultInvalid.isValid).toBe(false);
       expect(resultInvalid.errors.some((e) => e.name === "SalaryMatchingError")).toBe(true);
+    });
+
+    it("uses season-adjusted salary and apron thresholds for a 2026 trade", () => {
+      const thresholds = getSalaryCapThresholds(2026);
+      expect(thresholds).toEqual({
+        salaryCap: Math.round(NBA_RULES.SALARY_CAP * 1.1 ** 2),
+        luxuryTax: Math.round(NBA_RULES.LUXURY_TAX * 1.1 ** 2),
+        firstApron: Math.round(NBA_RULES.FIRST_APRON * 1.1 ** 2),
+        secondApron: Math.round(NBA_RULES.SECOND_APRON * 1.1 ** 2),
+      });
+
+      const pkgA: TradePackage = {
+        teamId: "PHI",
+        teamName: "Philadelphia 76ers",
+        outgoingAssets: [createPlayerAsset(20_000_000)],
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "LAL",
+        teamName: "Los Angeles Lakers",
+        outgoingAssets: [createPlayerAsset(22_000_000)],
+        incomingAssets: [],
+      };
+
+      const result = validator.validateTrade(
+        generateRoster(190_000_000),
+        generateRoster(190_000_000),
+        pkgA,
+        pkgB,
+        2026
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.details.teamA.isOverCapAfter).toBe(true);
+      expect(result.details.teamA.isOverHardCapAfter).toBe(false);
     });
 
     it("should flag Hard Cap violations (HardCapError) if trade pushes team over Second Apron", () => {
