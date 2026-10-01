@@ -44,15 +44,17 @@ export default function TradesPage({ params }: TradesPageProps) {
   const teamId = game?.selectedTeamId ?? "";
   const team = teams?.find(({ id }) => id === teamId);
   const opponent = teams?.find(({ id }) => id === opponentId);
-  const { data: teamRoster = [] } = useRoster(gameId, teamId || null);
-  const { data: opponentRoster = [] } = useRoster(gameId, opponentId || null);
-  const { data: teamContracts = [] } = useTeamContracts(gameId, teamId || null);
-  const { data: opponentContracts = [] } = useTeamContracts(gameId, opponentId || null);
+  const { data: teamRosterData } = useRoster(gameId, teamId || null);
+  const { data: opponentRosterData } = useRoster(gameId, opponentId || null);
+  const { data: teamContractsData } = useTeamContracts(gameId, teamId || null);
+  const { data: opponentContractsData } = useTeamContracts(gameId, opponentId || null);
   const { data: inventory = [] } = useDraftPickInventory(gameId);
   const { data: history = [] } = useTradeHistory(gameId);
   const { data: teamPlayerStates = [] } = usePlayerStates(gameId, teamId || null);
   const { data: opponentPlayerStates = [] } = usePlayerStates(gameId, opponentId || null);
   const executeTrade = useExecuteTrade();
+  const teamRoster = teamRosterData ?? [];
+  const opponentRoster = opponentRosterData ?? [];
 
   const teamPicks = inventory.filter(
     ({ ownerTeamId, isTransferable }) => ownerTeamId === teamId && isTransferable
@@ -99,17 +101,33 @@ export default function TradesPage({ params }: TradesPageProps) {
     packageB.incomingAssets = packageA.outgoingAssets;
   }
 
-  const simulation = useSimulateTrade(gameId, teamContracts, opponentContracts, packageA, packageB);
+  const teamSnapshot =
+    teamRosterData && teamContractsData
+      ? { contracts: teamContractsData, rosterSize: teamRosterData.length }
+      : null;
+  const opponentSnapshot =
+    opponentRosterData && opponentContractsData
+      ? { contracts: opponentContractsData, rosterSize: opponentRosterData.length }
+      : null;
+  const simulation = useSimulateTrade(
+    gameId,
+    teamSnapshot,
+    opponentSnapshot,
+    packageA,
+    packageB,
+    game?.seasonYear ?? new Date().getFullYear()
+  );
 
   const submitTrade = async () => {
-    if (!packageA || !packageB) return;
+    if (!game || !teamSnapshot || !opponentSnapshot || !packageA || !packageB) return;
     setExecutionError(null);
     const result = await executeTrade.mutateAsync({
       gameId,
-      teamAContracts: teamContracts,
-      teamBContracts: opponentContracts,
+      teamA: teamSnapshot,
+      teamB: opponentSnapshot,
       packageA,
       packageB,
+      seasonYear: game.seasonYear,
     });
     if (!result.success) {
       setExecutionError(result.error ?? "Trade execution failed");

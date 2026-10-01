@@ -1,5 +1,9 @@
-import type { Contract } from "@/domain/entities/Contract";
-import type { ExecutedTrade, TradePackage, TradeValidationResult } from "@/domain/entities/Trade";
+import type {
+  ExecutedTrade,
+  TradePackage,
+  TradeTeamSnapshot,
+  TradeValidationResult,
+} from "@/domain/entities/Trade";
 import type { TradeRepository } from "@/domain/repositories/TradeRepository";
 import { TradeValidator } from "@/domain/services/TradeValidator";
 
@@ -18,20 +22,16 @@ export class TradeEngine {
 
   async executeTrade(
     gameId: string,
-    teamAContracts: Contract[],
-    teamBContracts: Contract[],
+    teamA: TradeTeamSnapshot,
+    teamB: TradeTeamSnapshot,
     packageA: TradePackage,
     packageB: TradePackage,
-    shouldValidate: boolean = true
+    shouldValidate: boolean = true,
+    seasonYear: number = 2024
   ): Promise<TradeExecutionResult> {
     // 1. Validar el trade
     if (shouldValidate) {
-      const validation = this.validator.validateTrade(
-        teamAContracts,
-        teamBContracts,
-        packageA,
-        packageB
-      );
+      const validation = this.validator.validateTrade(teamA, teamB, packageA, packageB, seasonYear);
 
       if (!validation.isValid) {
         return {
@@ -72,11 +72,12 @@ export class TradeEngine {
   // Método para simular un trade sin ejecutarlo (útil para la UI)
   simulateTrade(
     _gameId: string,
-    teamAContracts: Contract[],
-    teamBContracts: Contract[],
+    teamA: TradeTeamSnapshot,
+    teamB: TradeTeamSnapshot,
     packageA: TradePackage,
-    packageB: TradePackage
+    packageB: TradePackage,
+    seasonYear: number = 2024
   ): TradeValidationResult {
-    return this.validator.validateTrade(teamAContracts, teamBContracts, packageA, packageB);
+    return this.validator.validateTrade(teamA, teamB, packageA, packageB, seasonYear);
   }
 }

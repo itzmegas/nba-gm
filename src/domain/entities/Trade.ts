@@ -116,6 +116,12 @@ export interface TradePackage {
   incomingAssets: TradeAsset[]; // Esto se calcula después
 }
 
+export interface TradeTeamSnapshot {
+  contracts: Contract[];
+  rosterSize: number;
+  hardCapLimit?: number;
+}
+
 export interface TradeValidationResult {
   isValid: boolean;
   errors: DomainError[];
@@ -128,11 +134,13 @@ export interface TradeValidationResult {
 
 export interface TeamTradeDetails {
   teamId: string;
+  teamName: string;
   outgoingSalary: number;
   incomingSalary: number;
   salaryDelta: number;
   rosterSizeAfter: number;
   isOverCapAfter: boolean;
   isOverHardCapAfter: boolean;
+  hardCapLimit?: number;
   newTotalSalary: number;
 }
