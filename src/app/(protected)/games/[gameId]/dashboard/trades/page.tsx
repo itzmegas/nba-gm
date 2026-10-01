@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRightLeft, History } from "lucide-react";
+import Image from "next/image";
 import { use, useState } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
@@ -183,7 +184,7 @@ export default function TradesPage({ params }: TradesPageProps) {
           <div className="grid gap-6 lg:grid-cols-2">
             <TradeAssetPanel
               teamName={team ? `${team.city} ${team.name}` : "Your team"}
-              teamAbbreviation={team?.abbreviation}
+              teamLogoUrl={team?.logoUrl}
               roster={teamRoster}
               picks={teamPicks}
               playerStateByPlayerId={playerStateByPlayerId}
@@ -195,7 +196,7 @@ export default function TradesPage({ params }: TradesPageProps) {
             />
             <TradeAssetPanel
               teamName={`${opponent.city} ${opponent.name}`}
-              teamAbbreviation={opponent.abbreviation}
+              teamLogoUrl={opponent.logoUrl}
               roster={opponentRoster}
               picks={opponentPicks}
               playerStateByPlayerId={playerStateByPlayerId}
@@ -211,8 +212,8 @@ export default function TradesPage({ params }: TradesPageProps) {
             <TradeSummary
               teamAName={packageA.teamName}
               teamBName={packageB.teamName}
-              teamAAbbreviation={team?.abbreviation}
-              teamBAbbreviation={opponent.abbreviation}
+              teamALogoUrl={team?.logoUrl}
+              teamBLogoUrl={opponent.logoUrl}
               packageA={packageA}
               packageB={packageB}
               pickById={pickById}
@@ -246,13 +247,23 @@ export default function TradesPage({ params }: TradesPageProps) {
               className="flex flex-col gap-1 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
             >
               <span className="flex items-center gap-2 font-medium">
-                <span className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] font-black">
-                  {teams?.find(({ id }) => id === trade.teamAId)?.abbreviation ?? "—"}
-                </span>
+                {teams?.find(({ id }) => id === trade.teamAId)?.logoUrl ? (
+                  <Image
+                    src={teams.find(({ id }) => id === trade.teamAId)?.logoUrl ?? ""}
+                    alt={`${teams.find(({ id }) => id === trade.teamAId)?.name ?? "Team"} logo`}
+                    width={28}
+                    height={28}
+                  />
+                ) : null}
                 <ArrowRightLeft className="size-3.5 text-muted-foreground" />
-                <span className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] font-black">
-                  {teams?.find(({ id }) => id === trade.teamBId)?.abbreviation ?? "—"}
-                </span>
+                {teams?.find(({ id }) => id === trade.teamBId)?.logoUrl ? (
+                  <Image
+                    src={teams.find(({ id }) => id === trade.teamBId)?.logoUrl ?? ""}
+                    alt={`${teams.find(({ id }) => id === trade.teamBId)?.name ?? "Team"} logo`}
+                    width={28}
+                    height={28}
+                  />
+                ) : null}
               </span>
               <span className="text-xs text-muted-foreground">
                 {trade.assets.length} assets ·{" "}
