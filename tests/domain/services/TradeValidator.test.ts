@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { NBA_RULES } from "../../../src/domain/constants/nba-rules";
-import type { Contract } from "../../../src/domain/entities/Contract";
-import type { TradeAsset, TradePackage } from "../../../src/domain/entities/Trade";
-import { TradeValidator } from "../../../src/domain/services/TradeValidator";
+import { NBA_RULES } from "@/domain/constants/nba-rules";
+import type { Contract } from "@/domain/entities/Contract";
+import type { TradeAsset, TradePackage, TradeTeamSnapshot } from "@/domain/entities/Trade";
+import { TradeValidator } from "@/domain/services/TradeValidator";
 
 describe("TradeValidator", () => {
   const validator = new TradeValidator();
@@ -18,6 +18,10 @@ describe("TradeValidator", () => {
     const avgSalary = totalSalary / count;
     return Array.from({ length: count }, () => createContract(avgSalary));
   };
+  const snapshot = (contracts: Contract[], rosterSize = contracts.length): TradeTeamSnapshot => ({
+    contracts,
+    rosterSize,
+  });
 
   describe("validateTrade", () => {
     it("should allow a valid non-taxpayer low tier trade (incoming <= 175% + 100k)", () => {
@@ -39,7 +43,12 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -63,7 +72,12 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(false);
       expect(result.errors.some((e) => e.name === "SalaryMatchingError")).toBe(true);
     });
@@ -87,7 +101,12 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(true);
     });
 
@@ -110,14 +129,19 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(true);
     });
 
     it("should enforce taxpayer matching rules (incoming <= 125% + 100k)", () => {
-      // First Apron is ~178M, Second is ~188M.
-      // 180M starting salary puts us firmly in taxpayer territory.
-      const teamAContracts = generateRoster(NBA_RULES.FIRST_APRON + 5_000_000);
+      // Keep payroll strictly between the luxury-tax line and first apron.
+      // This must use taxpayer matching even though it remains below the first apron.
+      const teamAContracts = generateRoster(NBA_RULES.LUXURY_TAX + 1_000_000);
       const teamBContracts = generateRoster(100_000_000);
 
       const pkgA: TradePackage = {
@@ -128,7 +152,7 @@ describe("TradeValidator", () => {
       };
 
       // 20M * 1.25 + 100k = 25.1M max.
-      // New salary = 183.1M - 20M + 25.1M = 188.2M (still under 188.9M Second Apron)
+      // Post-trade salary also remains strictly below the first apron.
       const pkgB: TradePackage = {
         teamId: "B",
         teamName: "Team B",
@@ -136,7 +160,12 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(true);
 
       const pkgB_Invalid: TradePackage = {
@@ -147,8 +176,8 @@ describe("TradeValidator", () => {
       };
 
       const resultInvalid = validator.validateTrade(
-        teamAContracts,
-        teamBContracts,
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
         pkgA,
         pkgB_Invalid
       );
@@ -156,7 +185,7 @@ describe("TradeValidator", () => {
       expect(resultInvalid.errors.some((e) => e.name === "SalaryMatchingError")).toBe(true);
     });
 
-    it("should flag Hard Cap violations (HardCapError) if trade pushes team over Second Apron", () => {
+    it("does not treat the second apron as a universal hard cap", () => {
       const teamAContracts = generateRoster(NBA_RULES.SECOND_APRON - 5_000_000); // 183.9M
       const teamBContracts = generateRoster(100_000_000);
 
@@ -168,7 +197,6 @@ describe("TradeValidator", () => {
       };
 
       // Taking in 16M. New salary = 183.9M - 10M + 16M = 189.9M (Over Second Apron: 188.9M)
-      // This will trigger a HardCapError because newTotalSalary > SECOND_APRON.
       const pkgB: TradePackage = {
         teamId: "B",
         teamName: "Team B",
@@ -176,12 +204,18 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(false);
-      expect(result.errors.some((e) => e.name === "HardCapError")).toBe(true);
+      expect(result.errors.some((e) => e.name === "SalaryMatchingError")).toBe(true);
+      expect(result.errors.some((e) => e.name === "HardCapError")).toBe(false);
     });
 
-    it("should return HardCapError for teams already over the Second Apron", () => {
+    it("allows an equal-salary trade for a team already over the second apron", () => {
       const teamAContracts = generateRoster(NBA_RULES.SECOND_APRON + 5_000_000); // 193.9M
       const teamBContracts = generateRoster(100_000_000);
 
@@ -199,13 +233,19 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      const resultValid = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB_Valid);
-      expect(resultValid.isValid).toBe(false); // Fails because of HardCapError
-      expect(resultValid.errors.some((e) => e.name === "HardCapError")).toBe(true);
+      const resultValid = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB_Valid
+      );
+      expect(resultValid.isValid).toBe(true);
+      expect(resultValid.errors.some((e) => e.name === "HardCapError")).toBe(false);
     });
 
-    it("should flag Hard Cap violations (HardCapError) if trade pushes team over Second Apron", () => {
-      const teamAContracts = generateRoster(NBA_RULES.SECOND_APRON - 5_000_000); // 183.9M
+    it("enforces an explicitly triggered hard cap", () => {
+      const hardCapLimit = NBA_RULES.FIRST_APRON;
+      const teamAContracts = generateRoster(hardCapLimit - 1_000_000);
       const teamBContracts = generateRoster(100_000_000);
 
       const pkgA: TradePackage = {
@@ -215,21 +255,106 @@ describe("TradeValidator", () => {
         incomingAssets: [],
       };
 
-      // Taking in 16M. New salary = 183.9M - 10M + 16M = 189.9M (Over Second Apron: 188.9M)
-      // Wait, is 16M allowed under taxpayer rules?
-      // 189.9M > FIRST_APRON, so taxpayer rules apply? Wait. If new salary > SECOND_APRON,
-      // it uses SECOND_APRON rules (incoming <= outgoing).
-      // Here incoming (16M) > outgoing (10M), so it violates salary matching AND triggers a Hard Cap error!
       const pkgB: TradePackage = {
         teamId: "B",
         teamName: "Team B",
-        outgoingAssets: [createPlayerAsset(16_000_000)],
+        outgoingAssets: [createPlayerAsset(12_000_000)],
         incomingAssets: [],
       };
 
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        { ...snapshot(teamAContracts), hardCapLimit },
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(false);
       expect(result.errors.some((e) => e.name === "HardCapError")).toBe(true);
+    });
+
+    it("uses team names instead of identifiers in validation messages", () => {
+      const pkgA: TradePackage = {
+        teamId: "ee149566-1111-4111-8111-111111111111",
+        teamName: "Philadelphia 76ers",
+        outgoingAssets: [createPlayerAsset(5_000_000)],
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "bbbbbbbb-1111-4111-8111-111111111111",
+        teamName: "Los Angeles Lakers",
+        outgoingAssets: [createPlayerAsset(9_000_000)],
+        incomingAssets: [],
+      };
+
+      const result = validator.validateTrade(
+        snapshot(generateRoster(100_000_000), 11),
+        snapshot(generateRoster(100_000_000), 15),
+        pkgA,
+        pkgB,
+        2024
+      );
+
+      expect(result.errors.map(({ message }) => message).join(" ")).not.toContain("ee149566");
+      expect(result.errors.some(({ message }) => message.includes("Philadelphia 76ers"))).toBe(
+        true
+      );
+    });
+
+    it("applies season-adjusted thresholds to the 2026-27 salary base", () => {
+      const pkgA: TradePackage = {
+        teamId: "PHI",
+        teamName: "Philadelphia 76ers",
+        outgoingAssets: [createPlayerAsset(20_000_000)],
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "LAL",
+        teamName: "Los Angeles Lakers",
+        outgoingAssets: [createPlayerAsset(22_000_000)],
+        incomingAssets: [],
+      };
+
+      const result = validator.validateTrade(
+        snapshot(generateRoster(190_000_000)),
+        snapshot(generateRoster(190_000_000)),
+        pkgA,
+        pkgB,
+        2026
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.errors.some(({ name }) => name === "HardCapError")).toBe(false);
+    });
+
+    it("keeps a mathematically correct post-trade roster minimum violation", () => {
+      const pkgA: TradePackage = {
+        teamId: "PHI",
+        teamName: "Philadelphia 76ers",
+        outgoingAssets: Array.from({ length: 4 }, () => createPlayerAsset(2_000_000)),
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "LAL",
+        teamName: "Los Angeles Lakers",
+        outgoingAssets: [createPlayerAsset(8_000_000)],
+        incomingAssets: [],
+      };
+
+      const result = validator.validateTrade(
+        snapshot(generateRoster(100_000_000), 14),
+        snapshot(generateRoster(100_000_000), 12),
+        pkgA,
+        pkgB,
+        2024
+      );
+
+      expect(result.details.teamA.rosterSizeAfter).toBe(11);
+      expect(
+        result.errors.some(
+          ({ name, message }) =>
+            name === "RosterSizeError" && message.includes("Philadelphia 76ers")
+        )
+      ).toBe(true);
     });
 
     it("should validate roster limits after trade", () => {
@@ -251,9 +376,42 @@ describe("TradeValidator", () => {
       };
 
       // Team A will have 15 - 1 + 2 = 16 players (Over limit)
-      const result = validator.validateTrade(teamAContracts, teamBContracts, pkgA, pkgB);
+      const result = validator.validateTrade(
+        snapshot(teamAContracts),
+        snapshot(teamBContracts),
+        pkgA,
+        pkgB
+      );
       expect(result.isValid).toBe(false);
       expect(result.errors.some((e) => e.name === "RosterSizeError")).toBe(true);
+    });
+
+    it("uses the visible roster size instead of counting contract rows", () => {
+      const teamAContracts = generateRoster(100_000_000, 17);
+      const teamBContracts = generateRoster(100_000_000, 8);
+      const pkgA: TradePackage = {
+        teamId: "PHI",
+        teamName: "Philadelphia 76ers",
+        outgoingAssets: [createPlayerAsset(5_000_000)],
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "BOS",
+        teamName: "Boston Celtics",
+        outgoingAssets: [createPlayerAsset(5_000_000)],
+        incomingAssets: [],
+      };
+
+      const result = validator.validateTrade(
+        snapshot(teamAContracts, 14),
+        snapshot(teamBContracts, 8),
+        pkgA,
+        pkgB
+      );
+
+      expect(result.details.teamA.rosterSizeAfter).toBe(14);
+      expect(result.details.teamB.rosterSizeAfter).toBe(8);
+      expect(result.errors.some((error) => error.message.includes("Roster size (17)"))).toBe(false);
     });
   });
 });
