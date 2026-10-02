@@ -47,6 +47,7 @@ function candidate(overrides: Partial<FreeAgencyCandidate> = {}): FreeAgencyCand
       exclusionEvidence: null,
       agreement: null,
     },
+    availabilityEvidence: { kind: "observed-standard-contract-absence" },
     classification: "confirmed-unrestricted-free-agent",
     ...overrides,
   };
@@ -82,6 +83,60 @@ describe("freeAgencyMarket", () => {
     expect(getEligibleFreeAgents(gameId, [eligible, signed, unknown, wrongGame, twoWay])).toEqual([
       eligible,
     ]);
+  });
+
+  it("accepts explicitly enrolled simulation availability without fabricating observed provenance", () => {
+    const enrolled = candidate({
+      contractState: {
+        ...candidate().contractState,
+        resolutionStatus: CONTRACT_IDENTITY_RESOLUTION_STATUS.UNCLASSIFIED,
+      },
+      availabilityEvidence: {
+        kind: "simulation-bootstrap-enrollment",
+        enrollmentId: "enrollment-1",
+      },
+    });
+    const enrollmentWithAgreement = candidate({
+      ...enrolled,
+      contractState: {
+        ...enrolled.contractState,
+        agreement: {
+          id: "agreement-1",
+          gameId,
+          playerId,
+          teamId,
+          startSeasonLabel: null,
+          endSeasonLabel: null,
+          remainingGuaranteedAmount: null,
+          contractType: "standard",
+          provenanceQuality: "observed",
+          sourceMethod: "basketball-reference-current-salary",
+          estimated: false,
+          capTreatment: CONTRACT_CAP_TREATMENT.STANDARD,
+          seasons: [],
+        },
+      },
+    });
+
+    expect(getEligibleFreeAgents(gameId, [enrolled])).toEqual([enrolled]);
+    expect(
+      getEligibleFreeAgents(gameId, [
+        {
+          ...enrolled,
+          availabilityEvidence: { kind: "simulation-bootstrap-enrollment", enrollmentId: "" },
+        },
+        { ...enrolled, availabilityEvidence: { kind: "unverified" } },
+        {
+          ...enrolled,
+          contractState: {
+            ...enrolled.contractState,
+            resolutionStatus: CONTRACT_IDENTITY_RESOLUTION_STATUS.OBSERVED_STANDARD,
+          },
+        },
+        enrollmentWithAgreement,
+        candidate({ availabilityEvidence: { kind: "unverified" } }),
+      ])
+    ).toEqual([]);
   });
 
   it("allows a legal cap-room offer and explains money and team opportunity", () => {

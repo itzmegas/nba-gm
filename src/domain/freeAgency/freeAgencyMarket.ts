@@ -13,11 +13,26 @@ export const FREE_AGENCY_CLASSIFICATION = {
 export type FreeAgencyClassification =
   (typeof FREE_AGENCY_CLASSIFICATION)[keyof typeof FREE_AGENCY_CLASSIFICATION];
 
+export const FREE_AGENCY_AVAILABILITY_EVIDENCE = {
+  OBSERVED_STANDARD_CONTRACT_ABSENCE: "observed-standard-contract-absence",
+  SIMULATION_BOOTSTRAP_ENROLLMENT: "simulation-bootstrap-enrollment",
+  UNVERIFIED: "unverified",
+} as const;
+
+export type FreeAgencyAvailabilityEvidence =
+  | { kind: typeof FREE_AGENCY_AVAILABILITY_EVIDENCE.OBSERVED_STANDARD_CONTRACT_ABSENCE }
+  | {
+      kind: typeof FREE_AGENCY_AVAILABILITY_EVIDENCE.SIMULATION_BOOTSTRAP_ENROLLMENT;
+      enrollmentId: string;
+    }
+  | { kind: typeof FREE_AGENCY_AVAILABILITY_EVIDENCE.UNVERIFIED };
+
 export interface FreeAgencyCandidate {
   gameId: string;
   player: Player;
   playerState: PlayerState;
   contractState: GamePlayerContractState;
+  availabilityEvidence: FreeAgencyAvailabilityEvidence;
   classification: FreeAgencyClassification;
 }
 
@@ -114,6 +129,17 @@ function isValidSeason(season: string): boolean {
 }
 
 function isEligibleCandidate(gameId: string, candidate: FreeAgencyCandidate): boolean {
+  const observedAvailability =
+    candidate.availabilityEvidence.kind ===
+      FREE_AGENCY_AVAILABILITY_EVIDENCE.OBSERVED_STANDARD_CONTRACT_ABSENCE &&
+    candidate.contractState.resolutionStatus ===
+      CONTRACT_IDENTITY_RESOLUTION_STATUS.OBSERVED_STANDARD;
+  const simulationAvailability =
+    candidate.availabilityEvidence.kind ===
+      FREE_AGENCY_AVAILABILITY_EVIDENCE.SIMULATION_BOOTSTRAP_ENROLLMENT &&
+    candidate.availabilityEvidence.enrollmentId.length > 0 &&
+    candidate.contractState.resolutionStatus === CONTRACT_IDENTITY_RESOLUTION_STATUS.UNCLASSIFIED;
+
   return (
     candidate.gameId === gameId &&
     candidate.player.id.length > 0 &&
@@ -129,8 +155,7 @@ function isEligibleCandidate(gameId: string, candidate: FreeAgencyCandidate): bo
     candidate.player.yearsOfExperience <= MAX_SERVICE_YEARS &&
     candidate.classification === FREE_AGENCY_CLASSIFICATION.CONFIRMED_UNRESTRICTED &&
     candidate.contractState.playerId === candidate.player.id &&
-    candidate.contractState.resolutionStatus ===
-      CONTRACT_IDENTITY_RESOLUTION_STATUS.OBSERVED_STANDARD &&
+    (observedAvailability || simulationAvailability) &&
     candidate.contractState.agreement === null &&
     candidate.contractState.contractType === null
   );
