@@ -93,6 +93,7 @@ DECLARE
   v_maximum BIGINT;
   v_cap_room BIGINT;
   v_service_years INTEGER;
+  v_roster_count INTEGER;
 BEGIN
   IF auth.uid() IS NULL OR auth.role() <> 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
   IF p_request_id IS NULL OR p_player_id IS NULL OR p_game_id IS NULL
@@ -129,8 +130,11 @@ BEGIN
   IF p_season <> '2026-27' THEN RAISE EXCEPTION 'Verified minimum salary schedule unavailable'; END IF;
   v_service_years := LEAST(COALESCE(v_player.years_of_experience, -1), 10);
   IF v_service_years < 0 THEN RAISE EXCEPTION 'Player years of service are unknown'; END IF;
+  -- These 2026-27 minimums mirror MINIMUM_SALARY_SCHEDULES in src/domain/contracts/MinimumSalarySchedule.ts.
   v_minimum := (ARRAY[1357763,2185116,2449421,2537526,2625627,2845883,3066143,3286399,3506659,3524115,3876529])[v_service_years + 1];
+  -- Cap projection mirrors NBA_RULES.SALARY_CAP, BASE_SALARY_CAP_SEASON (2024), and MAX_ANNUAL_CAP_GROWTH (1.1) in src/domain/constants/nba-rules.ts.
   v_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  -- Experience tiers mirror NBA_RULES.MAX_SALARY_TIERS: 25% through year 6, 30% for years 7-9, then 35%.
   v_maximum := floor(v_cap * CASE WHEN v_service_years <= 6 THEN 0.25 WHEN v_service_years <= 9 THEN 0.30 ELSE 0.35 END);
   IF p_annual_salary < v_minimum OR p_annual_salary > v_maximum THEN RAISE EXCEPTION 'Salary outside verified minimum and maximum'; END IF;
   SELECT COALESCE(sum(s.salary_amount), 0) INTO v_payroll FROM game_contract_agreements a
@@ -146,8 +150,8 @@ BEGIN
     WHERE c.game_id = p_game_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
       AND NOT EXISTS (SELECT 1 FROM game_contract_agreements a
       WHERE a.game_id = c.game_id AND a.player_id = c.player_id);
-  SELECT count(*) INTO v_service_years FROM game_player_states WHERE game_id = p_game_id AND team_id = v_game.selected_team_id AND is_active;
-  IF v_service_years >= 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id AND team_id = v_game.selected_team_id AND is_active;
+  IF v_roster_count >= 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
   v_cap_room := GREATEST(0, v_cap - v_payroll);
   IF p_annual_salary > v_cap_room AND p_annual_salary <> v_minimum THEN RAISE EXCEPTION 'Offer exceeds cap room'; END IF;
   INSERT INTO free_agency_pending_offers(request_id, owner_id, game_id, player_id, team_id,
