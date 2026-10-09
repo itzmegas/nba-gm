@@ -56,3 +56,24 @@ export interface GamePlayerContractState {
   exclusionEvidence: Readonly<Record<string, unknown>> | null;
   agreement: GameContractAgreement | null;
 }
+
+export interface SimulatedGameContract {
+  id: string;
+  gameId: string;
+  playerId: string;
+  origin: "simulated-agreement";
+  startYear: number;
+  endYear: number;
+  annualSalary: number;
+  isPlayerOption: boolean;
+  isTeamOption: boolean;
+  isGuaranteed: boolean | null;
+  createdAt: string;
+}
+
+export interface EffectiveGameContractState {
+  playerId: string;
+  teamId: string | null;
+  canonical: GamePlayerContractState | null;
+  simulated: SimulatedGameContract | null;
+}
