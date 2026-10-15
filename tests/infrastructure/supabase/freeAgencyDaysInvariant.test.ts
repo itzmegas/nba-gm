@@ -6,6 +6,7 @@ const migrations = [
   "027_free_agency_team_finances.sql",
   "028_free_agency_offer_assessment.sql",
   "029_free_agency_daily_market.sql",
+  "030_free_agency_simulation_day.sql",
 ] as const;
 describe("free-agency daily market schema", () => {
   for (const name of migrations) {

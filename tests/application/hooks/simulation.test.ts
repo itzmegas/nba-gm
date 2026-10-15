@@ -297,6 +297,37 @@ describe("batch simulation", () => {
     );
   });
 
+  it("uses the same guarded daily RPC sequence for a range and individual days", async () => {
+    const dates = ["2026-10-31", "2026-11-01", "2026-11-02"];
+    const responses = () => {
+      for (const [index, date] of dates.entries()) {
+        rpc.mockResolvedValueOnce({
+          data: [{ new_date: date, season_complete: index === dates.length - 1 }],
+          error: null,
+        });
+      }
+    };
+    responses();
+    const advanceDay = useAdvanceDay();
+    for (const date of ["2026-10-30", ...dates.slice(0, -1)]) {
+      await advanceDay.mutateAsync({
+        gameId: input.gameId,
+        simulationDate: new Date(`${date}T00:00:00.000Z`),
+      });
+    }
+    const dailyCalls = [...rpc.mock.calls];
+    rpc.mockClear();
+    invalidateQueries.mockClear();
+    responses();
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.SEASON, null);
+    await useAdvanceRange().mutateAsync({ ...input, mode: BATCH_SIMULATION_MODE.SEASON });
+    expect(rpc.mock.calls).toEqual(dailyCalls);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(3);
+    expect(
+      invalidateQueries.mock.calls.filter(([key]) => key.queryKey[0] === "games")
+    ).toHaveLength(3);
+  });
+
   it("stops before the next day when pause is requested", async () => {
     rpc.mockImplementationOnce(async () => {
       useBatchSimulationStore.getState().requestStop();
