@@ -12,6 +12,7 @@ const image =
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const phases = [
   ["027_free_agency_team_finances.sql", "freeAgencyTeamFinances.postgres.sql"],
+  ["028_free_agency_offer_assessment.sql", "freeAgencyOfferAssessment.postgres.sql"],
 ] as const;
 const database = "nba_gm_free_agency_days";
 function docker(args: string[], input?: string): string {

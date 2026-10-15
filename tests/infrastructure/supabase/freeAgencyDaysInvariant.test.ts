@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const schema = readFileSync(new URL("../../../scripts/schema.sql", import.meta.url), "utf8");
-const migrations = ["027_free_agency_team_finances.sql"] as const;
+const migrations = [
+  "027_free_agency_team_finances.sql",
+  "028_free_agency_offer_assessment.sql",
+] as const;
 describe("free-agency daily market schema", () => {
   for (const name of migrations) {
     it(`mirrors ${name} exactly once`, () => {
