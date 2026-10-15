@@ -2377,19 +2377,25 @@ BEGIN
       END IF;
       SELECT count(*) INTO v_contract_count FROM contracts
       WHERE game_id = p_game_id AND player_id = v_id;
-      IF v_contract_count = 0 THEN RAISE EXCEPTION 'Player contract is missing'; END IF;
-      FOR v_contract IN SELECT * FROM contracts
-        WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE LOOP
-        IF v_contract.team_id IS DISTINCT FROM v_from THEN
-          RAISE EXCEPTION 'Player contract ownership is stale or invalid';
-        END IF;
-      END LOOP;
+      IF v_contract_count = 0 AND NOT EXISTS (
+        SELECT 1 FROM game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = v_id
+      ) THEN
+        RAISE EXCEPTION 'Player contract is missing';
+      END IF;
       UPDATE game_player_states SET team_id = v_to, updated_at = now() WHERE id = v_state.id;
-      UPDATE contracts SET team_id = v_to, updated_at = now()
-      WHERE game_id = p_game_id AND player_id = v_id AND team_id = v_from;
-      GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-      IF v_updated_count <> v_contract_count THEN
-        RAISE EXCEPTION 'Player contract transfer was incomplete';
+      IF v_contract_count > 0 THEN
+        FOR v_contract IN SELECT * FROM contracts
+          WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE LOOP
+          IF v_contract.team_id IS DISTINCT FROM v_from THEN
+            RAISE EXCEPTION 'Player contract ownership is stale or invalid';
+          END IF;
+        END LOOP;
+        UPDATE contracts SET team_id = v_to, updated_at = now()
+        WHERE game_id = p_game_id AND player_id = v_id AND team_id = v_from;
+        GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+        IF v_updated_count <> v_contract_count THEN
+          RAISE EXCEPTION 'Player contract transfer was incomplete';
+        END IF;
       END IF;
       v_metadata := jsonb_build_object('player_id', v_id);
     ELSE

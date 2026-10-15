@@ -35,4 +35,12 @@ describe("free agency trade serialization migration", () => {
     expect(contractLock).toBeGreaterThan(gameLock);
     expect(migration).toContain("SET search_path = pg_catalog, public");
   });
+
+  it("transfers runtime-only players without rewriting the simulated agreement", () => {
+    expect(migration).toContain(
+      "game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = v_id"
+    );
+    expect(migration).not.toContain("UPDATE game_runtime_contracts");
+    expect(migration).toContain("Player contract is missing");
+  });
 });

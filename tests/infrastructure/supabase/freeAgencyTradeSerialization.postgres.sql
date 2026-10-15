@@ -67,3 +67,28 @@ BEGIN
   END IF;
 END $$;
 SELECT 'GREEN: both roster and legacy contract directions transferred; complete canonical and simulated snapshots unchanged' AS trade_snapshot_proof;
+
+-- Runtime-only agreements follow roster ownership without a mutable legacy surrogate.
+INSERT INTO game_runtime_contracts(game_id, player_id, origin_kind, start_year, end_year, annual_salary)
+VALUES ('40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002',
+  'simulated-agreement', 2026, 2028, 2000000);
+DELETE FROM contracts WHERE game_id = '40000000-0000-4000-8000-000000000001'
+  AND player_id = '30000000-0000-4000-8000-000000000002';
+CREATE TABLE free_agency_runtime_trade_prestate AS
+SELECT jsonb_agg(to_jsonb(r) ORDER BY id) AS snapshot FROM game_runtime_contracts r;
+SET ROLE authenticated;
+SELECT execute_trade_transactional(
+  '40000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000002',
+  '[{"asset_type":"player","asset_id":"30000000-0000-4000-8000-000000000002","from_team_id":"20000000-0000-4000-8000-000000000001"},{"asset_type":"player","asset_id":"30000000-0000-4000-8000-000000000001","from_team_id":"20000000-0000-4000-8000-000000000002"}]'::jsonb
+);
+RESET ROLE;
+DO $$ BEGIN
+  IF (SELECT team_id FROM game_player_states WHERE game_id = '40000000-0000-4000-8000-000000000001'
+      AND player_id = '30000000-0000-4000-8000-000000000002') IS DISTINCT FROM '20000000-0000-4000-8000-000000000002'::uuid
+     OR (SELECT snapshot FROM free_agency_runtime_trade_prestate) IS DISTINCT FROM
+       (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM game_runtime_contracts r) THEN
+    RAISE EXCEPTION 'Runtime-only trade failed roster transfer or changed simulated terms';
+  END IF;
+END $$;
