@@ -13,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const phases = [
   ["027_free_agency_team_finances.sql", "freeAgencyTeamFinances.postgres.sql"],
   ["028_free_agency_offer_assessment.sql", "freeAgencyOfferAssessment.postgres.sql"],
+  ["029_free_agency_daily_market.sql", "freeAgencyDailyMarket.postgres.sql"],
 ] as const;
 const database = "nba_gm_free_agency_days";
 function docker(args: string[], input?: string): string {
@@ -76,6 +77,8 @@ sql("Migration 025", file("scripts/migrations/025_free_agency_offer_resolution_s
 sql("Shared context fixture", context.slice(phase + marker.length));
 sql("Migration 026", file("scripts/migrations/026_resolve_free_agency_offer.sql"));
 const assertions = `
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', false);
+SELECT set_config('request.jwt.claim.role', 'authenticated', false);
 CREATE FUNCTION pg_temp.assert_true(condition BOOLEAN, message TEXT) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '%', message; END IF; END $$;
 CREATE FUNCTION pg_temp.expect_error(statement TEXT, message TEXT) RETURNS void LANGUAGE plpgsql AS $$

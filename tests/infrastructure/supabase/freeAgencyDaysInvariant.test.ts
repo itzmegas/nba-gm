@@ -5,6 +5,7 @@ const schema = readFileSync(new URL("../../../scripts/schema.sql", import.meta.u
 const migrations = [
   "027_free_agency_team_finances.sql",
   "028_free_agency_offer_assessment.sql",
+  "029_free_agency_daily_market.sql",
 ] as const;
 describe("free-agency daily market schema", () => {
   for (const name of migrations) {
