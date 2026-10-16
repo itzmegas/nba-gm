@@ -1,4 +1,68 @@
 export const en = {
+  freeAgency: {
+    title: "Free agency market",
+    description: "Compete for explicitly enrolled free agents in this save.",
+    policy:
+      "Offers resolve after advancing a simulated day. Pending offers reserve no cap space or roster spots.",
+    preferences:
+      "Decisions use simulated factors: salary 60%, roster opportunity 25%, team quality 15%. Duration is not scored. Ties use stable team and offer identifiers.",
+    enrollment:
+      "Only explicitly enrolled players appear here. Missing salary data does not establish availability.",
+    emptyPool:
+      "No eligible enrolled players are available. This save needs explicit simulation bootstrap enrollment; this screen does not enroll players.",
+    unsupported:
+      "The market requires an active 2026-27 modern save with materialized contract coverage.",
+    loadFailed:
+      "Unable to load the market. Check the connection and required migrations, then retry.",
+    retry: "Retry",
+    refresh: "Refresh market",
+    updating: "Updating market…",
+    pool: "Available players",
+    history: "Offers and results",
+    noOffers: "No offers recorded in this save.",
+    salary: "Annual salary (USD)",
+    years: "Years",
+    minimum: "Minimum salary",
+    maximum: "Maximum salary",
+    submit: "Submit offer",
+    submitting: "Submitting…",
+    submitted: "Offer submitted. Advance the simulation to resolve it.",
+    submitFailed:
+      "Unable to confirm the offer. Refresh the market or retry identical terms safely.",
+    invalidTerms:
+      "Enter a whole-dollar salary within the displayed bounds and a duration of 1–5 years.",
+    capExceeded:
+      "This salary exceeds cap room. Only the exact verified minimum qualifies for the modeled exception.",
+    rosterFull: "Your roster is full (15 players).",
+    simulationActive: "Offers are paused while the simulation is running.",
+    pendingExists: "You already have a pending offer for this player.",
+    minimumException: "The exact minimum salary can use the modeled minimum-salary exception.",
+    due: "Due on",
+    resolved: "Resolved on",
+    pending: "Pending",
+    accepted: "Accepted",
+    rejected: "Rejected",
+    human: "Your offer",
+    ai: "AI offer",
+    selected_offer_accepted:
+      "This offer won. The player joined the bidding team and payroll was updated.",
+    another_offer_accepted: "A competing offer was accepted for this player.",
+    offer_no_longer_legal: "The offer was no longer legal when it became due.",
+    detail: "Resolution detail",
+    "Roster maximum reached": "Roster maximum reached.",
+    "Offer exceeds cap room": "The offer exceeds current cap room.",
+    "Salary outside verified minimum and maximum": "Salary is outside the verified bounds.",
+    "Explicitly enrolled active teamless player without an agreement required":
+      "The player is no longer available in the enrolled pool.",
+    "Active explicitly enrolled player required": "The player is no longer active.",
+    "Offer season must match the supported game financial season":
+      "The offer season is no longer supported.",
+    "Stored offer terms are outside supported bounds":
+      "The stored terms are outside supported bounds.",
+    "Offer team does not match the selected game team":
+      "The offer does not belong to the selected team.",
+    "AI team does not participate in this game": "The AI team does not participate in this save.",
+  },
   common: {
     loading: "Loading...",
     error: "An error occurred",
