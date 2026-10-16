@@ -81,8 +81,23 @@ ROLLBACK;
 BEGIN;
 SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', false);
 SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+-- Earlier simulation-day fixtures can leave a completed signing and unrelated pending offers.
+-- Test with a guaranteed free player and one open roster slot instead of deleting offer history.
+UPDATE games SET simulation_date = '2026-10-02'
+WHERE id = '40000000-0000-4000-8000-000000000002';
+UPDATE scheduled_games SET status = 'scheduled', home_score = NULL, away_score = NULL, winner_team_id = NULL
+WHERE id = '70000000-0000-4000-8000-000000000001';
+UPDATE game_player_states SET is_active = false
+WHERE game_id = '40000000-0000-4000-8000-000000000002'
+  AND player_id = '30000000-0000-4000-8000-000000000006';
+DELETE FROM free_agency_pending_offers
+WHERE game_id = '40000000-0000-4000-8000-000000000002'
+  AND player_id = '30000000-0000-4000-8000-000000000017' AND status = 'pending';
+DELETE FROM free_agency_pending_offers
+WHERE game_id = '40000000-0000-4000-8000-000000000002'
+  AND offer_origin = 'ai' AND ai_decision_date = '2026-10-02' AND status IN ('pending', 'rejected');
 SELECT submit_free_agency_offer('40000000-0000-4000-8000-000000000002',
-  '30000000-0000-4000-8000-000000000005', '6fffffff-0000-4000-8000-000000000009',
+  '30000000-0000-4000-8000-000000000017', '6fffffff-0000-4000-8000-000000000009',
   '2026-27', 42000000, 1);
 SELECT * FROM advance_simulation_day('40000000-0000-4000-8000-000000000002', '2026-10-02');
 CREATE TEMP TABLE post_day_market AS
@@ -93,7 +108,7 @@ SELECT pg_temp.assert_true((SELECT EXISTS (
     AND offer->>'offer_origin' = 'human' AND offer->>'status' = 'accepted'
     AND offer ? 'resolved_date' AND offer ? 'resolution_reason'
     AND offer ? 'resolution_detail' AND offer ? 'resolved_contract_id'
-    AND offer->>'player_name' = 'Explicit Free Agent'
+    AND offer->>'player_name' = 'Roster Seventeen'
 ) AND EXISTS (
   SELECT 1 FROM post_day_market, jsonb_array_elements(post_day_market.value->'offers') offer
   WHERE offer->>'offer_origin' = 'ai' AND offer->>'status' = 'rejected'

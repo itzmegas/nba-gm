@@ -16,6 +16,7 @@ const phases = [
   ["029_free_agency_daily_market.sql", "freeAgencyDailyMarket.postgres.sql"],
   ["030_free_agency_simulation_day.sql", "freeAgencySimulationDay.postgres.sql"],
   ["031_free_agency_market_read.sql", "freeAgencyMarketRead.postgres.sql"],
+  ["032_roster_simulation_strength.sql", "rosterSimulationStrength.postgres.sql"],
 ] as const;
 const schemaOnly = process.argv[3] === "--schema-only";
 const database = schemaOnly ? "nba_gm_free_agency_days_schema" : "nba_gm_free_agency_days";
@@ -68,7 +69,7 @@ sql(
 );
 const schema = file("scripts/schema.sql");
 if (schemaOnly) {
-  sql("Complete canonical schema through 031", schema);
+  sql("Complete canonical schema through 032", schema);
   process.exit(0);
 }
 sql(
@@ -96,10 +97,39 @@ BEGIN
 END $$;
 `;
 for (const [migration, fixture] of phases) {
+  if (migration === "032_roster_simulation_strength.sql") {
+    const baseline = `
+      BEGIN;
+      DO $$ DECLARE r RECORD; b SMALLINT; s BIGINT; expected SMALLINT;
+      BEGIN
+        SELECT base_rating INTO b FROM teams WHERE id='20000000-0000-4000-8000-000000000001';
+        SELECT * INTO r FROM advance_simulation_day_core(
+          '40000000-0000-4000-8000-000000000002','2026-10-02')
+          WHERE result_id='70000000-0000-4000-8000-000000000001';
+        s := ('x'||substr(md5('40000000-0000-4000-8000-000000000002:2026-10-03:'||
+          '20000000-0000-4000-8000-000000000001:20000000-0000-4000-8000-000000000002'),1,8))::bit(32)::bigint;
+        expected := greatest(70,round(105+(b+3-75)*0.55+(mod(abs(s),2400)/100.0-12)));
+        IF r.home_score = expected THEN RAISE EXCEPTION 'ROSTER_BEHAVIOR_RED: unchanged base rating'; END IF;
+      END $$;
+      ROLLBACK;`;
+    try {
+      sql("Expected sporting behavior RED on unchanged 030 core", assertions + baseline);
+      throw new Error("Baseline roster behavior unexpectedly passed before migration 032");
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("ROSTER_BEHAVIOR_RED")) throw error;
+      console.log("Observed RED: unchanged core score equals base-rating counterfactual");
+    }
+  }
   sql(`Migration ${migration}`, file(`scripts/migrations/${migration}`));
   sql(fixture, assertions + file(`tests/infrastructure/supabase/${fixture}`));
+  if (migration === "032_roster_simulation_strength.sql") {
+    const regression = file("tests/infrastructure/supabase/freeAgencySimulationDay.postgres.sql");
+    sql(
+      "Post-032 rollback, daily/range, stale and terminal regressions",
+      assertions + regression.slice(regression.indexOf("CREATE FUNCTION pg_temp.day_snapshot()"))
+    );
+  }
 }
-
 interface SqlProcessResult {
   code: number;
   stdout: string;
@@ -140,57 +170,59 @@ const concurrency = file("tests/infrastructure/supabase/freeAgencyDayConcurrency
 const concurrencyMarker = "-- AFTER_CONCURRENT_DAYS\n";
 const concurrencyPhase = concurrency.indexOf(concurrencyMarker);
 if (concurrencyPhase < 0) throw new Error("Missing concurrency fixture boundary");
-sql("Day concurrency baseline", assertions + concurrency.slice(0, concurrencyPhase));
-const holder = startSession(
-  "BEGIN; SELECT id FROM games WHERE id='40000000-0000-4000-8000-000000000002' FOR UPDATE; " +
-    "SELECT 'fa-day-holder-ready'; SELECT pg_sleep(3); COMMIT;"
-);
-const holderDeadline = Date.now() + 5000;
-while (!holder.output().includes("fa-day-holder-ready") && Date.now() < holderDeadline) {
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
-}
-if (!holder.output().includes("fa-day-holder-ready"))
-  throw new Error("Day lock holder did not become ready");
-const names = ["fa-day-race-a", "fa-day-race-b"];
-const waiters = names.map((name) =>
-  startSession(`SET application_name = '${name}'; SET ROLE authenticated;
+{
+  sql("Day concurrency baseline", assertions + concurrency.slice(0, concurrencyPhase));
+  const holder = startSession(
+    "BEGIN; SELECT id FROM games WHERE id='40000000-0000-4000-8000-000000000002' FOR UPDATE; " +
+      "SELECT 'fa-day-holder-ready'; SELECT pg_sleep(3); COMMIT;"
+  );
+  const holderDeadline = Date.now() + 5000;
+  while (!holder.output().includes("fa-day-holder-ready") && Date.now() < holderDeadline) {
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+  }
+  if (!holder.output().includes("fa-day-holder-ready"))
+    throw new Error("Day lock holder did not become ready");
+  const names = ["fa-day-race-a", "fa-day-race-b"];
+  const waiters = names.map((name) =>
+    startSession(`SET application_name = '${name}'; SET ROLE authenticated;
   SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', false);
   SELECT set_config('request.jwt.claim.role', 'authenticated', false);
   SELECT new_date FROM advance_simulation_day('40000000-0000-4000-8000-000000000002', '2026-10-02');`)
-);
-const observed = new Set<string>();
-const waitDeadline = Date.now() + 5000;
-while (observed.size < names.length && Date.now() < waitDeadline) {
-  const waiting = docker([
-    "exec",
-    containerId,
-    "psql",
-    "-X",
-    "-At",
-    "-U",
-    "postgres",
-    "-d",
-    database,
-    "-c",
-    "SELECT application_name FROM pg_stat_activity WHERE application_name IN ('fa-day-race-a','fa-day-race-b') " +
-      "AND wait_event_type = 'Lock' AND cardinality(pg_blocking_pids(pid)) > 0",
-  ]);
-  for (const name of waiting.split("\n")) if (names.includes(name)) observed.add(name);
-  if (observed.size < names.length)
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
-}
-const results = await Promise.all([holder.done, ...waiters.map((waiter) => waiter.done)]);
-if (
-  observed.size !== 2 ||
-  results.some((result) => result.code !== 0) ||
-  results.slice(1).some((result) => !result.stdout.includes("2026-10-03"))
-) {
-  throw new Error(
-    `Concurrent day proof failed: waits=${[...observed]}, results=${JSON.stringify(results)}`
+  );
+  const observed = new Set<string>();
+  const waitDeadline = Date.now() + 5000;
+  while (observed.size < names.length && Date.now() < waitDeadline) {
+    const waiting = docker([
+      "exec",
+      containerId,
+      "psql",
+      "-X",
+      "-At",
+      "-U",
+      "postgres",
+      "-d",
+      database,
+      "-c",
+      "SELECT application_name FROM pg_stat_activity WHERE application_name IN ('fa-day-race-a','fa-day-race-b') " +
+        "AND wait_event_type = 'Lock' AND cardinality(pg_blocking_pids(pid)) > 0",
+    ]);
+    for (const name of waiting.split("\n")) if (names.includes(name)) observed.add(name);
+    if (observed.size < names.length)
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+  }
+  const results = await Promise.all([holder.done, ...waiters.map((waiter) => waiter.done)]);
+  if (
+    observed.size !== 2 ||
+    results.some((result) => result.code !== 0) ||
+    results.slice(1).some((result) => !result.stdout.includes("2026-10-03"))
+  ) {
+    throw new Error(
+      `Concurrent day proof failed: waits=${[...observed]}, results=${JSON.stringify(results)}`
+    );
+  }
+  console.log("Observed two real PostgreSQL game-lock waits for duplicate daily requests");
+  sql(
+    "Concurrent day replay and provenance",
+    assertions + concurrency.slice(concurrencyPhase + concurrencyMarker.length)
   );
 }
-console.log("Observed two real PostgreSQL game-lock waits for duplicate daily requests");
-sql(
-  "Concurrent day replay and provenance",
-  assertions + concurrency.slice(concurrencyPhase + concurrencyMarker.length)
-);
