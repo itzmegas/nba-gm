@@ -67,6 +67,7 @@ Excluded: real-world synchronization, new-game start-date choices, contract expi
 - [ ] FA-04: Market screen, offer submission and cache refresh.
   - Route: delegated direct; presentation and application hooks require multiple files.
   - Acceptance: existing dashboard navigation reaches the market, clear status/reasons, updated roster/payroll/market after resolution.
+  - [x] FA-04a: Owned-save read RPC, explicit enrolled pool, selected-team authoritative finances and human/AI terminal history. Migration 031 and exact schema mirror; isolated PG17 phase/full-schema/concurrent-day checks and 3/3 invariants passed. No enrollment or application database changes. Rollback: remove 031, its mirror, read fixtures and runner phase; preserve 027–030.
 - [ ] FA-05: Roster-aware sporting impact.
   - Route: delegated direct; simulation formula and integration require bounded implementation and tests.
   - Acceptance: save-specific acquisitions affect team strength with deterministic regression tests; formula documented before integration.

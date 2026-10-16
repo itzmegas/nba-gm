@@ -15,6 +15,7 @@ const phases = [
   ["028_free_agency_offer_assessment.sql", "freeAgencyOfferAssessment.postgres.sql"],
   ["029_free_agency_daily_market.sql", "freeAgencyDailyMarket.postgres.sql"],
   ["030_free_agency_simulation_day.sql", "freeAgencySimulationDay.postgres.sql"],
+  ["031_free_agency_market_read.sql", "freeAgencyMarketRead.postgres.sql"],
 ] as const;
 const schemaOnly = process.argv[3] === "--schema-only";
 const database = schemaOnly ? "nba_gm_free_agency_days_schema" : "nba_gm_free_agency_days";
@@ -67,7 +68,7 @@ sql(
 );
 const schema = file("scripts/schema.sql");
 if (schemaOnly) {
-  sql("Complete canonical schema through 030", schema);
+  sql("Complete canonical schema through 031", schema);
   process.exit(0);
 }
 sql(
