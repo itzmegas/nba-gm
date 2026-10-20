@@ -3,10 +3,13 @@
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
+import { useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
+import { ReleasePlayerButton } from "@/components/roster/release-player-button";
 import { Badge } from "@/components/ui/badge";
 import { CONTRACT_UI_CLASSIFICATION } from "@/domain/contracts/ContractClassification";
 import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
+import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
 import {
   formatSalarySeasonLabel,
   getSalarySeasonYears,
@@ -26,6 +29,9 @@ export function getRosterContractClassification(rosterPlayer: RosterPlayer): {
   title: string;
 } {
   const state = rosterPlayer.gameContract;
+  if (rosterPlayer.contract?.origin === CONTRACT_ORIGIN.SIMULATED_AGREEMENT) {
+    return { label: CONTRACT_UI_CLASSIFICATION.STANDARD, title: "Simulated standard NBA contract" };
+  }
   if (state?.contractType === "two-way")
     return {
       label: CONTRACT_UI_CLASSIFICATION.TWO_WAY,
@@ -54,8 +60,9 @@ export function getRosterContractClassification(rosterPlayer: RosterPlayer): {
 
 export function shouldRenderRosterPlayer(rosterPlayer: RosterPlayer): boolean {
   return (
+    rosterPlayer.contract?.origin === CONTRACT_ORIGIN.SIMULATED_AGREEMENT ||
     rosterPlayer.gameContract?.resolutionStatus !==
-    CONTRACT_IDENTITY_RESOLUTION_STATUS.INACTIVE_EXCLUDED
+      CONTRACT_IDENTITY_RESOLUTION_STATUS.INACTIVE_EXCLUDED
   );
 }
 
@@ -112,10 +119,18 @@ interface RosterTableProps {
   players: RosterPlayer[];
   seasonYear: number;
   leagueTeamId?: string;
+  canRelease?: boolean;
 }
 
-export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: RosterTableProps) {
+export function RosterTable({
+  gameId,
+  players,
+  seasonYear,
+  leagueTeamId,
+  canRelease = false,
+}: RosterTableProps) {
   const router = useRouter();
+  const t = useT();
 
   const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
 
@@ -146,6 +161,11 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
               Duración
             </th>
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-36">Estado</th>
+            {canRelease && (
+              <th className="py-3 px-4 text-right font-medium text-muted-foreground">
+                {t("dashboard", "rosterActions")}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -233,6 +253,11 @@ export function RosterTable({ gameId, players, seasonYear, leagueTeamId }: Roste
                     {status.label}
                   </Badge>
                 </td>
+                {canRelease && (
+                  <td className="py-3 px-4 text-right">
+                    <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} />
+                  </td>
+                )}
               </tr>
             );
           })}

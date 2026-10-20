@@ -1,6 +1,79 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  freeAgency: {
+    title: "Mercado de agentes libres",
+    description: "Compite por agentes libres inscritos explícitamente en esta partida.",
+    policy:
+      "Las ofertas se resuelven al avanzar un día simulado. Las ofertas pendientes no reservan espacio salarial ni plazas.",
+    preferences:
+      "Las decisiones usan factores simulados: salario 60%, oportunidad en la plantilla 25% y calidad del equipo 15%. La duración no puntúa. Los empates usan identificadores estables de equipo y oferta.",
+    enrollment:
+      "El mercado inicial se importa una sola vez desde el tracker de la NBA. Los fichajes posteriores dependen de la simulación de esta partida.",
+    emptyPool: "No hay agentes libres elegibles disponibles en esta partida.",
+    importInitial: "Cargar mercado inicial",
+    importing: "Importando mercado inicial…",
+    importHelp:
+      "En partidas creadas antes de la importación automática, carga el mercado inicial una sola vez. Se respetan los fichajes existentes y nunca se reinicia un mercado ya importado.",
+    importFailed:
+      "No se pudo importar el mercado inicial. Revisa la conexión con la NBA y la migración 033 antes de reintentar.",
+    imported:
+      "Mercado inicial cargado. Se excluyeron los jugadores con equipo o identidad sin resolver.",
+    unsupported:
+      "El mercado requiere una partida moderna activa de 2026-27 con cobertura contractual materializada.",
+    loadFailed:
+      "No se pudo cargar el mercado. Revisa la conexión y las migraciones necesarias antes de reintentar.",
+    retry: "Reintentar",
+    refresh: "Actualizar mercado",
+    updating: "Actualizando mercado…",
+    pool: "Jugadores disponibles",
+    history: "Ofertas y resultados",
+    noOffers: "No hay ofertas registradas en esta partida.",
+    salary: "Salario anual (USD)",
+    years: "Años",
+    minimum: "Salario mínimo",
+    maximum: "Salario máximo",
+    submit: "Enviar oferta",
+    submitting: "Enviando…",
+    submitted: "Oferta enviada. Avanza la simulación para resolverla.",
+    submitFailed:
+      "No se pudo confirmar la oferta. Actualiza el mercado o reintenta con los mismos términos de forma segura.",
+    invalidTerms:
+      "Introduce un salario entero dentro de los límites indicados y una duración de 1 a 5 años.",
+    capExceeded:
+      "El salario supera el espacio salarial. Solo el mínimo exacto permite usar la excepción modelada.",
+    rosterFull: "La plantilla está completa (15 jugadores).",
+    simulationActive: "Las ofertas están pausadas mientras se ejecuta la simulación.",
+    pendingExists: "Ya tienes una oferta pendiente por este jugador.",
+    minimumException:
+      "El salario mínimo exacto permite usar la excepción de salario mínimo modelada.",
+    due: "Vence el",
+    resolved: "Resuelta el",
+    pending: "Pendiente",
+    accepted: "Aceptada",
+    rejected: "Rechazada",
+    human: "Tu oferta",
+    ai: "Oferta de IA",
+    selected_offer_accepted:
+      "Esta oferta ganó. El jugador se incorporó al equipo y se actualizó la nómina.",
+    another_offer_accepted: "Se aceptó una oferta competidora por este jugador.",
+    offer_no_longer_legal: "La oferta dejó de ser legal al llegar su fecha de resolución.",
+    detail: "Detalle de la resolución",
+    "Roster maximum reached": "Se alcanzó el máximo de jugadores.",
+    "Offer exceeds cap room": "La oferta supera el espacio salarial actual.",
+    "Salary outside verified minimum and maximum":
+      "El salario está fuera de los límites verificados.",
+    "Explicitly enrolled active teamless player without an agreement required":
+      "El jugador ya no está disponible en el mercado inscrito.",
+    "Active explicitly enrolled player required": "El jugador ya no está activo.",
+    "Offer season must match the supported game financial season":
+      "La temporada de la oferta ya no está disponible.",
+    "Stored offer terms are outside supported bounds":
+      "Los términos guardados están fuera de los límites admitidos.",
+    "Offer team does not match the selected game team":
+      "La oferta no pertenece al equipo seleccionado.",
+    "AI team does not participate in this game": "El equipo de IA no participa en esta partida.",
+  },
   common: {
     loading: "Cargando...",
     error: "Ocurrió un error",
@@ -79,6 +152,18 @@ export const es: Messages = {
     weekdaySat: "Sáb",
   },
   dashboard: {
+    rosterActions: "Acciones",
+    releasePlayer: "Cortar",
+    confirmReleasePlayer: "Confirmar corte",
+    releasingPlayer: "Cortando…",
+    releasePlayerFailed: "No se pudo cortar al jugador.",
+    releasePlayerDescription:
+      "El jugador saldrá del roster y quedará disponible de inmediato en la agencia libre de esta partida. Los salarios garantizados, incluidos aquellos cuya garantía no está verificada, seguirán contando en la nómina. Esta acción no se puede deshacer.",
+    releasedSalary: "Cargos por jugadores cortados",
+    releaseChargesFailed:
+      "No se pudieron cargar los cargos por jugadores cortados. La nómina no está disponible.",
+    standardPlayers: "Plantilla estándar",
+    twoWayPlayers: "jugadores two-way (cupos separados)",
     dashboard: "Panel",
     roster: "Plantel",
     calendar: "Calendario",

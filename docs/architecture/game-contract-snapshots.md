@@ -10,15 +10,28 @@ contracts into normalized game-owned agreement, season, and provenance tables. C
 eligibility is a gate: inactive players are excluded before salary resolution and can never receive
 an estimate. Eligible active players then follow a strict hierarchy: observed Basketball-Reference
 current salary, official NBA G League two-way classification, then a versioned years-of-service
-minimum estimate. In the current/preseason roster-refresh path only, an unmatched roster-only
-player whose ESPN experience is `NULL` may use the 0-years-of-service minimum as an explicit
-estimated assumption. The classification records
-`current-roster-espn-omitted-experience-minimum` and
-`espn-omitted-experience-assumed-zero-years-of-service`; it remains standard cap and matching
-salary treatment, has no Basketball-Reference provenance, and receives the 2026-27 rookie minimum
-of $1,357,763. A matched source player with missing experience, an unavailable two-way source, or
-any other blocked condition remains `unclassified` and blocks activation; no global `NULL`-to-zero
-conversion or fabricated $0 contract is permitted.
+minimum estimate. In the current/preseason roster-refresh path only, an active player whose ESPN
+experience is `NULL` may receive an explicit age-based minimum estimate, whether or not their
+identity matches Basketball-Reference. Observed salary and known years of service always take
+precedence over the age heuristic.
+
+| ESPN age when experience is missing | Assumed service | 2026-27 minimum |
+| --- | --- | --- |
+| Over 30 | 10+ years | $3,876,529 |
+| 30 or younger, or unknown age | 0 years | $1,357,763 |
+
+The server passes the successful refresh run ID into materialization and reads age by ESPN player
+ID from that run's `roster_refresh_staging.payload`. Age is validated and staged with the roster;
+no additional player column is required. A failed staging read aborts materialization rather than
+silently replacing veteran estimates with rookie estimates.
+
+The classification records `current-roster-espn-omitted-experience-minimum`, the observed age
+(nullable), and the assumed service. Its assumption is
+`espn-omitted-experience-age-over-30-assumed-ten-years-of-service` for the veteran estimate or
+`espn-omitted-experience-assumed-zero-years-of-service` otherwise. It retains standard cap and
+matching salary treatment; the estimated agreement has no Basketball-Reference salary provenance.
+An unavailable two-way source or minimum schedule still blocks activation. No global `NULL`-to-zero
+experience conversion or fabricated $0 contract is permitted.
 Unknown salary, agreement boundaries, and season guarantee remain `NULL` / `unknown`. Every source
 season is copied, including a sixth season and each season's independent option.
 
@@ -33,10 +46,10 @@ Two-way cash compensation remains nullable and is excluded from standard cap tot
 matching. Estimated minimums are standard salary but carry `estimated` provenance. The complete
 2026-27 years-of-service schedule is versioned from Hoops Rumors' 2026-07-01 table (created with
 RealGM data), observed 2026-08-24: https://www.hoopsrumors.com/2026/07/nba-minimum-salaries-for-2026-27.html.
-Unknown ESPN experience remains a typed blocker outside that narrow current-roster exception and
-is never globally treated as rookie experience. The exception is risky because an ESPN omission can
-conceal veteran service; therefore it requires an unmatched source identity, active roster status,
-a confirmed two-way lookup, and the explicit current-roster policy flag. Nick Smith Jr. is a bounded
+Unknown ESPN experience remains a typed blocker outside that current-roster exception and
+is never globally treated as rookie experience. Age is a gameplay heuristic, not evidence of actual
+NBA service, and may overestimate or underestimate salary. The exception requires active roster
+status, a confirmed two-way lookup, and the current refresh run context. Nick Smith Jr. is a bounded
 curated inactive exception based on the 2026-06-29 declined Lakers option; Spotrac is not bulk-fetched.
 
 No browser can materialize or mutate these copies. Authenticated users have owner-scoped read-only

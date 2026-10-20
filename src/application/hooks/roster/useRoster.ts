@@ -3,7 +3,7 @@ import {
   CONTRACT_IDENTITY_RESOLUTION_STATUS,
   type GamePlayerContractState,
 } from "@/domain/contracts/GameContract";
-import type { Contract } from "@/domain/entities/Contract";
+import { CONTRACT_ORIGIN, type Contract } from "@/domain/entities/Contract";
 import type { Player } from "@/domain/entities/Player";
 import { SupabaseGameContractRepository } from "@/infrastructure/contracts/SupabaseGameContractRepository";
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
@@ -53,17 +53,21 @@ export function useRoster(gameId: string | null, teamId: string | null) {
       for (const playerState of playerStates) {
         const player = playerById.get(playerState.playerId);
         const gameContract = gameContractByPlayerId.get(playerState.playerId) ?? null;
+        const contract = contractByPlayerId.get(playerState.playerId) ?? null;
 
         if (
           !player ||
-          gameContract?.resolutionStatus === CONTRACT_IDENTITY_RESOLUTION_STATUS.INACTIVE_EXCLUDED
+          !playerState.isActive ||
+          (contract?.origin !== CONTRACT_ORIGIN.SIMULATED_AGREEMENT &&
+            gameContract?.resolutionStatus ===
+              CONTRACT_IDENTITY_RESOLUTION_STATUS.INACTIVE_EXCLUDED)
         ) {
           continue;
         }
 
         rosterPlayers.push({
           player,
-          contract: contractByPlayerId.get(player.id) ?? null,
+          contract,
           gameContract,
         });
       }

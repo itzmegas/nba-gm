@@ -6,14 +6,19 @@ export class SupabasePlayerRepository implements PlayerRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async getAll(): Promise<Player[]> {
-    const { data, error } = await this.client
-      .from("players")
-      .select("*")
-      .order("last_name", { ascending: true });
-
-    if (error) throw new Error(error.message);
-
-    return data.map(this.mapToEntity);
+    const players: Player[] = [];
+    const pageSize = 500;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await this.client
+        .from("players")
+        .select("*")
+        .order("last_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      players.push(...data.map(this.mapToEntity));
+      if (data.length < pageSize) return players;
+    }
   }
 
   async getById(id: string): Promise<Player | null> {

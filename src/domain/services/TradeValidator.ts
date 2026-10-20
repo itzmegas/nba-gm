@@ -87,7 +87,10 @@ export class TradeValidator {
     currentYear: number
   ): TeamTradeDetails {
     const teamId = outgoingPackage.teamId;
-    const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(team.contracts);
+    const currentTotalSalary = this.salaryCapCalc.calculateTotalSalary(
+      team.contracts,
+      team.releaseCapCharge ?? 0
+    );
 
     const outgoingSalary = outgoingPackage.outgoingAssets
       .filter((asset) => asset.type === "player" && asset.contract)

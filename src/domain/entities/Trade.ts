@@ -119,6 +119,7 @@ export interface TradePackage {
 export interface TradeTeamSnapshot {
   contracts: Contract[];
   rosterSize: number;
+  releaseCapCharge?: number;
   hardCapLimit?: number;
 }
 

@@ -72,4 +72,16 @@ describe("roster contract presentation", () => {
     ).toBe(false);
     expect(shouldRenderRosterPlayer(rosterPlayer(null))).toBe(true);
   });
+
+  it("uses a newly signed standard agreement instead of the released imported classification", () => {
+    const signed = {
+      ...rosterPlayer({
+        resolutionStatus: "inactive-excluded",
+        contractType: "two-way",
+      } as RosterPlayer["gameContract"]),
+      contract: { origin: "simulated-agreement" },
+    } as unknown as RosterPlayer;
+    expect(shouldRenderRosterPlayer(signed)).toBe(true);
+    expect(getRosterContractClassification(signed).label).toBe("Standard");
+  });
 });

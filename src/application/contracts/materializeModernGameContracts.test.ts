@@ -268,7 +268,7 @@ describe("materializeModernGameContracts", () => {
     expect(extras[4]).toMatchObject({ capTreatment: "standard-cap-and-matching", estimated: true });
   });
 
-  it("materializes a Jameer-like unmatched roster player with the current-roster estimate", async () => {
+  it("materializes matched and unmatched players with missing experience using current-roster ages", async () => {
     const rpc = vi.fn(async () => ({ data: { status: "materialized" }, error: null }));
     const rosterRows: TestRosterRow[] = NBA_TO_BASKETBALL_REFERENCE_TEAMS.map(
       ({ nbaAbbreviation }, index) => ({
@@ -277,11 +277,19 @@ describe("materializeModernGameContracts", () => {
         teams: { abbreviation: nbaAbbreviation },
       })
     );
-    rosterRows.push({
-      player_id: playerId(100),
-      players: { espn_id: 10_001, full_name: "Jameer Nelson Jr.", years_of_experience: null },
-      teams: { abbreviation: "PHI" },
-    });
+    const estimates = [
+      [100, 10_001, "Jameer Nelson Jr.", "PHI", null, false, 1_357_763],
+      [101, 4_701_819, "Jalon Moore", "NOP", 23, true, 1_357_763],
+      [102, 4_897_696, "Jamarion Sharp", "TOR", 25, true, 1_357_763],
+      [103, 10_004, "Veteran Without Experience", "TOR", 31, true, 3_876_529],
+    ] as const;
+    rosterRows.push(
+      ...estimates.map(([id, espnId, fullName, team]) => ({
+        player_id: playerId(id),
+        players: { espn_id: espnId, full_name: fullName, years_of_experience: null },
+        teams: { abbreviation: team },
+      }))
+    );
     const baseCache = cacheWithFailure();
     const cache: ContractSnapshotCache<BasketballReferenceContractSnapshot> = {
       ...baseCache,
@@ -297,24 +305,47 @@ describe("materializeModernGameContracts", () => {
               ...value.snapshot.metadata,
               cacheIdentity: { ...value.snapshot.metadata.cacheIdentity, season: "2026-27" },
             },
-            contracts: value.snapshot.contracts.map((contract) => ({
-              ...contract,
-              salaries: contract.salaries.map((salary) => ({ ...salary, season: "2026-27" })),
-            })),
+            contracts: [
+              ...value.snapshot.contracts.map((contract) => ({
+                ...contract,
+                salaries: contract.salaries.map((salary) => ({ ...salary, season: "2026-27" })),
+              })),
+              ...estimates
+                .filter(([, , , team, , matched]) => matched && team === identity.team)
+                .map(([id, , fullName, team]) => ({
+                  playerSlug: `estimate${id}`,
+                  playerUrl: `https://www.basketball-reference.com/players/e/estimate${id}.html`,
+                  fullName,
+                  teamAbbreviation: team,
+                  salaries: [{ season: "2026-27", amount: null, optionKind: "none" as const }],
+                  remainingGuaranteedAmount: null,
+                  contractNotes: null,
+                })),
+            ],
           },
         };
       }),
     };
     const eq = vi.fn(async () => ({ data: rosterRows, error: null }));
+    const stagingEq = vi.fn(async () => ({
+      data: estimates.map(([, espnId, , , age]) => ({
+        player_source_id: espnId,
+        payload: { age },
+      })),
+      error: null,
+    }));
+    const from = vi.fn((table: string) => ({
+      select: vi.fn(() => ({ eq: table === "roster_refresh_staging" ? stagingEq : eq })),
+    }));
 
     await materializeModernGameContracts({
       gameId: "11111111-1111-4111-8111-111111111111",
       userId: "22222222-2222-4222-8222-222222222222",
       seasonYear: 2026,
       cache,
-      serviceClient: { from: vi.fn(() => ({ select: vi.fn(() => ({ eq })) })), rpc } as never,
+      serviceClient: { from, rpc } as never,
       ttlMs: Number.MAX_SAFE_INTEGER,
-      allowUnmatchedRosterExperienceFallback: true,
+      rosterRefreshRunId: "33333333-3333-4333-8333-333333333333",
       fetchTwoWayTracker: async () => ({
         sourceUrl: "https://gleague.nba.com/twowayplayers",
         observedAt: now,
@@ -335,21 +366,49 @@ describe("materializeModernGameContracts", () => {
         },
       ]
     )[1];
-    const classification = params.p_contract_classifications.at(-1);
-    expect(classification).toMatchObject({
-      sourcePlayerId: null,
-      resolution: {
-        status: "resolved",
-        salaryAmount: 1_357_763,
-        estimated: true,
-        method: "current-roster-espn-omitted-experience-minimum",
-        capTreatment: "standard-cap-and-matching",
-        evidence: {
-          assumption: "espn-omitted-experience-assumed-zero-years-of-service",
+    expect(stagingEq).toHaveBeenCalledWith("run_id", "33333333-3333-4333-8333-333333333333");
+    for (const [id, , , , age, matched, salaryAmount] of estimates) {
+      const classification = params.p_contract_classifications.find(
+        ({ targetPlayerId }) => targetPlayerId === playerId(id)
+      );
+      expect(classification).toMatchObject({
+        sourcePlayerId: matched ? `estimate${id}` : null,
+        resolution: {
+          status: "resolved",
+          salaryAmount,
+          estimated: true,
+          method: "current-roster-espn-omitted-experience-minimum",
+          capTreatment: "standard-cap-and-matching",
+          evidence: { age, assumedYearsOfService: age !== null && age > 30 ? 10 : 0 },
         },
-      },
-    });
-    expect(JSON.stringify(classification)).not.toContain("basketball-reference");
+      });
+      expect(JSON.stringify(classification)).not.toContain("basketball-reference");
+    }
+  });
+
+  it("fails rather than assuming rookie service when current-roster ages cannot be loaded", async () => {
+    const rpc = vi.fn();
+    const from = vi.fn((table: string) => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(async () =>
+          table === "roster_refresh_staging"
+            ? { data: null, error: { message: "staging unavailable" } }
+            : { data: [], error: null }
+        ),
+      })),
+    }));
+    await expect(
+      materializeModernGameContracts({
+        gameId: "11111111-1111-4111-8111-111111111111",
+        userId: "22222222-2222-4222-8222-222222222222",
+        seasonYear: 2025,
+        cache: cacheWithFailure(),
+        serviceClient: { from, rpc } as never,
+        ttlMs: Number.MAX_SAFE_INTEGER,
+        rosterRefreshRunId: "33333333-3333-4333-8333-333333333333",
+      })
+    ).rejects.toThrow("Failed to load current-roster ages: staging unavailable");
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("reports bounded actionable fallback coverage failures for the 2026-27 branch", async () => {

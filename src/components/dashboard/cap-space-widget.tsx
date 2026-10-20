@@ -2,7 +2,10 @@
 
 import { AlertTriangle, DollarSign } from "lucide-react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
+import { useGame } from "@/application/hooks/games/useGame";
+import { useReleaseCapCharge } from "@/application/hooks/roster/useReleasePlayer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
 import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 const formatCurrency = (amount: number) => {
@@ -20,10 +23,16 @@ interface CapSpaceWidgetProps {
 
 export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
   const { data: contracts, isLoading } = useTeamContracts(gameId, teamId);
+  const { data: game } = useGame(gameId);
+  const releaseCapCharge = useReleaseCapCharge(gameId, teamId, game?.seasonYear ?? 2026);
+  const thresholds = getSalaryCapThresholds(game?.seasonYear ?? 2026);
 
-  const calculator = new SalaryCapCalculator();
+  const calculator = new SalaryCapCalculator(thresholds);
 
-  const status = contracts ? calculator.getFinancialStatus(contracts) : null;
+  const status =
+    contracts && releaseCapCharge.data !== undefined
+      ? calculator.getFinancialStatus(contracts, releaseCapCharge.data)
+      : null;
 
   if (isLoading || !status) {
     return (
@@ -41,9 +50,9 @@ export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
     );
   }
 
-  const SALARY_CAP = 140_000_000;
-  const LUXURY_TAX = 170_000_000;
-  const FIRST_APRON = 178_000_000;
+  const SALARY_CAP = thresholds.salaryCap;
+  const LUXURY_TAX = thresholds.luxuryTax;
+  const FIRST_APRON = thresholds.firstApron;
 
   const capPercentage = Math.min((status.totalSalary / SALARY_CAP) * 100, 100);
 

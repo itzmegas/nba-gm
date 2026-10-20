@@ -21,6 +21,7 @@ describe("fetchCurrentRosterForTeam", () => {
             firstName: "Luka",
             lastName: "Doncic",
             fullName: "Luka Doncic",
+            age: 27,
             jersey: "77",
             position: { abbreviation: "PG" },
             experience: { years: 8 },
@@ -56,6 +57,7 @@ describe("fetchCurrentRosterForTeam", () => {
             lastName: "Doncic",
             fullName: "Luka Doncic",
             displayHeight: "6' 6\"",
+            age: 27,
             displayWeight: "230 lbs",
             jersey: "77",
             position: { abbreviation: "PG" },
@@ -76,6 +78,7 @@ describe("fetchCurrentRosterForTeam", () => {
           first_name: "Luka",
           last_name: "Doncic",
           full_name: "Luka Doncic",
+          age: 27,
           position: "PG",
           height: "6' 6\"",
           weight: "230 lbs",
@@ -99,6 +102,7 @@ describe("fetchCurrentRosterForTeam", () => {
         payload: expect.objectContaining({
           full_name: "Luka Doncic",
           years_of_experience: 8,
+          age: 27,
         }),
       }),
       expect.objectContaining({
@@ -107,6 +111,7 @@ describe("fetchCurrentRosterForTeam", () => {
         payload: expect.objectContaining({
           full_name: "Jaxson Hayes",
           years_of_experience: 6,
+          age: null,
         }),
       }),
     ]);

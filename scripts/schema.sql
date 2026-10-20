@@ -1974,3 +1974,2290 @@ GRANT EXECUTE ON FUNCTION materialize_game_contract_snapshots(UUID, UUID, TEXT, 
 
 COMMIT;
 -- End canonical schema mirror for migration 019.
+-- Canonical schema mirror for migration 020. Keep byte-identical below.
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS free_agency_availability_enrollments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  evidence_kind TEXT NOT NULL CHECK (evidence_kind = 'simulation-bootstrap-enrollment'),
+  enrolled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (game_id, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS free_agency_pending_offers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL,
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
+  season TEXT NOT NULL CHECK (season ~ '^\d{4}-\d{2}$'),
+  annual_salary BIGINT NOT NULL CHECK (annual_salary > 0),
+  years INTEGER NOT NULL CHECK (years BETWEEN 1 AND 5),
+  due_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status = 'pending'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, game_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_free_agency_pending_offers_game_status
+  ON free_agency_pending_offers(game_id, status, due_date);
+
+ALTER TABLE free_agency_availability_enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE free_agency_pending_offers ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE free_agency_availability_enrollments, free_agency_pending_offers
+  FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE free_agency_pending_offers TO authenticated;
+CREATE POLICY free_agency_pending_offers_owner_read ON free_agency_pending_offers
+  FOR SELECT TO authenticated USING (owner_id = auth.uid());
+
+CREATE OR REPLACE FUNCTION enroll_simulated_free_agents(p_game_id UUID, p_player_ids UUID[])
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_player_id UUID;
+  v_count INTEGER := 0;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  IF p_player_ids IS NULL OR cardinality(p_player_ids) = 0
+     OR cardinality(ARRAY(SELECT DISTINCT unnest(p_player_ids))) <> cardinality(p_player_ids) THEN
+    RAISE EXCEPTION 'Explicit unique player ids are required';
+  END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id FOR UPDATE;
+  IF NOT FOUND OR v_game.status <> 'active' OR v_game.season_era_id <> 'modern' OR v_game.deleted_at IS NOT NULL
+     OR NOT EXISTS (SELECT 1 FROM game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Active game with materialized contract coverage required';
+  END IF;
+  FOREACH v_player_id IN ARRAY p_player_ids LOOP
+    IF NOT EXISTS (SELECT 1 FROM players p WHERE p.id = v_player_id AND p.is_active)
+       OR EXISTS (SELECT 1 FROM contracts c WHERE c.game_id = p_game_id AND c.player_id = v_player_id)
+       OR EXISTS (SELECT 1 FROM game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = v_player_id) THEN
+      RAISE EXCEPTION 'Player is inactive or has a current game agreement';
+    END IF;
+    INSERT INTO game_player_states(game_id, player_id, team_id, is_active)
+    VALUES (p_game_id, v_player_id, NULL, true)
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM game_player_states s WHERE s.game_id = p_game_id
+      AND s.player_id = v_player_id AND s.team_id IS NULL AND s.is_active) THEN
+      RAISE EXCEPTION 'Player is not active and teamless in this game';
+    END IF;
+    INSERT INTO free_agency_availability_enrollments(game_id, player_id, evidence_kind)
+    VALUES (p_game_id, v_player_id, 'simulation-bootstrap-enrollment')
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END;
+$$;
+REVOKE ALL ON FUNCTION enroll_simulated_free_agents(UUID, UUID[]) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION enroll_simulated_free_agents(UUID, UUID[]) TO service_role;
+
+CREATE OR REPLACE FUNCTION submit_free_agency_offer(
+  p_game_id UUID, p_player_id UUID, p_request_id UUID, p_season TEXT,
+  p_annual_salary BIGINT, p_years INTEGER
+) RETURNS free_agency_pending_offers
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_player players%ROWTYPE;
+  v_state game_player_states%ROWTYPE;
+  v_existing free_agency_pending_offers%ROWTYPE;
+  v_offer free_agency_pending_offers%ROWTYPE;
+  v_payroll BIGINT;
+  v_minimum BIGINT;
+  v_cap BIGINT;
+  v_maximum BIGINT;
+  v_cap_room BIGINT;
+  v_service_years INTEGER;
+  v_roster_count INTEGER;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() <> 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF p_request_id IS NULL OR p_player_id IS NULL OR p_game_id IS NULL
+     OR p_annual_salary IS NULL OR p_annual_salary <= 0 OR p_years IS NULL OR p_years NOT BETWEEN 1 AND 5
+     OR p_season IS NULL OR p_season !~ '^\d{4}-\d{2}$'
+     OR split_part(p_season, '-', 2)::INTEGER <> (split_part(p_season, '-', 1)::INTEGER + 1) % 100 THEN
+    RAISE EXCEPTION 'Invalid offer terms';
+  END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active game required'; END IF;
+  SELECT * INTO v_existing FROM free_agency_pending_offers
+    WHERE owner_id = auth.uid() AND game_id = p_game_id AND request_id = p_request_id;
+  IF FOUND THEN
+    IF (v_existing.player_id, v_existing.team_id, v_existing.season, v_existing.annual_salary, v_existing.years)
+       IS DISTINCT FROM (p_player_id, v_game.selected_team_id, p_season, p_annual_salary, p_years) THEN
+      RAISE EXCEPTION 'Idempotency key reused with changed offer payload';
+    END IF;
+    RETURN v_existing;
+  END IF;
+  SELECT * INTO v_player FROM players WHERE id = p_player_id AND is_active;
+  SELECT * INTO v_state FROM game_player_states WHERE game_id = p_game_id AND player_id = p_player_id FOR UPDATE;
+  IF NOT FOUND OR v_state.team_id IS NOT NULL OR NOT v_state.is_active
+     OR NOT EXISTS (SELECT 1 FROM free_agency_availability_enrollments e
+       WHERE e.game_id = p_game_id AND e.player_id = p_player_id
+         AND e.evidence_kind = 'simulation-bootstrap-enrollment')
+     OR EXISTS (SELECT 1 FROM contracts c WHERE c.game_id = p_game_id AND c.player_id = p_player_id)
+     OR EXISTS (SELECT 1 FROM game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = p_player_id) THEN
+    RAISE EXCEPTION 'Explicitly enrolled active teamless player without a game agreement required';
+  END IF;
+  IF p_season <> format('%s-%s', v_game.season_year, right((v_game.season_year + 1)::TEXT, 2)) THEN
+    RAISE EXCEPTION 'Offer season must match current simulation season';
+  END IF;
+  IF p_season <> '2026-27' THEN RAISE EXCEPTION 'Verified minimum salary schedule unavailable'; END IF;
+  v_service_years := LEAST(COALESCE(v_player.years_of_experience, -1), 10);
+  IF v_service_years < 0 THEN RAISE EXCEPTION 'Player years of service are unknown'; END IF;
+  -- These 2026-27 minimums mirror MINIMUM_SALARY_SCHEDULES in src/domain/contracts/MinimumSalarySchedule.ts.
+  v_minimum := (ARRAY[1357763,2185116,2449421,2537526,2625627,2845883,3066143,3286399,3506659,3524115,3876529])[v_service_years + 1];
+  -- Cap projection mirrors NBA_RULES.SALARY_CAP, BASE_SALARY_CAP_SEASON (2024), and MAX_ANNUAL_CAP_GROWTH (1.1) in src/domain/constants/nba-rules.ts.
+  v_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  -- Experience tiers mirror NBA_RULES.MAX_SALARY_TIERS: 25% through year 6, 30% for years 7-9, then 35%.
+  v_maximum := floor(v_cap * CASE WHEN v_service_years <= 6 THEN 0.25 WHEN v_service_years <= 9 THEN 0.30 ELSE 0.35 END);
+  IF p_annual_salary < v_minimum OR p_annual_salary > v_maximum THEN RAISE EXCEPTION 'Salary outside verified minimum and maximum'; END IF;
+  SELECT COALESCE(sum(s.salary_amount), 0) INTO v_payroll FROM game_contract_agreements a
+    JOIN game_contract_seasons s ON s.agreement_id = a.id AND s.game_id = a.game_id
+    JOIN game_player_states state ON state.game_id = a.game_id AND state.player_id = a.player_id
+      AND state.team_id = v_game.selected_team_id
+    WHERE a.game_id = p_game_id AND s.start_year = v_game.season_year;
+  SELECT v_payroll + COALESCE(sum(CASE v_game.season_year - c.start_year
+      WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+      WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE 0 END), 0) INTO v_payroll FROM contracts c
+    JOIN game_player_states state ON state.game_id = c.game_id AND state.player_id = c.player_id
+      AND state.team_id = v_game.selected_team_id
+    WHERE c.game_id = p_game_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+      AND NOT EXISTS (SELECT 1 FROM game_contract_agreements a
+      WHERE a.game_id = c.game_id AND a.player_id = c.player_id);
+  SELECT count(*) INTO v_roster_count FROM game_player_states WHERE game_id = p_game_id AND team_id = v_game.selected_team_id AND is_active;
+  IF v_roster_count >= 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
+  v_cap_room := GREATEST(0, v_cap - v_payroll);
+  IF p_annual_salary > v_cap_room AND p_annual_salary <> v_minimum THEN RAISE EXCEPTION 'Offer exceeds cap room'; END IF;
+  INSERT INTO free_agency_pending_offers(request_id, owner_id, game_id, player_id, team_id,
+    season, annual_salary, years, due_date)
+  VALUES (p_request_id, auth.uid(), p_game_id, p_player_id, v_game.selected_team_id,
+    p_season, p_annual_salary, p_years, v_game.simulation_date + 1)
+  RETURNING * INTO v_offer;
+  RETURN v_offer;
+END;
+$$;
+REVOKE ALL ON FUNCTION submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER) TO authenticated;
+
+CREATE OR REPLACE FUNCTION list_pending_free_agency_offers(p_game_id UUID)
+RETURNS SETOF free_agency_pending_offers
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT o.* FROM free_agency_pending_offers o JOIN games g ON g.id = o.game_id
+  WHERE o.game_id = p_game_id AND o.owner_id = auth.uid() AND g.user_id = auth.uid()
+    AND o.status = 'pending' ORDER BY o.due_date, o.created_at, o.id
+$$;
+REVOKE ALL ON FUNCTION list_pending_free_agency_offers(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION list_pending_free_agency_offers(UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 020.
+
+-- Canonical schema mirror for migration 021. Keep byte-identical below.
+BEGIN;
+
+-- Simulated agreements are game-owned runtime state, never imported observations.
+CREATE TABLE game_runtime_contracts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  origin_kind TEXT NOT NULL CHECK (origin_kind = 'simulated-agreement'),
+  start_year INTEGER NOT NULL,
+  end_year INTEGER NOT NULL CHECK (end_year BETWEEN start_year AND start_year + 4),
+  annual_salary BIGINT NOT NULL CHECK (annual_salary > 0),
+  is_player_option BOOLEAN NOT NULL DEFAULT false,
+  is_team_option BOOLEAN NOT NULL DEFAULT false,
+  is_guaranteed BOOLEAN,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (game_id, player_id),
+  CHECK (NOT (is_player_option AND is_team_option))
+);
+
+CREATE INDEX idx_game_runtime_contracts_game_player
+  ON game_runtime_contracts(game_id, player_id);
+
+ALTER TABLE game_runtime_contracts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY game_runtime_contracts_owner_read ON game_runtime_contracts
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM games g WHERE g.id = game_runtime_contracts.game_id AND g.user_id = auth.uid()
+  ));
+
+REVOKE ALL ON TABLE game_runtime_contracts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE game_runtime_contracts TO authenticated;
+REVOKE ALL ON TABLE game_runtime_contracts FROM service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 021.
+
+-- Canonical schema mirror for migration 022. Keep byte-identical below.
+BEGIN;
+
+-- Imported team IDs are provenance, not mutable roster ownership. Retain the
+-- game/player relation while roster rows move between teams.
+ALTER TABLE game_contract_identities
+  DROP CONSTRAINT IF EXISTS game_contract_identities_game_id_player_id_team_id_fkey;
+ALTER TABLE game_contract_identities
+  ADD CONSTRAINT game_contract_identities_game_player_fkey
+  FOREIGN KEY (game_id, player_id)
+  REFERENCES game_player_states(game_id, player_id) ON DELETE RESTRICT;
+
+ALTER TABLE game_contract_agreements
+  DROP CONSTRAINT IF EXISTS game_contract_agreements_game_id_player_id_team_id_fkey;
+ALTER TABLE game_contract_agreements
+  ADD CONSTRAINT game_contract_agreements_game_player_fkey
+  FOREIGN KEY (game_id, player_id)
+  REFERENCES game_player_states(game_id, player_id) ON DELETE RESTRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS game_player_states_game_player_identity_unique
+  ON game_player_states(game_id, player_id);
+
+ALTER TABLE game_player_states
+  DROP CONSTRAINT IF EXISTS game_player_states_game_player_team_unique;
+
+COMMIT;
+-- End canonical schema mirror for migration 022.
+
+-- Canonical schema mirror for migration 023. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION guard_game_player_state_writes()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    -- Allow existing game-delete cascades, but never direct roster removal.
+    IF NOT EXISTS (SELECT 1 FROM public.games WHERE id = OLD.game_id) THEN
+      RETURN OLD;
+    END IF;
+    RAISE EXCEPTION 'Direct roster deletion is not permitted';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    RAISE EXCEPTION 'Direct roster insertion is not permitted';
+  END IF;
+
+  IF (NEW.game_id, NEW.player_id, NEW.team_id, NEW.is_active)
+     IS DISTINCT FROM (OLD.game_id, OLD.player_id, OLD.team_id, OLD.is_active) THEN
+    RAISE EXCEPTION 'Roster identity, ownership, and eligibility are authoritative';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER game_player_states_write_integrity
+  BEFORE INSERT OR UPDATE OR DELETE ON game_player_states
+  FOR EACH ROW EXECUTE FUNCTION guard_game_player_state_writes();
+REVOKE ALL ON FUNCTION guard_game_player_state_writes() FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION guard_legacy_contract_writes()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+  IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM public.games WHERE id = OLD.game_id) THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION 'Legacy contract identity and salary are authoritative';
+END;
+$$;
+
+CREATE TRIGGER contracts_write_integrity
+  BEFORE INSERT OR UPDATE OR DELETE ON contracts
+  FOR EACH ROW EXECUTE FUNCTION guard_legacy_contract_writes();
+REVOKE ALL ON FUNCTION guard_legacy_contract_writes() FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION guard_game_clock_writes()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF current_user IN ('authenticated', 'anon') AND (
+    NEW.user_id IS DISTINCT FROM OLD.user_id
+    OR NEW.selected_team_id IS DISTINCT FROM OLD.selected_team_id
+    OR NEW.season_year IS DISTINCT FROM OLD.season_year
+    OR NEW.season_era_id IS DISTINCT FROM OLD.season_era_id
+    OR NEW.simulation_date IS DISTINCT FROM OLD.simulation_date
+    OR (NEW.status = 'initializing' AND OLD.status <> 'initializing')
+  ) THEN
+    RAISE EXCEPTION 'Game ownership, identity, and simulation clock are authoritative';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER games_write_integrity
+  BEFORE UPDATE ON games
+  FOR EACH ROW EXECUTE FUNCTION guard_game_clock_writes();
+REVOKE ALL ON FUNCTION guard_game_clock_writes() FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 023.
+
+-- Canonical schema mirror for migration 024. Keep byte-identical below.
+BEGIN;
+
+-- Trades and later signing transactions share a game-first lock order.
+CREATE OR REPLACE FUNCTION execute_trade_transactional(
+  p_game_id UUID,
+  p_team_a_id UUID,
+  p_team_b_id UUID,
+  p_assets JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_trade_id UUID;
+  v_asset JSONB;
+  v_type TEXT;
+  v_id UUID;
+  v_from UUID;
+  v_to UUID;
+  v_pick game_pick_inventory%ROWTYPE;
+  v_state game_player_states%ROWTYPE;
+  v_metadata JSONB;
+  v_contract contracts%ROWTYPE;
+  v_contract_count INTEGER;
+  v_updated_count INTEGER;
+BEGIN
+  SELECT * INTO v_game FROM games WHERE id = p_game_id AND user_id = auth.uid() FOR UPDATE;
+  IF NOT FOUND OR p_team_a_id = p_team_b_id THEN
+    RAISE EXCEPTION 'Game or participating teams are invalid';
+  END IF;
+  IF jsonb_typeof(p_assets) <> 'array' OR jsonb_array_length(p_assets) < 2 THEN
+    RAISE EXCEPTION 'A trade requires assets from both teams';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_assets) a WHERE NOT (a ? 'asset_type' AND a ? 'asset_id' AND a ? 'from_team_id'))
+    OR (SELECT count(*) FROM jsonb_array_elements(p_assets) a WHERE a->>'from_team_id' = p_team_a_id::TEXT) = 0
+    OR (SELECT count(*) FROM jsonb_array_elements(p_assets) a WHERE a->>'from_team_id' = p_team_b_id::TEXT) = 0 THEN
+    RAISE EXCEPTION 'Each team must send at least one asset';
+  END IF;
+  IF (SELECT count(*) FROM jsonb_array_elements(p_assets) a) <> (
+    SELECT count(DISTINCT (a->>'asset_type') || ':' || (a->>'asset_id')) FROM jsonb_array_elements(p_assets) a
+  ) THEN
+    RAISE EXCEPTION 'Duplicate trade asset';
+  END IF;
+
+  INSERT INTO executed_trades (game_id, team_a_id, team_b_id)
+  VALUES (p_game_id, p_team_a_id, p_team_b_id) RETURNING id INTO v_trade_id;
+  FOR v_asset IN SELECT * FROM jsonb_array_elements(p_assets) LOOP
+    v_type := v_asset->>'asset_type';
+    v_id := (v_asset->>'asset_id')::UUID;
+    v_from := (v_asset->>'from_team_id')::UUID;
+    v_to := CASE WHEN v_from = p_team_a_id THEN p_team_b_id ELSE p_team_a_id END;
+    IF v_from NOT IN (p_team_a_id, p_team_b_id) OR v_type NOT IN ('player', 'pick') THEN
+      RAISE EXCEPTION 'Asset does not belong to this trade';
+    END IF;
+    IF v_type = 'player' THEN
+      SELECT * INTO v_state FROM game_player_states
+      WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE;
+      IF NOT FOUND OR v_state.team_id IS DISTINCT FROM v_from THEN
+        RAISE EXCEPTION 'Player ownership is stale or invalid';
+      END IF;
+      SELECT count(*) INTO v_contract_count FROM contracts
+      WHERE game_id = p_game_id AND player_id = v_id;
+      IF v_contract_count = 0 AND NOT EXISTS (
+        SELECT 1 FROM game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = v_id
+      ) THEN
+        RAISE EXCEPTION 'Player contract is missing';
+      END IF;
+      UPDATE game_player_states SET team_id = v_to, updated_at = now() WHERE id = v_state.id;
+      IF v_contract_count > 0 THEN
+        FOR v_contract IN SELECT * FROM contracts
+          WHERE game_id = p_game_id AND player_id = v_id FOR UPDATE LOOP
+          IF v_contract.team_id IS DISTINCT FROM v_from THEN
+            RAISE EXCEPTION 'Player contract ownership is stale or invalid';
+          END IF;
+        END LOOP;
+        UPDATE contracts SET team_id = v_to, updated_at = now()
+        WHERE game_id = p_game_id AND player_id = v_id AND team_id = v_from;
+        GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+        IF v_updated_count <> v_contract_count THEN
+          RAISE EXCEPTION 'Player contract transfer was incomplete';
+        END IF;
+      END IF;
+      v_metadata := jsonb_build_object('player_id', v_id);
+    ELSE
+      SELECT * INTO v_pick FROM game_pick_inventory
+      WHERE game_id = p_game_id AND id = v_id FOR UPDATE;
+      IF NOT FOUND OR v_pick.owner_team_id IS DISTINCT FROM v_from OR NOT v_pick.is_transferable THEN
+        RAISE EXCEPTION 'Draft pick ownership is stale or invalid';
+      END IF;
+      SELECT jsonb_build_object('pick_id', p.id, 'draft_year', p.draft_year,
+        'draft_round', p.draft_round, 'protection', p.protection,
+        'original_team_id', p.original_team_id)
+      INTO v_metadata FROM draft_picks p WHERE p.id = v_pick.draft_pick_id;
+      UPDATE game_pick_inventory SET owner_team_id = v_to, updated_at = now() WHERE id = v_pick.id;
+    END IF;
+    INSERT INTO trade_asset_snapshots (executed_trade_id, asset_type, asset_id, from_team_id, to_team_id, metadata)
+    VALUES (v_trade_id, v_type, v_id, v_from, v_to, coalesce(v_metadata, '{}'::jsonb));
+  END LOOP;
+  RETURN v_trade_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION execute_trade_transactional(UUID, UUID, UUID, JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION execute_trade_transactional(UUID, UUID, UUID, JSONB) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 024.
+
+-- Canonical schema mirror for migration 025. Keep byte-identical below.
+BEGIN;
+
+ALTER TABLE public.free_agency_pending_offers
+  DROP CONSTRAINT IF EXISTS free_agency_pending_offers_status_check;
+ALTER TABLE public.free_agency_pending_offers
+  ADD COLUMN resolved_at TIMESTAMPTZ,
+  ADD COLUMN resolved_date DATE,
+  ADD COLUMN resolution_reason TEXT,
+  ADD COLUMN resolved_contract_id UUID,
+  ADD CONSTRAINT free_agency_pending_offers_status_check
+    CHECK (status IN ('pending', 'accepted', 'rejected')),
+  ADD CONSTRAINT free_agency_pending_offers_resolution_state_check CHECK (
+    (status = 'pending' AND resolved_at IS NULL AND resolved_date IS NULL
+      AND resolution_reason IS NULL AND resolved_contract_id IS NULL)
+    OR (status = 'accepted' AND resolved_at IS NOT NULL AND resolved_date IS NOT NULL
+      AND resolution_reason IS NOT DISTINCT FROM 'selected_offer_accepted' AND resolved_contract_id IS NOT NULL)
+    OR (status = 'rejected' AND resolved_at IS NOT NULL AND resolved_date IS NOT NULL
+      AND resolution_reason IS NOT DISTINCT FROM 'another_offer_accepted' AND resolved_contract_id IS NULL)
+  );
+
+ALTER TABLE public.game_runtime_contracts ADD COLUMN source_offer_id UUID;
+CREATE UNIQUE INDEX game_runtime_contracts_id_game_player_unique
+  ON public.game_runtime_contracts(id, game_id, player_id);
+CREATE UNIQUE INDEX free_agency_pending_offers_id_game_player_unique
+  ON public.free_agency_pending_offers(id, game_id, player_id);
+ALTER TABLE public.game_runtime_contracts
+  ADD CONSTRAINT game_runtime_contracts_source_offer_game_player_fkey
+    FOREIGN KEY (source_offer_id, game_id, player_id)
+    REFERENCES public.free_agency_pending_offers(id, game_id, player_id) ON DELETE RESTRICT;
+ALTER TABLE public.free_agency_pending_offers
+  ADD CONSTRAINT free_agency_pending_offers_resolved_contract_game_player_fkey
+    FOREIGN KEY (resolved_contract_id, game_id, player_id)
+    REFERENCES public.game_runtime_contracts(id, game_id, player_id) ON DELETE RESTRICT;
+
+CREATE OR REPLACE FUNCTION public.get_free_agency_financial_context(
+  p_game_id UUID,
+  p_player_id UUID
+)
+RETURNS TABLE (
+  selected_team_id UUID,
+  season_year INTEGER,
+  simulation_date DATE,
+  salary_cap BIGINT,
+  payroll BIGINT,
+  cap_room BIGINT,
+  roster_count INTEGER,
+  service_years INTEGER,
+  minimum_salary BIGINT,
+  maximum_salary BIGINT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_player public.players%ROWTYPE;
+  v_payroll NUMERIC := 0;
+BEGIN
+  SELECT g.* INTO v_game
+  FROM public.games g
+  WHERE g.id = p_game_id
+    AND g.user_id = auth.uid()
+    AND g.status = 'active'
+    AND g.season_era_id = 'modern'
+    AND g.deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+
+  SELECT p.* INTO v_player FROM public.players p
+  WHERE p.id = p_player_id AND p.is_active;
+  IF NOT FOUND OR v_player.years_of_experience IS NULL
+     OR v_player.years_of_experience NOT BETWEEN 0 AND 99 THEN
+    RAISE EXCEPTION 'Active player with known years of service required';
+  END IF;
+  IF v_game.season_year <> 2026 THEN
+    RAISE EXCEPTION 'Verified minimum salary schedule unavailable for game season';
+  END IF;
+
+  -- Keep verified minimums/cap projection aligned with MinimumSalarySchedule and nba-rules.
+  service_years := LEAST(v_player.years_of_experience, 10);
+  minimum_salary := (ARRAY[
+    1357763, 2185116, 2449421, 2537526, 2625627, 2845883,
+    3066143, 3286399, 3506659, 3524115, 3876529
+  ]::BIGINT[])[service_years + 1];
+  salary_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  maximum_salary := floor(
+    salary_cap * CASE WHEN service_years <= 6 THEN 0.25 WHEN service_years <= 9 THEN 0.30 ELSE 0.35 END
+  )::BIGINT;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.game_player_states s
+    LEFT JOIN public.game_runtime_contracts r
+      ON r.game_id = s.game_id AND r.player_id = s.player_id
+    LEFT JOIN public.game_contract_identities i
+      ON i.game_id = s.game_id AND i.player_id = s.player_id
+    LEFT JOIN public.game_contract_agreements a
+      ON a.game_id = s.game_id AND a.player_id = s.player_id
+    LEFT JOIN public.game_contract_seasons cs
+      ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+      AND cs.start_year = v_game.season_year
+    WHERE s.game_id = p_game_id
+      AND s.team_id = v_game.selected_team_id
+      AND r.id IS NULL
+      AND (
+        (i.player_id IS NOT NULL AND i.cap_treatment = 'standard-cap-and-matching'
+          AND (a.id IS NULL OR a.cap_treatment <> 'standard-cap-and-matching'
+            OR cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (a.id IS NOT NULL AND a.cap_treatment = 'standard-cap-and-matching'
+          AND (cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (i.player_id IS NULL AND a.id IS NULL AND NOT EXISTS (
+          SELECT 1 FROM public.contracts c
+          WHERE c.game_id = s.game_id AND c.player_id = s.player_id
+        ))
+      )
+  ) THEN
+    RAISE EXCEPTION 'Canonical current-season standard salary context is incomplete';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.contracts c
+    JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    WHERE c.game_id = p_game_id AND s.team_id = v_game.selected_team_id
+      AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+        WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+        WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+        WHERE r.game_id = c.game_id AND r.player_id = c.player_id)
+      AND (
+        (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) IS NULL
+        OR (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) < 0
+      )
+  ) THEN
+    RAISE EXCEPTION 'Legacy current-season salary context is incomplete';
+  END IF;
+
+  SELECT COALESCE(sum(cs.salary_amount), 0) INTO v_payroll
+  FROM public.game_contract_agreements a
+  JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+    AND cs.start_year = v_game.season_year
+  JOIN public.game_player_states s ON s.game_id = a.game_id AND s.player_id = a.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE a.game_id = p_game_id
+    AND a.cap_treatment = 'standard-cap-and-matching'
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = a.game_id AND r.player_id = a.player_id);
+
+  SELECT v_payroll + COALESCE(sum(r.annual_salary), 0) INTO v_payroll
+  FROM public.game_runtime_contracts r
+  JOIN public.game_player_states s ON s.game_id = r.game_id AND s.player_id = r.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE r.game_id = p_game_id
+    AND r.start_year <= v_game.season_year AND r.end_year >= v_game.season_year;
+
+  SELECT v_payroll + COALESCE(sum(
+    CASE v_game.season_year - c.start_year
+      WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+      WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE 0 END
+  ), 0) INTO v_payroll
+  FROM public.contracts c
+  JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE c.game_id = p_game_id
+    AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+      WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+      WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = c.game_id AND r.player_id = c.player_id);
+
+  IF v_payroll < 0 OR v_payroll > 9007199254740991 THEN
+    RAISE EXCEPTION 'Current payroll is outside supported safe integer range';
+  END IF;
+  SELECT count(*)::INTEGER INTO roster_count
+  FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.team_id = v_game.selected_team_id AND s.is_active;
+
+  selected_team_id := v_game.selected_team_id;
+  season_year := v_game.season_year;
+  simulation_date := v_game.simulation_date;
+  payroll := v_payroll::BIGINT;
+  cap_room := GREATEST(0, salary_cap - payroll);
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_financial_context(UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.submit_free_agency_offer(
+  p_game_id UUID, p_player_id UUID, p_request_id UUID, p_season TEXT,
+  p_annual_salary BIGINT, p_years INTEGER
+) RETURNS public.free_agency_pending_offers
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_player public.players%ROWTYPE;
+  v_state public.game_player_states%ROWTYPE;
+  v_existing public.free_agency_pending_offers%ROWTYPE;
+  v_offer public.free_agency_pending_offers%ROWTYPE;
+  v_financial RECORD;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() <> 'authenticated' THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+  IF p_request_id IS NULL OR p_player_id IS NULL OR p_game_id IS NULL
+     OR p_annual_salary IS NULL OR p_annual_salary <= 0 OR p_annual_salary > 9007199254740991
+     OR p_years IS NULL OR p_years NOT BETWEEN 1 AND 5
+     OR p_season IS NULL OR p_season !~ '^\d{4}-\d{2}$'
+     OR split_part(p_season, '-', 2)::INTEGER <> (split_part(p_season, '-', 1)::INTEGER + 1) % 100 THEN
+    RAISE EXCEPTION 'Invalid offer terms';
+  END IF;
+
+  SELECT g.* INTO v_game FROM public.games g
+  WHERE g.id = p_game_id AND g.user_id = auth.uid()
+    AND g.status = 'active' AND g.season_era_id = 'modern' AND g.deleted_at IS NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active game required'; END IF;
+
+  SELECT o.* INTO v_existing FROM public.free_agency_pending_offers o
+  WHERE o.owner_id = auth.uid() AND o.game_id = p_game_id AND o.request_id = p_request_id
+  FOR UPDATE;
+  IF FOUND THEN
+    IF (v_existing.player_id, v_existing.team_id, v_existing.season, v_existing.annual_salary, v_existing.years)
+       IS DISTINCT FROM (p_player_id, v_game.selected_team_id, p_season, p_annual_salary, p_years) THEN
+      RAISE EXCEPTION 'Idempotency key reused with changed offer payload';
+    END IF;
+    IF v_existing.status <> 'pending' THEN RAISE EXCEPTION 'Offer request has already been resolved'; END IF;
+    RETURN v_existing;
+  END IF;
+
+  SELECT p.* INTO v_player FROM public.players p WHERE p.id = p_player_id AND p.is_active;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Explicitly enrolled active teamless player required'; END IF;
+  SELECT s.* INTO v_state FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.player_id = p_player_id FOR UPDATE;
+  IF NOT FOUND OR NOT v_state.is_active OR v_state.team_id IS NOT NULL
+     OR NOT EXISTS (SELECT 1 FROM public.free_agency_availability_enrollments e
+       WHERE e.game_id = p_game_id AND e.player_id = p_player_id
+         AND e.evidence_kind = 'simulation-bootstrap-enrollment')
+     OR EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = p_player_id)
+     OR EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = p_player_id)
+     OR EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = p_player_id) THEN
+    RAISE EXCEPTION 'Explicitly enrolled active teamless player without a game agreement required';
+  END IF;
+
+  SELECT f.* INTO v_financial
+  FROM public.get_free_agency_financial_context(p_game_id, p_player_id) f;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Authoritative financial context unavailable'; END IF;
+  IF p_season <> format('%s-%s', v_financial.season_year, right((v_financial.season_year + 1)::TEXT, 2))
+     OR p_season <> '2026-27' THEN
+    RAISE EXCEPTION 'Offer season must match the supported game financial season';
+  END IF;
+  IF p_annual_salary < v_financial.minimum_salary OR p_annual_salary > v_financial.maximum_salary THEN
+    RAISE EXCEPTION 'Salary outside verified minimum and maximum';
+  END IF;
+  IF v_financial.roster_count + 1 > 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
+  IF p_annual_salary > v_financial.cap_room AND p_annual_salary <> v_financial.minimum_salary THEN
+    RAISE EXCEPTION 'Offer exceeds cap room';
+  END IF;
+
+  INSERT INTO public.free_agency_pending_offers(request_id, owner_id, game_id, player_id, team_id,
+    season, annual_salary, years, due_date)
+  VALUES (p_request_id, auth.uid(), p_game_id, p_player_id, v_financial.selected_team_id,
+    p_season, p_annual_salary, p_years, v_financial.simulation_date + 1)
+  RETURNING * INTO v_offer;
+  RETURN v_offer;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER)
+  TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 025.
+
+-- Canonical schema mirror for migration 026. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.resolve_free_agency_offer(
+  p_game_id UUID,
+  p_offer_id UUID
+)
+RETURNS public.free_agency_pending_offers
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_offer public.free_agency_pending_offers%ROWTYPE;
+  v_competitor public.free_agency_pending_offers%ROWTYPE;
+  v_player public.players%ROWTYPE;
+  v_state public.game_player_states%ROWTYPE;
+  v_financial RECORD;
+  v_runtime_contract_id UUID;
+  v_resolved_at TIMESTAMPTZ;
+  v_updated_count INTEGER;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authenticated game owner required'; END IF;
+
+  -- Match trade/submission lock order: serialize at the game before player/offer rows.
+  SELECT g.* INTO v_game FROM public.games g
+  WHERE g.id = p_game_id AND g.user_id = auth.uid()
+    AND g.status = 'active' AND g.season_era_id = 'modern' AND g.deleted_at IS NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+
+  SELECT o.* INTO v_offer FROM public.free_agency_pending_offers o
+  WHERE o.id = p_offer_id AND o.game_id = p_game_id AND o.owner_id = auth.uid()
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game offer not found'; END IF;
+
+  IF v_offer.status = 'accepted' THEN
+    IF v_offer.resolved_contract_id IS NULL OR NOT EXISTS (
+      SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.id = v_offer.resolved_contract_id AND r.game_id = p_game_id
+        AND r.player_id = v_offer.player_id AND r.source_offer_id = v_offer.id
+    ) THEN
+      RAISE EXCEPTION 'Accepted offer resolution record is inconsistent';
+    END IF;
+    RETURN v_offer;
+  ELSIF v_offer.status = 'rejected' THEN
+    IF v_offer.resolved_at IS NULL OR v_offer.resolved_date IS NULL
+       OR v_offer.resolution_reason <> 'another_offer_accepted' THEN
+      RAISE EXCEPTION 'Rejected offer resolution record is inconsistent';
+    END IF;
+    RETURN v_offer;
+  ELSIF v_offer.status <> 'pending' THEN
+    RAISE EXCEPTION 'Offer status is not resolvable';
+  END IF;
+
+  IF v_game.simulation_date < v_offer.due_date THEN
+    RAISE EXCEPTION 'Offer is not due';
+  END IF;
+  IF v_offer.team_id IS DISTINCT FROM v_game.selected_team_id THEN
+    RAISE EXCEPTION 'Offer team does not match the selected game team';
+  END IF;
+  IF v_offer.season <> format('%s-%s', v_game.season_year, right((v_game.season_year + 1)::TEXT, 2))
+     OR v_offer.season <> '2026-27' THEN
+    RAISE EXCEPTION 'Offer season must match the supported game financial season';
+  END IF;
+  IF v_offer.annual_salary <= 0 OR v_offer.annual_salary > 9007199254740991
+     OR v_offer.years NOT BETWEEN 1 AND 5 THEN
+    RAISE EXCEPTION 'Stored offer terms are outside supported bounds';
+  END IF;
+
+  SELECT p.* INTO v_player FROM public.players p
+  WHERE p.id = v_offer.player_id AND p.is_active;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Active explicitly enrolled player required'; END IF;
+  SELECT s.* INTO v_state FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.player_id = v_offer.player_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT v_state.is_active OR v_state.team_id IS NOT NULL
+     OR NOT EXISTS (SELECT 1 FROM public.free_agency_availability_enrollments e
+       WHERE e.game_id = p_game_id AND e.player_id = v_offer.player_id
+         AND e.evidence_kind = 'simulation-bootstrap-enrollment')
+     OR EXISTS (SELECT 1 FROM public.contracts c
+       WHERE c.game_id = p_game_id AND c.player_id = v_offer.player_id)
+     OR EXISTS (SELECT 1 FROM public.game_contract_agreements a
+       WHERE a.game_id = p_game_id AND a.player_id = v_offer.player_id)
+     OR EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+       WHERE r.game_id = p_game_id AND r.player_id = v_offer.player_id) THEN
+    RAISE EXCEPTION 'Explicitly enrolled active teamless player without an agreement required';
+  END IF;
+
+  SELECT f.* INTO v_financial
+  FROM public.get_free_agency_financial_context(p_game_id, v_offer.player_id) f;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Authoritative financial context unavailable'; END IF;
+  IF v_offer.annual_salary < v_financial.minimum_salary
+     OR v_offer.annual_salary > v_financial.maximum_salary THEN
+    RAISE EXCEPTION 'Salary outside verified minimum and maximum';
+  END IF;
+  IF v_financial.roster_count + 1 > 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
+  IF v_offer.annual_salary > v_financial.cap_room
+     AND v_offer.annual_salary <> v_financial.minimum_salary THEN
+    RAISE EXCEPTION 'Offer exceeds cap room';
+  END IF;
+
+  v_resolved_at := clock_timestamp();
+  INSERT INTO public.game_runtime_contracts(
+    game_id, player_id, origin_kind, start_year, end_year, annual_salary,
+    is_player_option, is_team_option, is_guaranteed, source_offer_id
+  ) VALUES (
+    p_game_id, v_offer.player_id, 'simulated-agreement', v_financial.season_year,
+    v_financial.season_year + v_offer.years - 1, v_offer.annual_salary,
+    false, false, NULL, v_offer.id
+  ) RETURNING id INTO v_runtime_contract_id;
+
+  UPDATE public.game_player_states s
+  SET team_id = v_financial.selected_team_id, updated_at = now()
+  WHERE s.game_id = p_game_id AND s.player_id = v_offer.player_id
+    AND s.team_id IS NULL AND s.is_active;
+  GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+  IF v_updated_count <> 1 THEN RAISE EXCEPTION 'Roster assignment changed during offer resolution'; END IF;
+
+  FOR v_competitor IN
+    SELECT o.* FROM public.free_agency_pending_offers o
+    WHERE o.game_id = p_game_id AND o.player_id = v_offer.player_id AND o.status = 'pending'
+    ORDER BY o.id FOR UPDATE
+  LOOP
+    IF v_competitor.id = v_offer.id THEN
+      UPDATE public.free_agency_pending_offers o
+      SET status = 'accepted', resolved_at = v_resolved_at,
+          resolved_date = v_game.simulation_date,
+          resolution_reason = 'selected_offer_accepted',
+          resolved_contract_id = v_runtime_contract_id
+      WHERE o.id = v_competitor.id
+      RETURNING o.* INTO v_offer;
+    ELSE
+      UPDATE public.free_agency_pending_offers o
+      SET status = 'rejected', resolved_at = v_resolved_at,
+          resolved_date = v_game.simulation_date,
+          resolution_reason = 'another_offer_accepted',
+          resolved_contract_id = NULL
+      WHERE o.id = v_competitor.id;
+    END IF;
+  END LOOP;
+
+  IF v_offer.status <> 'accepted' OR v_offer.resolved_contract_id IS DISTINCT FROM v_runtime_contract_id THEN
+    RAISE EXCEPTION 'Offer competitors were not terminalized consistently';
+  END IF;
+  RETURN v_offer;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.resolve_free_agency_offer(UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 026.
+
+-- Canonical schema mirror for migration 027. Keep byte-identical below.
+BEGIN;
+
+-- Private overload: human submission and AI resolution share the same payroll rules.
+CREATE FUNCTION public.get_free_agency_financial_context(
+  p_game_id UUID, p_player_id UUID, p_team_id UUID
+) RETURNS TABLE (
+  selected_team_id UUID, season_year INTEGER, simulation_date DATE, salary_cap BIGINT,
+  payroll BIGINT, cap_room BIGINT, roster_count INTEGER, service_years INTEGER,
+  minimum_salary BIGINT, maximum_salary BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_player public.players%ROWTYPE;
+  v_payroll NUMERIC := 0;
+BEGIN
+  SELECT g.* INTO v_game FROM public.games g
+  WHERE g.id = p_game_id AND g.user_id = auth.uid() AND g.status = 'active'
+    AND g.season_era_id = 'modern' AND g.deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  IF p_team_id IS NULL OR NOT (
+    p_team_id = v_game.selected_team_id
+    OR EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+    OR EXISTS (SELECT 1 FROM public.league_standings s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+  ) THEN RAISE EXCEPTION 'Team does not participate in this game'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+  -- This is only a local record; the save's selected team is never changed.
+  v_game.selected_team_id := p_team_id;
+  SELECT p.* INTO v_player FROM public.players p WHERE p.id = p_player_id AND p.is_active;
+  IF NOT FOUND OR v_player.years_of_experience IS NULL
+     OR v_player.years_of_experience NOT BETWEEN 0 AND 99 THEN
+    RAISE EXCEPTION 'Active player with known years of service required';
+  END IF;
+  IF v_game.season_year <> 2026 THEN
+    RAISE EXCEPTION 'Verified minimum salary schedule unavailable for game season';
+  END IF;
+  -- Verified schedules and cap projection match MinimumSalarySchedule and nba-rules.
+  service_years := LEAST(v_player.years_of_experience, 10);
+  minimum_salary := (ARRAY[
+    1357763, 2185116, 2449421, 2537526, 2625627, 2845883,
+    3066143, 3286399, 3506659, 3524115, 3876529
+  ]::BIGINT[])[service_years + 1];
+  salary_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  maximum_salary := floor(salary_cap * CASE WHEN service_years <= 6 THEN 0.25
+    WHEN service_years <= 9 THEN 0.30 ELSE 0.35 END)::BIGINT;
+
+  IF EXISTS (
+    SELECT 1 FROM public.game_player_states s
+    LEFT JOIN public.game_runtime_contracts r ON r.game_id = s.game_id AND r.player_id = s.player_id
+    LEFT JOIN public.game_contract_identities i ON i.game_id = s.game_id AND i.player_id = s.player_id
+    LEFT JOIN public.game_contract_agreements a ON a.game_id = s.game_id AND a.player_id = s.player_id
+    LEFT JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+      AND cs.start_year = v_game.season_year
+    WHERE s.game_id = p_game_id AND s.team_id = v_game.selected_team_id AND r.id IS NULL
+      AND (
+        (i.player_id IS NOT NULL AND i.cap_treatment = 'standard-cap-and-matching'
+          AND (a.id IS NULL OR a.cap_treatment <> 'standard-cap-and-matching'
+            OR cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (a.id IS NOT NULL AND a.cap_treatment = 'standard-cap-and-matching'
+          AND (cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (i.player_id IS NULL AND a.id IS NULL AND NOT EXISTS (
+          SELECT 1 FROM public.contracts c WHERE c.game_id = s.game_id AND c.player_id = s.player_id
+        ))
+      )
+  ) THEN RAISE EXCEPTION 'Canonical current-season standard salary context is incomplete'; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.contracts c
+    JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    WHERE c.game_id = p_game_id AND s.team_id = v_game.selected_team_id
+      AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+        WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+        WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+        WHERE r.game_id = c.game_id AND r.player_id = c.player_id)
+      AND (
+        (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) IS NULL
+        OR (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) < 0
+      )
+  ) THEN RAISE EXCEPTION 'Legacy current-season salary context is incomplete'; END IF;
+
+  SELECT COALESCE(sum(cs.salary_amount), 0) INTO v_payroll
+  FROM public.game_contract_agreements a
+  JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+    AND cs.start_year = v_game.season_year
+  JOIN public.game_player_states s ON s.game_id = a.game_id AND s.player_id = a.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE a.game_id = p_game_id AND a.cap_treatment = 'standard-cap-and-matching'
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = a.game_id AND r.player_id = a.player_id);
+
+  SELECT v_payroll + COALESCE(sum(r.annual_salary), 0) INTO v_payroll
+  FROM public.game_runtime_contracts r
+  JOIN public.game_player_states s ON s.game_id = r.game_id AND s.player_id = r.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE r.game_id = p_game_id AND r.start_year <= v_game.season_year AND r.end_year >= v_game.season_year;
+
+  SELECT v_payroll + COALESCE(sum(
+    CASE v_game.season_year - c.start_year
+      WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+      WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE 0 END
+  ), 0) INTO v_payroll
+  FROM public.contracts c
+  JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE c.game_id = p_game_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+      WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+      WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = c.game_id AND r.player_id = c.player_id);
+  IF v_payroll < 0 OR v_payroll > 9007199254740991 THEN
+    RAISE EXCEPTION 'Current payroll is outside supported safe integer range';
+  END IF;
+  SELECT count(*)::INTEGER INTO roster_count FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.team_id = v_game.selected_team_id AND s.is_active;
+  selected_team_id := v_game.selected_team_id;
+  season_year := v_game.season_year;
+  simulation_date := v_game.simulation_date;
+  payroll := v_payroll::BIGINT;
+  cap_room := GREATEST(0, salary_cap - payroll);
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_financial_context(UUID, UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- Preserve the two-argument contract used by the selected-team submission API.
+CREATE OR REPLACE FUNCTION public.get_free_agency_financial_context(p_game_id UUID, p_player_id UUID)
+RETURNS TABLE (
+  selected_team_id UUID, season_year INTEGER, simulation_date DATE, salary_cap BIGINT,
+  payroll BIGINT, cap_room BIGINT, roster_count INTEGER, service_years INTEGER,
+  minimum_salary BIGINT, maximum_salary BIGINT
+)
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT f.* FROM public.get_free_agency_financial_context(p_game_id, p_player_id,
+    (SELECT g.selected_team_id FROM public.games g WHERE g.id = p_game_id)) f;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_financial_context(UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 027.
+
+-- Canonical schema mirror for migration 028. Keep byte-identical below.
+BEGIN;
+
+ALTER TABLE public.free_agency_pending_offers
+  ADD COLUMN offer_origin TEXT NOT NULL DEFAULT 'human' CHECK (offer_origin IN ('human', 'ai')),
+  ADD COLUMN ai_decision_date DATE,
+  ADD COLUMN resolution_detail TEXT,
+  ADD CONSTRAINT free_agency_offer_origin_date_check
+    CHECK ((offer_origin = 'ai') = (ai_decision_date IS NOT NULL)),
+  DROP CONSTRAINT free_agency_pending_offers_resolution_state_check;
+ALTER TABLE public.free_agency_pending_offers
+  ADD CONSTRAINT free_agency_pending_offers_resolution_state_check CHECK (
+    (status = 'pending' AND resolved_at IS NULL AND resolved_date IS NULL
+      AND resolution_reason IS NULL AND resolved_contract_id IS NULL)
+    OR (status = 'accepted' AND resolved_at IS NOT NULL AND resolved_date IS NOT NULL
+      AND resolution_reason IS NOT DISTINCT FROM 'selected_offer_accepted' AND resolved_contract_id IS NOT NULL)
+    OR (status = 'rejected' AND resolved_at IS NOT NULL AND resolved_date IS NOT NULL
+      AND resolution_reason IS NOT NULL AND resolution_reason IN ('another_offer_accepted', 'offer_no_longer_legal')
+      AND resolved_contract_id IS NULL)
+  ),
+  ADD CONSTRAINT free_agency_offer_resolution_detail_check CHECK (
+    (resolution_reason IS NOT DISTINCT FROM 'offer_no_longer_legal') = (resolution_detail IS NOT NULL)
+    AND (resolution_detail IS NULL OR length(btrim(resolution_detail)) > 0)
+  );
+CREATE UNIQUE INDEX free_agency_one_ai_offer_per_team_day
+  ON public.free_agency_pending_offers(game_id, team_id, ai_decision_date) WHERE offer_origin = 'ai';
+
+-- Ranking and signing call this same authoritative evaluator under the game lock.
+CREATE FUNCTION public.assess_free_agency_offer(p_game_id UUID, p_offer_id UUID)
+RETURNS TABLE (rejection_reason TEXT, score NUMERIC)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; o public.free_agency_pending_offers%ROWTYPE;
+  f RECORD; quality INTEGER;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  SELECT * INTO o FROM public.free_agency_pending_offers
+  WHERE game_id = p_game_id AND id = p_offer_id AND owner_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game offer not found'; END IF;
+  score := 0;
+  IF o.status <> 'pending' THEN rejection_reason := 'Offer is not pending';
+  ELSIF g.simulation_date < o.due_date THEN rejection_reason := 'Offer is not due';
+  ELSIF o.offer_origin = 'human' AND o.team_id IS DISTINCT FROM g.selected_team_id THEN
+    rejection_reason := 'Offer team does not match the selected game team';
+  ELSIF o.offer_origin = 'ai' AND (o.team_id = g.selected_team_id OR NOT (
+    EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id = o.team_id)
+    OR EXISTS (SELECT 1 FROM public.league_standings s WHERE s.game_id = p_game_id AND s.team_id = o.team_id)
+  )) THEN rejection_reason := 'AI team does not participate in this game';
+  ELSIF o.season <> format('%s-%s', g.season_year, right((g.season_year + 1)::TEXT, 2))
+    OR o.season <> '2026-27' THEN rejection_reason := 'Offer season must match the supported game financial season';
+  ELSIF o.annual_salary <= 0 OR o.annual_salary > 9007199254740991 OR o.years NOT BETWEEN 1 AND 5 THEN
+    rejection_reason := 'Stored offer terms are outside supported bounds';
+  ELSIF NOT EXISTS (SELECT 1 FROM public.players p WHERE p.id = o.player_id AND p.is_active) THEN
+    rejection_reason := 'Active explicitly enrolled player required';
+  ELSIF NOT EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id
+      AND s.player_id = o.player_id AND s.is_active AND s.team_id IS NULL)
+    OR NOT EXISTS (SELECT 1 FROM public.free_agency_availability_enrollments e
+      WHERE e.game_id = p_game_id AND e.player_id = o.player_id AND e.evidence_kind = 'simulation-bootstrap-enrollment')
+    OR EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = o.player_id)
+    OR EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = o.player_id)
+    OR EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = o.player_id) THEN
+    rejection_reason := 'Explicitly enrolled active teamless player without an agreement required';
+  END IF;
+  IF rejection_reason IS NOT NULL THEN RETURN NEXT; RETURN; END IF;
+
+  -- Missing financial evidence is an integrity error, never a zero-payroll assumption.
+  SELECT * INTO STRICT f FROM public.get_free_agency_financial_context(p_game_id, o.player_id, o.team_id);
+  IF o.annual_salary < f.minimum_salary OR o.annual_salary > f.maximum_salary THEN
+    rejection_reason := 'Salary outside verified minimum and maximum';
+  ELSIF f.roster_count + 1 > 15 THEN rejection_reason := 'Roster maximum reached';
+  ELSIF o.annual_salary > f.cap_room AND o.annual_salary <> f.minimum_salary THEN
+    rejection_reason := 'Offer exceeds cap room';
+  ELSE
+    SELECT LEAST(100, GREATEST(0, base_rating)) INTO quality FROM public.teams WHERE id = o.team_id;
+    -- Same 60/25/15 simulation weights as evaluateFreeAgencyOffer. Duration is not scored in v1.
+    score := (o.annual_salary - f.minimum_salary)::NUMERIC / GREATEST(f.minimum_salary, f.maximum_salary) * 60
+      + GREATEST(0, 15 - f.roster_count)::NUMERIC / 15 * 25 + quality::NUMERIC / 100 * 15;
+  END IF;
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.assess_free_agency_offer(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.resolve_free_agency_offer(p_game_id UUID, p_offer_id UUID)
+RETURNS public.free_agency_pending_offers
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; o public.free_agency_pending_offers%ROWTYPE;
+  assessment RECORD; contract_id UUID; resolved_time TIMESTAMPTZ := clock_timestamp(); updated_count INTEGER;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  SELECT * INTO o FROM public.free_agency_pending_offers
+  WHERE id = p_offer_id AND game_id = p_game_id AND owner_id = auth.uid() FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game offer not found'; END IF;
+  IF o.status = 'accepted' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.id = o.resolved_contract_id
+      AND r.game_id = p_game_id AND r.player_id = o.player_id AND r.source_offer_id = o.id) THEN
+      RAISE EXCEPTION 'Accepted offer resolution record is inconsistent';
+    END IF;
+    RETURN o;
+  ELSIF o.status = 'rejected' THEN RETURN o;
+  END IF;
+  PERFORM 1 FROM public.game_player_states WHERE game_id = p_game_id AND player_id = o.player_id FOR UPDATE;
+  SELECT * INTO STRICT assessment FROM public.assess_free_agency_offer(p_game_id, p_offer_id);
+  IF assessment.rejection_reason IS NOT NULL THEN RAISE EXCEPTION '%', assessment.rejection_reason; END IF;
+
+  INSERT INTO public.game_runtime_contracts(game_id, player_id, origin_kind, start_year, end_year,
+    annual_salary, is_player_option, is_team_option, is_guaranteed, source_offer_id)
+  VALUES (p_game_id, o.player_id, 'simulated-agreement', g.season_year, g.season_year + o.years - 1,
+    o.annual_salary, false, false, NULL, o.id) RETURNING id INTO contract_id;
+  UPDATE public.game_player_states SET team_id = o.team_id, updated_at = now()
+  WHERE game_id = p_game_id AND player_id = o.player_id AND team_id IS NULL AND is_active;
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 1 THEN RAISE EXCEPTION 'Roster assignment changed during offer resolution'; END IF;
+  UPDATE public.free_agency_pending_offers SET status = 'accepted', resolved_at = resolved_time,
+    resolved_date = g.simulation_date, resolution_reason = 'selected_offer_accepted', resolved_contract_id = contract_id
+  WHERE id = p_offer_id RETURNING * INTO o;
+  UPDATE public.free_agency_pending_offers SET status = 'rejected', resolved_at = resolved_time,
+    resolved_date = g.simulation_date, resolution_reason = 'another_offer_accepted'
+  WHERE game_id = p_game_id AND player_id = o.player_id AND status = 'pending';
+  RETURN o;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.resolve_free_agency_offer(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 028.
+
+-- Canonical schema mirror for migration 029. Keep byte-identical below.
+BEGIN;
+
+CREATE FUNCTION public.generate_ai_free_agency_offers(p_game_id UUID) RETURNS INTEGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; team UUID; player UUID; f RECORD;
+  salary BIGINT; offer_id UUID; inserted INTEGER; total INTEGER := 0;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  FOR team IN
+    SELECT s.team_id FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id IS NOT NULL
+    UNION SELECT s.team_id FROM public.league_standings s WHERE s.game_id = p_game_id ORDER BY team_id
+  LOOP
+    IF team = g.selected_team_id OR EXISTS (SELECT 1 FROM public.free_agency_pending_offers o
+      WHERE o.game_id = p_game_id AND o.team_id = team AND o.offer_origin = 'ai'
+        AND o.ai_decision_date = g.simulation_date) THEN CONTINUE; END IF;
+    -- No player rating exists in persistence: v1 deliberately uses stable player identity.
+    FOR player IN
+      SELECT e.player_id FROM public.free_agency_availability_enrollments e
+      JOIN public.game_player_states s ON s.game_id = e.game_id AND s.player_id = e.player_id
+      JOIN public.players p ON p.id = e.player_id
+      WHERE e.game_id = p_game_id AND s.team_id IS NULL AND s.is_active AND p.is_active
+        AND p.years_of_experience BETWEEN 0 AND 99 AND e.evidence_kind = 'simulation-bootstrap-enrollment'
+        AND NOT EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = e.player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = e.player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = e.player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.free_agency_pending_offers o WHERE o.game_id = p_game_id
+          AND o.player_id = e.player_id AND o.team_id = team AND o.status = 'pending')
+      ORDER BY e.player_id
+    LOOP
+      SELECT * INTO STRICT f FROM public.get_free_agency_financial_context(p_game_id, player, team);
+      IF f.roster_count >= 15 THEN EXIT; END IF;
+      salary := CASE WHEN f.cap_room >= floor(f.minimum_salary * 1.10)
+        THEN LEAST(f.maximum_salary, floor(f.minimum_salary * 1.10)::BIGINT) ELSE f.minimum_salary END;
+      offer_id := md5('free-agency-ai-v1:' || p_game_id::TEXT || ':' || g.simulation_date::TEXT || ':' || team::TEXT)::UUID;
+      INSERT INTO public.free_agency_pending_offers(id, request_id, owner_id, game_id, player_id, team_id,
+        season, annual_salary, years, due_date, offer_origin, ai_decision_date)
+      VALUES (offer_id, gen_random_uuid(), g.user_id, p_game_id, player, team,
+        format('%s-%s', g.season_year, right((g.season_year + 1)::TEXT, 2)), salary, 1,
+        g.simulation_date + 1, 'ai', g.simulation_date)
+      ON CONFLICT (game_id, team_id, ai_decision_date) WHERE offer_origin = 'ai' DO NOTHING;
+      GET DIAGNOSTICS inserted = ROW_COUNT;
+      total := total + inserted;
+      EXIT;
+    END LOOP;
+  END LOOP;
+  RETURN total;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.generate_ai_free_agency_offers(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.resolve_due_free_agency_market(p_game_id UUID) RETURNS INTEGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; player UUID; o public.free_agency_pending_offers%ROWTYPE;
+  assessment RECORD; winner UUID; winner_team UUID; best NUMERIC; total INTEGER := 0;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  -- Older due groups first, then player identity. Later groups see updated cap/roster.
+  FOR player IN SELECT player_id FROM public.free_agency_pending_offers
+    WHERE game_id = p_game_id AND owner_id = auth.uid() AND status = 'pending' AND due_date <= g.simulation_date
+    GROUP BY player_id ORDER BY min(due_date), player_id
+  LOOP
+    winner := NULL; winner_team := NULL; best := NULL;
+    FOR o IN SELECT * FROM public.free_agency_pending_offers
+      WHERE game_id = p_game_id AND player_id = player AND owner_id = auth.uid()
+        AND status = 'pending' AND due_date <= g.simulation_date ORDER BY id FOR UPDATE
+    LOOP
+      SELECT * INTO STRICT assessment FROM public.assess_free_agency_offer(p_game_id, o.id);
+      IF assessment.rejection_reason IS NOT NULL THEN
+        UPDATE public.free_agency_pending_offers SET status = 'rejected', resolved_at = clock_timestamp(),
+          resolved_date = g.simulation_date, resolution_reason = 'offer_no_longer_legal',
+          resolution_detail = assessment.rejection_reason WHERE id = o.id;
+      ELSIF winner IS NULL OR assessment.score > best OR (assessment.score = best AND (o.team_id, o.id) < (winner_team, winner)) THEN
+        winner := o.id; winner_team := o.team_id; best := assessment.score;
+      END IF;
+    END LOOP;
+    IF winner IS NOT NULL THEN
+      PERFORM public.resolve_free_agency_offer(p_game_id, winner);
+      total := total + 1;
+    END IF;
+  END LOOP;
+  RETURN total;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.resolve_due_free_agency_market(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 029.
+
+-- Canonical schema mirror for migration 030. Keep byte-identical below.
+BEGIN;
+
+-- Keep the proven sports/clock implementation, but remove every client bypass.
+ALTER FUNCTION public.advance_simulation_day(UUID, DATE) RENAME TO advance_simulation_day_core;
+ALTER FUNCTION public.advance_simulation_day_core(UUID, DATE) SET search_path = pg_catalog, public, pg_temp;
+REVOKE ALL ON FUNCTION public.advance_simulation_day_core(UUID, DATE) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.advance_simulation_day(p_game_id UUID, p_expected_date DATE)
+RETURNS TABLE (
+  new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID,
+  away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID,
+  standing_team_id UUID, wins INTEGER, losses INTEGER
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; run_market BOOLEAN;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  -- Stale retries and terminal no-ops must not generate bids or resolve the market.
+  IF g.simulation_date IS DISTINCT FROM p_expected_date OR g.simulation_date >= make_date(g.season_year + 1, 4, 15) THEN
+    RETURN QUERY SELECT * FROM public.advance_simulation_day_core(p_game_id, p_expected_date);
+    RETURN;
+  END IF;
+  run_market := g.season_era_id = 'modern' AND (
+    EXISTS (SELECT 1 FROM public.free_agency_availability_enrollments WHERE game_id = p_game_id)
+    OR EXISTS (SELECT 1 FROM public.free_agency_pending_offers WHERE game_id = p_game_id AND status = 'pending')
+  );
+  IF run_market THEN PERFORM public.generate_ai_free_agency_offers(p_game_id); END IF;
+  -- RETURN QUERY buffers rows; market failure still rolls back sports, standings and clock.
+  RETURN QUERY SELECT * FROM public.advance_simulation_day_core(p_game_id, p_expected_date);
+  IF run_market THEN PERFORM public.resolve_due_free_agency_market(p_game_id); END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.advance_simulation_day(UUID, DATE) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.advance_simulation_day(UUID, DATE) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 030.
+
+-- Canonical schema mirror for migration 031. Keep byte-identical below.
+BEGIN;
+
+CREATE FUNCTION public.get_free_agency_market(p_game_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE;
+  ready BOOLEAN;
+  finance RECORD;
+  result JSONB;
+  candidates JSONB;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+  SELECT * INTO g FROM public.games
+  WHERE id = p_game_id AND user_id = auth.uid() AND deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game not found'; END IF;
+
+  ready := g.status = 'active' AND g.season_era_id = 'modern' AND g.season_year = 2026
+    AND EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id);
+  result := jsonb_build_object(
+    'game_id', g.id,
+    'supported', ready,
+    'context', NULL,
+    'candidates', '[]'::jsonb,
+    'offers', COALESCE((
+      SELECT jsonb_agg(to_jsonb(o) || jsonb_build_object(
+        'player_name', concat_ws(' ', p.first_name, p.last_name),
+        'team_name', t.name
+      ) ORDER BY o.created_at DESC, o.id DESC)
+      FROM public.free_agency_pending_offers o
+      LEFT JOIN public.players p ON p.id = o.player_id
+      LEFT JOIN public.teams t ON t.id = o.team_id
+      WHERE o.game_id = p_game_id AND o.owner_id = auth.uid()
+    ), '[]'::jsonb)
+  );
+  IF NOT ready THEN RETURN result; END IF;
+
+  -- A valid probe supplies the private helper's required player argument; it never enrolls a player.
+  SELECT f.* INTO finance
+  FROM public.game_player_states s
+  JOIN public.players p ON p.id = s.player_id AND p.is_active
+    AND p.years_of_experience BETWEEN 0 AND 99
+  CROSS JOIN LATERAL public.get_free_agency_financial_context(p_game_id, p.id, g.selected_team_id) f
+  WHERE s.game_id = p_game_id
+  ORDER BY s.player_id LIMIT 1;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Active player with known years of service required for market context'; END IF;
+
+  result := jsonb_set(result, '{context}', jsonb_build_object(
+    'team_id', finance.selected_team_id,
+    'season', format('%s-%s', finance.season_year, right((finance.season_year + 1)::TEXT, 2)),
+    'simulation_date', finance.simulation_date,
+    'salary_cap', finance.salary_cap,
+    'payroll', finance.payroll,
+    'cap_room', finance.cap_room,
+    'roster_count', finance.roster_count
+  ));
+
+  IF EXISTS (
+    SELECT 1 FROM public.free_agency_availability_enrollments e
+    JOIN public.game_player_states s ON s.game_id = e.game_id AND s.player_id = e.player_id
+    JOIN public.players p ON p.id = e.player_id AND p.is_active
+    WHERE e.game_id = p_game_id AND e.evidence_kind = 'simulation-bootstrap-enrollment'
+      AND s.is_active AND s.team_id IS NULL
+      AND (p.years_of_experience IS NULL OR p.years_of_experience NOT BETWEEN 0 AND 99)
+      AND NOT EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = p.id)
+  ) THEN RAISE EXCEPTION 'Active player with known years of service required'; END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'player_id', p.id, 'first_name', p.first_name, 'last_name', p.last_name,
+    'position', p.position, 'minimum_salary', f.minimum_salary, 'maximum_salary', f.maximum_salary
+  ) ORDER BY p.id), '[]'::jsonb) INTO candidates
+  FROM public.free_agency_availability_enrollments e
+  JOIN public.players p ON p.id = e.player_id AND p.is_active
+  JOIN public.game_player_states s ON s.game_id = e.game_id AND s.player_id = e.player_id
+    AND s.is_active AND s.team_id IS NULL
+  CROSS JOIN LATERAL public.get_free_agency_financial_context(p_game_id, p.id, g.selected_team_id) f
+  WHERE e.game_id = p_game_id AND e.evidence_kind = 'simulation-bootstrap-enrollment'
+    AND p.years_of_experience BETWEEN 0 AND 99
+    AND NOT EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = p.id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = p.id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = p.id);
+  result := jsonb_set(result, '{candidates}', candidates);
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_market(UUID) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.get_free_agency_market(UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 031.
+
+-- Canonical schema mirror for migration 032. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_simulation_team_rating(p_game_id UUID, p_team_id UUID)
+RETURNS SMALLINT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE;
+  base SMALLINT;
+  available INTEGER;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  SELECT t.base_rating INTO base FROM public.teams t WHERE t.id = p_team_id;
+  IF base IS NULL THEN RAISE EXCEPTION 'Simulation team not found'; END IF;
+  IF g.season_era_id <> 'modern'
+     OR NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id)
+     OR NOT EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id) THEN
+    RETURN base;
+  END IF;
+  SELECT count(*)::INTEGER INTO available FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.team_id = p_team_id AND s.is_active AND NOT s.is_injured;
+  RETURN LEAST(100, GREATEST(0, base + 2 * (LEAST(available, 15) - 12)))::SMALLINT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_simulation_team_rating(UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.advance_simulation_day_core(p_game_id UUID, p_expected_date DATE)
+RETURNS TABLE (
+  new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID,
+  away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID,
+  standing_team_id UUID, wins INTEGER, losses INTEGER
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_new_date DATE;
+  v_match public.scheduled_games%ROWTYPE;
+  v_home_rating SMALLINT;
+  v_away_rating SMALLINT;
+  v_home_score SMALLINT;
+  v_away_score SMALLINT;
+  v_winner UUID;
+  v_seed BIGINT;
+  v_count INTEGER := 0;
+BEGIN
+  SELECT * INTO v_game FROM public.games WHERE id = p_game_id AND user_id = auth.uid() FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  IF v_game.simulation_date IS DISTINCT FROM p_expected_date THEN
+    new_date := v_game.simulation_date;
+    season_complete := v_game.simulation_date >= make_date(v_game.season_year + 1, 4, 15);
+    RETURN NEXT; RETURN;
+  END IF;
+  v_new_date := v_game.simulation_date + 1;
+  IF v_new_date > make_date(v_game.season_year + 1, 4, 15) THEN
+    new_date := v_game.simulation_date; season_complete := true; RETURN NEXT; RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.scheduled_games WHERE game_id = p_game_id) THEN
+    WITH teams_ordered AS (SELECT id, row_number() OVER (ORDER BY nba_id) - 1 AS slot FROM public.teams),
+    rounds AS (
+      SELECT c, r, 0 AS home_slot, 1 + r % 29 AS away_slot
+      FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
+      UNION ALL
+      SELECT c, r, 1 + (r + k) % 29, 1 + (r - k + 29) % 29
+      FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
+      CROSS JOIN generate_series(1, 14) AS pairs(k)
+    )
+    INSERT INTO public.scheduled_games (game_id, game_date, home_team_id, away_team_id)
+    SELECT p_game_id, make_date(v_game.season_year, 10, 15) + (((c * 29 + r) * 182 / 57)::INTEGER),
+      home.id, away.id FROM rounds
+    JOIN teams_ordered home ON home.slot = CASE WHEN c = 0 THEN home_slot ELSE away_slot END
+    JOIN teams_ordered away ON away.slot = CASE WHEN c = 0 THEN away_slot ELSE home_slot END;
+    INSERT INTO public.league_standings (game_id, team_id)
+    SELECT p_game_id, id FROM public.teams ON CONFLICT DO NOTHING;
+  END IF;
+  FOR v_match IN SELECT * FROM public.scheduled_games
+    WHERE game_id = p_game_id AND game_date = v_new_date AND status = 'scheduled' FOR UPDATE
+  LOOP
+    v_home_rating := public.get_simulation_team_rating(p_game_id, v_match.home_team_id);
+    v_away_rating := public.get_simulation_team_rating(p_game_id, v_match.away_team_id);
+    v_seed := ('x' || substr(md5(p_game_id::TEXT || ':' || v_new_date::TEXT || ':' ||
+      v_match.home_team_id::TEXT || ':' || v_match.away_team_id::TEXT), 1, 8))::bit(32)::bigint;
+    v_home_score := greatest(70, round(105 + (v_home_rating + 3 - 75) * 0.55 +
+      (mod(abs(v_seed), 2400) / 100.0 - 12)));
+    v_away_score := greatest(70, round(105 + (v_away_rating - 75) * 0.55 +
+      (mod(abs(v_seed / 2400), 2400) / 100.0 - 12)));
+    IF v_home_score = v_away_score THEN v_away_score := v_away_score - 1; END IF;
+    v_winner := CASE WHEN v_home_score > v_away_score THEN v_match.home_team_id ELSE v_match.away_team_id END;
+    UPDATE public.scheduled_games SET status = 'completed', home_score = v_home_score,
+      away_score = v_away_score, winner_team_id = v_winner WHERE id = v_match.id;
+    UPDATE public.league_standings SET wins = league_standings.wins + CASE WHEN team_id = v_winner THEN 1 ELSE 0 END,
+      losses = league_standings.losses + CASE WHEN team_id <> v_winner AND team_id IN (v_match.home_team_id, v_match.away_team_id)
+        THEN 1 ELSE 0 END
+    WHERE game_id = p_game_id AND team_id IN (v_match.home_team_id, v_match.away_team_id);
+    new_date := v_new_date; season_complete := false; result_id := v_match.id;
+    home_team_id := v_match.home_team_id; away_team_id := v_match.away_team_id;
+    home_score := v_home_score; away_score := v_away_score; winner_team_id := v_winner;
+    standing_team_id := NULL; wins := NULL; losses := NULL; v_count := v_count + 1; RETURN NEXT;
+  END LOOP;
+  UPDATE public.games SET simulation_date = v_new_date, updated_at = now() WHERE id = p_game_id;
+  IF v_count = 0 THEN new_date := v_new_date; season_complete := false; RETURN NEXT; END IF;
+END;
+$$;
+ALTER FUNCTION public.advance_simulation_day_core(UUID, DATE) SET search_path = pg_catalog, public, pg_temp;
+REVOKE ALL ON FUNCTION public.advance_simulation_day_core(UUID, DATE) FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 032.
+
+-- Canonical schema mirror for migration 033. Keep byte-identical below.
+BEGIN;
+
+CREATE TABLE public.free_agency_imports (
+  game_id UUID PRIMARY KEY REFERENCES public.games(id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL,
+  enrolled_count INTEGER NOT NULL CHECK (enrolled_count >= 0),
+  skipped_count INTEGER NOT NULL CHECK (skipped_count >= 0),
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.free_agency_imports ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.free_agency_imports FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.free_agency_imports TO authenticated;
+CREATE POLICY free_agency_imports_owner_read ON public.free_agency_imports
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+
+CREATE FUNCTION public.import_initial_free_agents(p_game_id UUID, p_owner_id UUID, p_snapshot JSONB)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE;
+  prior public.free_agency_imports%ROWTYPE;
+  candidate JSONB;
+  player public.players%ROWTYPE;
+  enrolled INTEGER := 0;
+  skipped INTEGER := 0;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  -- Serialize with global roster promotion and other imports before resolving identities.
+  PERFORM pg_advisory_xact_lock(hashtextextended('current-roster', 0));
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = p_owner_id
+    AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND OR g.status <> 'active' OR g.season_era_id <> 'modern' OR g.season_year <> 2026
+    OR NOT EXISTS (SELECT 1 FROM public.game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Owned active materialized modern 2026 game required';
+  END IF;
+  SELECT * INTO prior FROM public.free_agency_imports WHERE game_id = p_game_id;
+  IF FOUND THEN
+    RETURN jsonb_build_object('enrolled_count', prior.enrolled_count, 'skipped_count', prior.skipped_count);
+  END IF;
+  IF p_snapshot IS NULL
+    OR p_snapshot->>'sourceUrl' IS DISTINCT FROM 'https://www.nba.com/players/free-agent-tracker/2026'
+    OR p_snapshot->>'seasonYear' IS DISTINCT FROM '2026'
+    OR jsonb_typeof(p_snapshot->'players') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Validated NBA tracker snapshot required';
+  END IF;
+  IF jsonb_array_length(p_snapshot->'players') NOT BETWEEN 1 AND 1000 THEN
+    RAISE EXCEPTION 'Invalid NBA tracker size';
+  END IF;
+  FOR candidate IN SELECT value FROM jsonb_array_elements(p_snapshot->'players') LOOP
+    -- Options and restricted/two-way agreements require unsupported transaction rules.
+    IF candidate->>'season' IS DISTINCT FROM '2026'
+      OR candidate->>'type' IS DISTINCT FROM 'ufa' OR candidate->>'newTeamId' IS DISTINCT FROM '0'
+      OR candidate->>'isPlayerOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isTeamOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isEarlyTerminationOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isTwoWayFreeAgent' IS DISTINCT FROM 'false' THEN
+      CONTINUE;
+    END IF;
+    IF (candidate->>'playerId')::INTEGER <= 0 OR (candidate->>'exp')::INTEGER NOT BETWEEN 0 AND 99
+      OR NULLIF(trim(candidate->>'playerFirstName'), '') IS NULL
+      OR NULLIF(trim(candidate->>'playerLastName'), '') IS NULL
+      OR NULLIF(trim(candidate->>'playerDisplayName'), '') IS NULL
+      OR candidate->>'position' !~ '^[GFC](-[GFC])?$' THEN
+      RAISE EXCEPTION 'Invalid NBA tracker player';
+    END IF;
+    SELECT * INTO player FROM public.players WHERE nba_id = (candidate->>'playerId')::INTEGER;
+    IF NOT FOUND THEN
+      -- An ESPN-only identity must be reconciled, never duplicated or rebound by name alone.
+      IF EXISTS (SELECT 1 FROM public.players p
+        WHERE lower(p.full_name) = lower(candidate->>'playerDisplayName')) THEN
+        skipped := skipped + 1;
+        CONTINUE;
+      END IF;
+      INSERT INTO public.players(nba_id, first_name, last_name, full_name, position, years_of_experience, is_active)
+      VALUES ((candidate->>'playerId')::INTEGER, candidate->>'playerFirstName', candidate->>'playerLastName',
+        candidate->>'playerDisplayName', candidate->>'position', (candidate->>'exp')::SMALLINT, true)
+      RETURNING * INTO player;
+    END IF;
+    IF player.team_id IS NOT NULL
+      OR EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id
+        AND s.player_id = player.id AND (s.team_id IS NOT NULL OR NOT s.is_active))
+      OR EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = player.id)
+      OR EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = player.id)
+      OR EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = player.id) THEN
+      skipped := skipped + 1;
+      CONTINUE;
+    END IF;
+    UPDATE public.players SET is_active = true,
+      years_of_experience = COALESCE(years_of_experience, (candidate->>'exp')::SMALLINT)
+    WHERE id = player.id;
+    PERFORM public.enroll_simulated_free_agents(p_game_id, ARRAY[player.id]);
+    enrolled := enrolled + 1;
+  END LOOP;
+  INSERT INTO public.free_agency_imports(game_id, snapshot, enrolled_count, skipped_count)
+  VALUES (p_game_id, p_snapshot, enrolled, skipped);
+  RETURN jsonb_build_object('enrolled_count', enrolled, 'skipped_count', skipped);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.import_initial_free_agents(UUID, UUID, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.import_initial_free_agents(UUID, UUID, JSONB) TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 033.
+
+-- Canonical schema mirror for migration 034. Keep byte-identical below.
+BEGIN;
+
+-- Market reads, human submissions and AI assessment share standard roster slots.
+CREATE OR REPLACE FUNCTION public.get_free_agency_financial_context(
+  p_game_id UUID, p_player_id UUID, p_team_id UUID
+) RETURNS TABLE (
+  selected_team_id UUID, season_year INTEGER, simulation_date DATE, salary_cap BIGINT,
+  payroll BIGINT, cap_room BIGINT, roster_count INTEGER, service_years INTEGER,
+  minimum_salary BIGINT, maximum_salary BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_player public.players%ROWTYPE;
+  v_payroll NUMERIC := 0;
+BEGIN
+  SELECT g.* INTO v_game FROM public.games g
+  WHERE g.id = p_game_id AND g.user_id = auth.uid() AND g.status = 'active'
+    AND g.season_era_id = 'modern' AND g.deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  IF p_team_id IS NULL OR NOT (
+    p_team_id = v_game.selected_team_id
+    OR EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+    OR EXISTS (SELECT 1 FROM public.league_standings s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+  ) THEN RAISE EXCEPTION 'Team does not participate in this game'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+  v_game.selected_team_id := p_team_id;
+  SELECT p.* INTO v_player FROM public.players p WHERE p.id = p_player_id AND p.is_active;
+  IF NOT FOUND OR v_player.years_of_experience IS NULL
+     OR v_player.years_of_experience NOT BETWEEN 0 AND 99 THEN
+    RAISE EXCEPTION 'Active player with known years of service required';
+  END IF;
+  IF v_game.season_year <> 2026 THEN
+    RAISE EXCEPTION 'Verified minimum salary schedule unavailable for game season';
+  END IF;
+  service_years := LEAST(v_player.years_of_experience, 10);
+  minimum_salary := (ARRAY[
+    1357763, 2185116, 2449421, 2537526, 2625627, 2845883,
+    3066143, 3286399, 3506659, 3524115, 3876529
+  ]::BIGINT[])[service_years + 1];
+  salary_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  maximum_salary := floor(salary_cap * CASE WHEN service_years <= 6 THEN 0.25
+    WHEN service_years <= 9 THEN 0.30 ELSE 0.35 END)::BIGINT;
+
+  IF EXISTS (
+    SELECT 1 FROM public.game_player_states s
+    LEFT JOIN public.game_runtime_contracts r ON r.game_id = s.game_id AND r.player_id = s.player_id
+    LEFT JOIN public.game_contract_identities i ON i.game_id = s.game_id AND i.player_id = s.player_id
+    LEFT JOIN public.game_contract_agreements a ON a.game_id = s.game_id AND a.player_id = s.player_id
+    LEFT JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+      AND cs.start_year = v_game.season_year
+    WHERE s.game_id = p_game_id AND s.team_id = v_game.selected_team_id AND r.id IS NULL
+      AND (
+        (i.player_id IS NOT NULL AND i.cap_treatment = 'standard-cap-and-matching'
+          AND (a.id IS NULL OR a.cap_treatment <> 'standard-cap-and-matching'
+            OR cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (a.id IS NOT NULL AND a.cap_treatment = 'standard-cap-and-matching'
+          AND (cs.id IS NULL OR cs.salary_amount IS NULL))
+        OR (i.player_id IS NULL AND a.id IS NULL AND NOT EXISTS (
+          SELECT 1 FROM public.contracts c WHERE c.game_id = s.game_id AND c.player_id = s.player_id
+        ))
+      )
+  ) THEN RAISE EXCEPTION 'Canonical current-season standard salary context is incomplete'; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.contracts c
+    JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    WHERE c.game_id = p_game_id AND s.team_id = v_game.selected_team_id
+      AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+        WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+        WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+        WHERE r.game_id = c.game_id AND r.player_id = c.player_id)
+      AND (
+        (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) IS NULL
+        OR (CASE v_game.season_year - c.start_year
+          WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+          WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE NULL END) < 0
+      )
+  ) THEN RAISE EXCEPTION 'Legacy current-season salary context is incomplete'; END IF;
+
+  SELECT COALESCE(sum(cs.salary_amount), 0) INTO v_payroll
+  FROM public.game_contract_agreements a
+  JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id
+    AND cs.start_year = v_game.season_year
+  JOIN public.game_player_states s ON s.game_id = a.game_id AND s.player_id = a.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE a.game_id = p_game_id AND a.cap_treatment = 'standard-cap-and-matching'
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = a.game_id AND r.player_id = a.player_id);
+
+  SELECT v_payroll + COALESCE(sum(r.annual_salary), 0) INTO v_payroll
+  FROM public.game_runtime_contracts r
+  JOIN public.game_player_states s ON s.game_id = r.game_id AND s.player_id = r.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE r.game_id = p_game_id AND r.start_year <= v_game.season_year AND r.end_year >= v_game.season_year;
+
+  SELECT v_payroll + COALESCE(sum(
+    CASE v_game.season_year - c.start_year
+      WHEN 0 THEN c.salary_y1 WHEN 1 THEN c.salary_y2 WHEN 2 THEN c.salary_y3
+      WHEN 3 THEN c.salary_y4 WHEN 4 THEN c.salary_y5 ELSE 0 END
+  ), 0) INTO v_payroll
+  FROM public.contracts c
+  JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    AND s.team_id = v_game.selected_team_id
+  WHERE c.game_id = p_game_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i
+      WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+      WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_runtime_contracts r
+      WHERE r.game_id = c.game_id AND r.player_id = c.player_id);
+  IF v_payroll < 0 OR v_payroll > 9007199254740991 THEN
+    RAISE EXCEPTION 'Current payroll is outside supported safe integer range';
+  END IF;
+  SELECT count(*)::INTEGER INTO roster_count FROM public.game_player_states s
+  LEFT JOIN public.game_contract_identities i ON i.game_id = s.game_id AND i.player_id = s.player_id
+  LEFT JOIN public.game_runtime_contracts r ON r.game_id = s.game_id AND r.player_id = s.player_id
+  WHERE s.game_id = p_game_id AND s.team_id = v_game.selected_team_id AND s.is_active
+    AND (r.id IS NOT NULL OR COALESCE(i.cap_treatment, 'standard-cap-and-matching')
+      NOT IN ('excluded-two-way', 'excluded-inactive'));
+  selected_team_id := v_game.selected_team_id;
+  season_year := v_game.season_year;
+  simulation_date := v_game.simulation_date;
+  payroll := v_payroll::BIGINT;
+  cap_room := GREATEST(0, salary_cap - payroll);
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_financial_context(UUID, UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 034.
+
+-- Canonical schema mirror for migration 035. Keep byte-identical below.
+BEGIN;
+
+-- Releases are runtime events. Imported agreement/identity snapshots remain immutable.
+CREATE TABLE public.game_roster_releases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES public.games(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES public.players(id) ON DELETE RESTRICT,
+  team_id UUID NOT NULL REFERENCES public.teams(id) ON DELETE RESTRICT,
+  request_id UUID NOT NULL,
+  contract_id UUID,
+  contract_origin TEXT NOT NULL CHECK (contract_origin IN ('observed', 'simulated')),
+  salary_by_year JSONB NOT NULL CHECK (jsonb_typeof(salary_by_year) = 'object'),
+  released_date DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (game_id, request_id)
+);
+CREATE INDEX game_roster_releases_player ON public.game_roster_releases(game_id, player_id);
+ALTER TABLE public.game_roster_releases ENABLE ROW LEVEL SECURITY;
+CREATE POLICY game_roster_releases_owner_read ON public.game_roster_releases
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+  ));
+REVOKE ALL ON public.game_roster_releases FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.game_roster_releases TO authenticated;
+
+-- Aggregate in PostgreSQL so PostgREST's row limit cannot truncate cap charges.
+CREATE FUNCTION public.get_roster_release_cap_charge(p_game_id UUID, p_team_id UUID, p_season_year INTEGER)
+RETURNS BIGINT LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT COALESCE(sum((salary_by_year ->> p_season_year::TEXT)::BIGINT), 0)::BIGINT
+  FROM public.game_roster_releases WHERE game_id = p_game_id AND team_id = p_team_id;
+$$;
+REVOKE ALL ON FUNCTION public.get_roster_release_cap_charge(UUID, UUID, INTEGER) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.get_roster_release_cap_charge(UUID, UUID, INTEGER) TO authenticated;
+
+ALTER TABLE public.game_runtime_contracts ADD COLUMN released_at TIMESTAMPTZ;
+ALTER TABLE public.game_runtime_contracts DROP CONSTRAINT game_runtime_contracts_game_id_player_id_key;
+CREATE UNIQUE INDEX game_runtime_contracts_one_active_player
+  ON public.game_runtime_contracts(game_id, player_id) WHERE released_at IS NULL;
+CREATE VIEW public.game_active_runtime_contracts WITH (security_invoker = true) AS
+  SELECT * FROM public.game_runtime_contracts WHERE released_at IS NULL;
+REVOKE ALL ON public.game_active_runtime_contracts FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.game_active_runtime_contracts TO authenticated;
+
+-- This predicate is shared by market reads, human submissions and AI decisions.
+CREATE FUNCTION public.is_available_free_agent(p_game_id UUID, p_player_id UUID)
+RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM public.game_player_states s JOIN public.players p ON p.id = s.player_id
+    WHERE s.game_id = p_game_id AND s.player_id = p_player_id
+      AND s.team_id IS NULL AND s.is_active AND p.is_active)
+    AND (EXISTS (SELECT 1 FROM public.free_agency_availability_enrollments e
+      WHERE e.game_id = p_game_id AND e.player_id = p_player_id)
+      OR EXISTS (SELECT 1 FROM public.game_roster_releases x
+        WHERE x.game_id = p_game_id AND x.player_id = p_player_id))
+    AND NOT EXISTS (SELECT 1 FROM public.game_active_runtime_contracts r
+      WHERE r.game_id = p_game_id AND r.player_id = p_player_id)
+    AND (EXISTS (SELECT 1 FROM public.game_roster_releases x
+        WHERE x.game_id = p_game_id AND x.player_id = p_player_id AND x.contract_origin = 'observed')
+      OR (NOT EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = p_player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a
+          WHERE a.game_id = p_game_id AND a.player_id = p_player_id)));
+$$;
+REVOKE ALL ON FUNCTION public.is_available_free_agent(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.release_roster_player(
+  p_game_id UUID, p_player_id UUID, p_request_id UUID, p_contract_id UUID
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; s public.game_player_states%ROWTYPE;
+  r public.game_runtime_contracts%ROWTYPE; a public.game_contract_agreements%ROWTYPE;
+  c public.contracts%ROWTYPE; previous public.game_roster_releases%ROWTYPE;
+  salaries JSONB := '{}'; origin TEXT := 'observed'; current_contract UUID; release_id UUID;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+  IF p_game_id IS NULL OR p_player_id IS NULL OR p_request_id IS NULL THEN
+    RAISE EXCEPTION 'Release identifiers required';
+  END IF;
+  -- Same game-first lock order as trades, signing and simulation days.
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND season_year = 2026
+    AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern 2026 game required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+  SELECT * INTO previous FROM public.game_roster_releases WHERE game_id = p_game_id AND request_id = p_request_id;
+  IF FOUND THEN
+    IF previous.player_id <> p_player_id OR previous.contract_id IS DISTINCT FROM p_contract_id THEN
+      RAISE EXCEPTION 'Idempotency key reused with changed release payload';
+    END IF;
+    RETURN previous.id;
+  END IF;
+  SELECT * INTO s FROM public.game_player_states WHERE game_id = p_game_id AND player_id = p_player_id FOR UPDATE;
+  IF NOT FOUND OR s.team_id IS DISTINCT FROM g.selected_team_id OR NOT s.is_active THEN
+    RAISE EXCEPTION 'Player is not on the selected team active roster';
+  END IF;
+  SELECT * INTO r FROM public.game_active_runtime_contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+  IF FOUND THEN
+    current_contract := r.id; origin := 'simulated';
+    SELECT jsonb_object_agg(y::TEXT, CASE WHEN r.is_guaranteed IS false THEN 0 ELSE r.annual_salary END)
+    INTO salaries FROM generate_series(GREATEST(g.season_year, r.start_year), r.end_year) y;
+  ELSE
+    SELECT * INTO a FROM public.game_contract_agreements WHERE game_id = p_game_id AND player_id = p_player_id;
+    IF FOUND THEN
+      current_contract := a.id;
+      IF a.cap_treatment = 'standard-cap-and-matching' THEN
+        IF NOT EXISTS (SELECT 1 FROM public.game_contract_seasons WHERE game_id = p_game_id
+          AND agreement_id = a.id AND start_year = g.season_year AND salary_amount IS NOT NULL)
+          OR EXISTS (SELECT 1 FROM public.game_contract_seasons WHERE game_id = p_game_id
+            AND agreement_id = a.id AND start_year >= g.season_year AND salary_amount IS NULL) THEN
+          RAISE EXCEPTION 'Release salary coverage is incomplete';
+        END IF;
+        -- ponytail: unknown/partial guarantees retain full salary; no stretch or set-off in v1.
+        SELECT jsonb_object_agg(start_year::TEXT, CASE WHEN guarantee_kind = 'not-guaranteed' THEN 0 ELSE salary_amount END)
+        INTO salaries FROM public.game_contract_seasons
+        WHERE game_id = p_game_id AND agreement_id = a.id AND start_year >= g.season_year;
+      END IF;
+    ELSIF EXISTS (SELECT 1 FROM public.game_contract_identities WHERE game_id = p_game_id
+      AND player_id = p_player_id AND cap_treatment = 'excluded-two-way') THEN
+      current_contract := NULL;
+    ELSE
+      SELECT * INTO c FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+      IF NOT FOUND OR (SELECT count(*) FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id) <> 1 THEN
+        RAISE EXCEPTION 'Release salary coverage is incomplete';
+      END IF;
+      current_contract := c.id;
+      SELECT jsonb_object_agg(y::TEXT, CASE WHEN c.is_guaranteed IS false THEN 0 ELSE
+        (ARRAY[c.salary_y1, c.salary_y2, c.salary_y3, c.salary_y4, c.salary_y5])[y - c.start_year + 1] END)
+      INTO salaries FROM generate_series(GREATEST(g.season_year, c.start_year), c.end_year) y;
+      IF EXISTS (SELECT 1 FROM jsonb_each(salaries) WHERE value = 'null'::JSONB) THEN
+        RAISE EXCEPTION 'Release salary coverage is incomplete';
+      END IF;
+    END IF;
+  END IF;
+  IF current_contract IS DISTINCT FROM p_contract_id THEN RAISE EXCEPTION 'Player contract changed; refresh the roster'; END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_each_text(COALESCE(salaries, '{}'))
+    WHERE value IS NULL OR value::NUMERIC < 0 OR value::NUMERIC > 9007199254740991) THEN
+    RAISE EXCEPTION 'Release salary coverage is incomplete';
+  END IF;
+  INSERT INTO public.game_roster_releases(game_id, player_id, team_id, request_id, contract_id,
+    contract_origin, salary_by_year, released_date)
+  VALUES (p_game_id, p_player_id, g.selected_team_id, p_request_id, current_contract,
+    origin, COALESCE(salaries, '{}'), g.simulation_date) RETURNING id INTO release_id;
+  UPDATE public.game_runtime_contracts SET released_at = now() WHERE id = r.id;
+  -- Legacy compatibility rows describe live contracts, unlike immutable imported snapshots.
+  DELETE FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+  UPDATE public.game_player_states SET team_id = NULL, updated_at = now() WHERE id = s.id;
+  RETURN release_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_free_agency_financial_context(
+  p_game_id UUID, p_player_id UUID, p_team_id UUID
+) RETURNS TABLE (
+  selected_team_id UUID, season_year INTEGER, simulation_date DATE, salary_cap BIGINT,
+  payroll BIGINT, cap_room BIGINT, roster_count INTEGER, service_years INTEGER,
+  minimum_salary BIGINT, maximum_salary BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE; v_player public.players%ROWTYPE; v_payroll NUMERIC := 0;
+BEGIN
+  SELECT g.* INTO v_game FROM public.games g
+  WHERE g.id = p_game_id AND g.user_id = auth.uid() AND g.status = 'active'
+    AND g.season_era_id = 'modern' AND g.deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  IF p_team_id IS NULL OR NOT (p_team_id = v_game.selected_team_id
+    OR EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+    OR EXISTS (SELECT 1 FROM public.league_standings s WHERE s.game_id = p_game_id AND s.team_id = p_team_id)
+  ) THEN RAISE EXCEPTION 'Team does not participate in this game'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+  SELECT p.* INTO v_player FROM public.players p WHERE p.id = p_player_id AND p.is_active;
+  IF NOT FOUND OR v_player.years_of_experience IS NULL OR v_player.years_of_experience NOT BETWEEN 0 AND 99 THEN
+    RAISE EXCEPTION 'Active player with known years of service required';
+  END IF;
+  IF v_game.season_year <> 2026 THEN RAISE EXCEPTION 'Verified minimum salary schedule unavailable for game season'; END IF;
+  service_years := LEAST(v_player.years_of_experience, 10);
+  minimum_salary := (ARRAY[1357763,2185116,2449421,2537526,2625627,2845883,3066143,3286399,3506659,3524115,3876529]::BIGINT[])[service_years + 1];
+  salary_cap := round(140588000 * power(1.1, GREATEST(0, v_game.season_year - 2024)))::BIGINT;
+  maximum_salary := floor(salary_cap * CASE WHEN service_years <= 6 THEN 0.25 WHEN service_years <= 9 THEN 0.30 ELSE 0.35 END)::BIGINT;
+  IF EXISTS (
+    SELECT 1 FROM public.game_player_states s
+    LEFT JOIN public.game_active_runtime_contracts r ON r.game_id = s.game_id AND r.player_id = s.player_id
+    LEFT JOIN public.game_contract_identities i ON i.game_id = s.game_id AND i.player_id = s.player_id
+    LEFT JOIN public.game_contract_agreements a ON a.game_id = s.game_id AND a.player_id = s.player_id
+    LEFT JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id AND cs.start_year = v_game.season_year
+    WHERE s.game_id = p_game_id AND s.team_id = p_team_id AND r.id IS NULL AND (
+      (i.player_id IS NOT NULL AND i.cap_treatment = 'standard-cap-and-matching'
+        AND (a.id IS NULL OR a.cap_treatment <> 'standard-cap-and-matching' OR cs.id IS NULL OR cs.salary_amount IS NULL))
+      OR (a.id IS NOT NULL AND a.cap_treatment = 'standard-cap-and-matching' AND (cs.id IS NULL OR cs.salary_amount IS NULL))
+      OR (i.player_id IS NULL AND a.id IS NULL AND NOT EXISTS (
+        SELECT 1 FROM public.contracts c WHERE c.game_id = s.game_id AND c.player_id = s.player_id))
+    )
+  ) THEN RAISE EXCEPTION 'Canonical current-season standard salary context is incomplete'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.contracts c JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id
+    WHERE c.game_id = p_game_id AND s.team_id = p_team_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+      AND NOT EXISTS (SELECT 1 FROM public.game_active_runtime_contracts r WHERE r.game_id = c.game_id AND r.player_id = c.player_id)
+      AND (COALESCE((ARRAY[c.salary_y1,c.salary_y2,c.salary_y3,c.salary_y4,c.salary_y5])[v_game.season_year-c.start_year+1], -1) < 0)
+  ) THEN RAISE EXCEPTION 'Legacy current-season salary context is incomplete'; END IF;
+  SELECT COALESCE(sum(cs.salary_amount), 0) INTO v_payroll
+  FROM public.game_contract_agreements a
+  JOIN public.game_contract_seasons cs ON cs.game_id = a.game_id AND cs.agreement_id = a.id AND cs.start_year = v_game.season_year
+  JOIN public.game_player_states s ON s.game_id = a.game_id AND s.player_id = a.player_id AND s.team_id = p_team_id
+  WHERE a.game_id = p_game_id AND a.cap_treatment = 'standard-cap-and-matching'
+    AND NOT EXISTS (SELECT 1 FROM public.game_active_runtime_contracts r WHERE r.game_id = a.game_id AND r.player_id = a.player_id);
+  SELECT v_payroll + COALESCE(sum(r.annual_salary), 0) INTO v_payroll
+  FROM public.game_active_runtime_contracts r
+  JOIN public.game_player_states s ON s.game_id = r.game_id AND s.player_id = r.player_id AND s.team_id = p_team_id
+  WHERE r.game_id = p_game_id AND r.start_year <= v_game.season_year AND r.end_year >= v_game.season_year;
+  SELECT v_payroll + COALESCE(sum((ARRAY[c.salary_y1,c.salary_y2,c.salary_y3,c.salary_y4,c.salary_y5])[v_game.season_year-c.start_year+1]), 0)
+  INTO v_payroll FROM public.contracts c
+  JOIN public.game_player_states s ON s.game_id = c.game_id AND s.player_id = c.player_id AND s.team_id = p_team_id
+  WHERE c.game_id = p_game_id AND c.start_year <= v_game.season_year AND c.end_year >= v_game.season_year
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_identities i WHERE i.game_id = c.game_id AND i.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = c.game_id AND a.player_id = c.player_id)
+    AND NOT EXISTS (SELECT 1 FROM public.game_active_runtime_contracts r WHERE r.game_id = c.game_id AND r.player_id = c.player_id);
+  SELECT v_payroll + COALESCE(sum((x.salary_by_year ->> v_game.season_year::TEXT)::BIGINT), 0) INTO v_payroll
+  FROM public.game_roster_releases x WHERE x.game_id = p_game_id AND x.team_id = p_team_id;
+  IF v_payroll < 0 OR v_payroll > 9007199254740991 THEN RAISE EXCEPTION 'Current payroll is outside supported safe integer range'; END IF;
+  SELECT count(*)::INTEGER INTO roster_count FROM public.game_player_states s
+  LEFT JOIN public.game_contract_identities i ON i.game_id = s.game_id AND i.player_id = s.player_id
+  LEFT JOIN public.game_active_runtime_contracts r ON r.game_id = s.game_id AND r.player_id = s.player_id
+  WHERE s.game_id = p_game_id AND s.team_id = p_team_id AND s.is_active
+    AND (r.id IS NOT NULL OR COALESCE(i.cap_treatment, 'standard-cap-and-matching') NOT IN ('excluded-two-way', 'excluded-inactive'));
+  selected_team_id := p_team_id; season_year := v_game.season_year; simulation_date := v_game.simulation_date;
+  payroll := v_payroll::BIGINT; cap_room := GREATEST(0, salary_cap - payroll);
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_financial_context(UUID, UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.submit_free_agency_offer(
+  p_game_id UUID, p_player_id UUID, p_request_id UUID, p_season TEXT, p_annual_salary BIGINT, p_years INTEGER
+) RETURNS public.free_agency_pending_offers LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; existing public.free_agency_pending_offers%ROWTYPE;
+  result public.free_agency_pending_offers%ROWTYPE; f RECORD;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF p_request_id IS NULL OR p_player_id IS NULL OR p_game_id IS NULL
+    OR p_annual_salary IS NULL OR p_annual_salary <= 0 OR p_annual_salary > 9007199254740991
+    OR p_years IS NULL OR p_years NOT BETWEEN 1 AND 5 OR p_season IS NULL OR p_season !~ '^\d{4}-\d{2}$'
+    OR split_part(p_season, '-', 2)::INTEGER <> (split_part(p_season, '-', 1)::INTEGER + 1) % 100 THEN
+    RAISE EXCEPTION 'Invalid offer terms';
+  END IF;
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active game required'; END IF;
+  SELECT * INTO existing FROM public.free_agency_pending_offers
+  WHERE owner_id = auth.uid() AND game_id = p_game_id AND request_id = p_request_id FOR UPDATE;
+  IF FOUND THEN
+    IF (existing.player_id, existing.team_id, existing.season, existing.annual_salary, existing.years)
+      IS DISTINCT FROM (p_player_id, g.selected_team_id, p_season, p_annual_salary, p_years) THEN
+      RAISE EXCEPTION 'Idempotency key reused with changed offer payload';
+    END IF;
+    IF existing.status <> 'pending' THEN RAISE EXCEPTION 'Offer request has already been resolved'; END IF;
+    RETURN existing;
+  END IF;
+  PERFORM 1 FROM public.game_player_states WHERE game_id = p_game_id AND player_id = p_player_id FOR UPDATE;
+  IF NOT public.is_available_free_agent(p_game_id, p_player_id) THEN
+    RAISE EXCEPTION 'Explicitly enrolled active teamless player without a game agreement required';
+  END IF;
+  SELECT * INTO STRICT f FROM public.get_free_agency_financial_context(p_game_id, p_player_id);
+  IF p_season <> format('%s-%s', f.season_year, right((f.season_year + 1)::TEXT, 2)) OR p_season <> '2026-27' THEN
+    RAISE EXCEPTION 'Offer season must match the supported game financial season';
+  END IF;
+  IF p_annual_salary < f.minimum_salary OR p_annual_salary > f.maximum_salary THEN RAISE EXCEPTION 'Salary outside verified minimum and maximum'; END IF;
+  IF f.roster_count + 1 > 15 THEN RAISE EXCEPTION 'Roster maximum reached'; END IF;
+  IF p_annual_salary > f.cap_room AND p_annual_salary <> f.minimum_salary THEN RAISE EXCEPTION 'Offer exceeds cap room'; END IF;
+  INSERT INTO public.free_agency_pending_offers(request_id, owner_id, game_id, player_id, team_id, season, annual_salary, years, due_date)
+  VALUES (p_request_id, auth.uid(), p_game_id, p_player_id, f.selected_team_id, p_season, p_annual_salary, p_years, f.simulation_date + 1)
+  RETURNING * INTO result;
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_free_agency_offer(UUID, UUID, UUID, TEXT, BIGINT, INTEGER) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.assess_free_agency_offer(p_game_id UUID, p_offer_id UUID)
+RETURNS TABLE (rejection_reason TEXT, score NUMERIC)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; o public.free_agency_pending_offers%ROWTYPE; f RECORD; quality INTEGER;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  SELECT * INTO o FROM public.free_agency_pending_offers WHERE game_id = p_game_id AND id = p_offer_id AND owner_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game offer not found'; END IF;
+  score := 0;
+  IF o.status <> 'pending' THEN rejection_reason := 'Offer is not pending';
+  ELSIF g.simulation_date < o.due_date THEN rejection_reason := 'Offer is not due';
+  ELSIF o.offer_origin = 'human' AND o.team_id IS DISTINCT FROM g.selected_team_id THEN
+    rejection_reason := 'Offer team does not match the selected game team';
+  ELSIF o.offer_origin = 'ai' AND (o.team_id = g.selected_team_id OR NOT (
+    EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id = o.team_id)
+    OR EXISTS (SELECT 1 FROM public.league_standings s WHERE s.game_id = p_game_id AND s.team_id = o.team_id)
+  )) THEN rejection_reason := 'AI team does not participate in this game';
+  ELSIF o.season <> format('%s-%s', g.season_year, right((g.season_year + 1)::TEXT, 2)) OR o.season <> '2026-27' THEN
+    rejection_reason := 'Offer season must match the supported game financial season';
+  ELSIF o.annual_salary <= 0 OR o.annual_salary > 9007199254740991 OR o.years NOT BETWEEN 1 AND 5 THEN
+    rejection_reason := 'Stored offer terms are outside supported bounds';
+  ELSIF NOT public.is_available_free_agent(p_game_id, o.player_id) THEN
+    rejection_reason := 'Explicitly enrolled active teamless player without an agreement required';
+  END IF;
+  IF rejection_reason IS NOT NULL THEN RETURN NEXT; RETURN; END IF;
+  SELECT * INTO STRICT f FROM public.get_free_agency_financial_context(p_game_id, o.player_id, o.team_id);
+  IF o.annual_salary < f.minimum_salary OR o.annual_salary > f.maximum_salary THEN
+    rejection_reason := 'Salary outside verified minimum and maximum';
+  ELSIF f.roster_count + 1 > 15 THEN rejection_reason := 'Roster maximum reached';
+  ELSIF o.annual_salary > f.cap_room AND o.annual_salary <> f.minimum_salary THEN rejection_reason := 'Offer exceeds cap room';
+  ELSE
+    SELECT LEAST(100, GREATEST(0, base_rating)) INTO quality FROM public.teams WHERE id = o.team_id;
+    score := (o.annual_salary - f.minimum_salary)::NUMERIC / GREATEST(f.minimum_salary, f.maximum_salary) * 60
+      + GREATEST(0, 15 - f.roster_count)::NUMERIC / 15 * 25 + quality::NUMERIC / 100 * 15;
+  END IF;
+  RETURN NEXT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.assess_free_agency_offer(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.generate_ai_free_agency_offers(p_game_id UUID) RETURNS INTEGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; team UUID; player UUID; f RECORD;
+  salary BIGINT; offer_id UUID; inserted INTEGER; total INTEGER := 0;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern game required'; END IF;
+  FOR team IN SELECT s.team_id FROM public.game_player_states s WHERE s.game_id = p_game_id AND s.team_id IS NOT NULL
+    UNION SELECT s.team_id FROM public.league_standings s WHERE s.game_id = p_game_id ORDER BY team_id
+  LOOP
+    IF team = g.selected_team_id OR EXISTS (SELECT 1 FROM public.free_agency_pending_offers o
+      WHERE o.game_id = p_game_id AND o.team_id = team AND o.offer_origin = 'ai' AND o.ai_decision_date = g.simulation_date) THEN CONTINUE; END IF;
+    FOR player IN SELECT s.player_id FROM public.game_player_states s JOIN public.players p ON p.id = s.player_id
+      WHERE s.game_id = p_game_id AND p.years_of_experience BETWEEN 0 AND 99
+        AND public.is_available_free_agent(p_game_id, s.player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.free_agency_pending_offers o WHERE o.game_id = p_game_id
+          AND o.player_id = s.player_id AND o.team_id = team AND o.status = 'pending') ORDER BY s.player_id
+    LOOP
+      SELECT * INTO STRICT f FROM public.get_free_agency_financial_context(p_game_id, player, team);
+      IF f.roster_count >= 15 THEN EXIT; END IF;
+      salary := CASE WHEN f.cap_room >= floor(f.minimum_salary * 1.10)
+        THEN LEAST(f.maximum_salary, floor(f.minimum_salary * 1.10)::BIGINT) ELSE f.minimum_salary END;
+      offer_id := md5('free-agency-ai-v1:' || p_game_id::TEXT || ':' || g.simulation_date::TEXT || ':' || team::TEXT)::UUID;
+      INSERT INTO public.free_agency_pending_offers(id, request_id, owner_id, game_id, player_id, team_id,
+        season, annual_salary, years, due_date, offer_origin, ai_decision_date)
+      VALUES (offer_id, gen_random_uuid(), g.user_id, p_game_id, player, team,
+        format('%s-%s', g.season_year, right((g.season_year + 1)::TEXT, 2)), salary, 1, g.simulation_date + 1, 'ai', g.simulation_date)
+      ON CONFLICT (game_id, team_id, ai_decision_date) WHERE offer_origin = 'ai' DO NOTHING;
+      GET DIAGNOSTICS inserted = ROW_COUNT;
+      total := total + inserted;
+      EXIT;
+    END LOOP;
+  END LOOP;
+  RETURN total;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.generate_ai_free_agency_offers(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.get_free_agency_market(p_game_id UUID) RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; ready BOOLEAN; finance RECORD; result JSONB; candidates JSONB;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid() AND deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned game not found'; END IF;
+  ready := g.status = 'active' AND g.season_era_id = 'modern' AND g.season_year = 2026
+    AND EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id);
+  result := jsonb_build_object('game_id', g.id, 'supported', ready, 'context', NULL, 'candidates', '[]'::jsonb,
+    'offers', COALESCE((SELECT jsonb_agg(to_jsonb(o) || jsonb_build_object(
+      'player_name', concat_ws(' ', p.first_name, p.last_name), 'team_name', t.name) ORDER BY o.created_at DESC, o.id DESC)
+      FROM public.free_agency_pending_offers o LEFT JOIN public.players p ON p.id = o.player_id
+      LEFT JOIN public.teams t ON t.id = o.team_id WHERE o.game_id = p_game_id AND o.owner_id = auth.uid()), '[]'::jsonb));
+  IF NOT ready THEN RETURN result; END IF;
+  SELECT f.* INTO finance FROM public.game_player_states s JOIN public.players p ON p.id = s.player_id
+    AND p.is_active AND p.years_of_experience BETWEEN 0 AND 99
+  CROSS JOIN LATERAL public.get_free_agency_financial_context(p_game_id, p.id, g.selected_team_id) f
+  WHERE s.game_id = p_game_id ORDER BY s.player_id LIMIT 1;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Active player with known years of service required for market context'; END IF;
+  result := jsonb_set(result, '{context}', jsonb_build_object('team_id', finance.selected_team_id,
+    'season', format('%s-%s', finance.season_year, right((finance.season_year + 1)::TEXT, 2)),
+    'simulation_date', finance.simulation_date, 'salary_cap', finance.salary_cap,
+    'payroll', finance.payroll, 'cap_room', finance.cap_room, 'roster_count', finance.roster_count));
+  IF EXISTS (SELECT 1 FROM public.game_player_states s JOIN public.players p ON p.id = s.player_id
+    WHERE s.game_id = p_game_id AND public.is_available_free_agent(p_game_id, p.id)
+      AND (p.years_of_experience IS NULL OR p.years_of_experience NOT BETWEEN 0 AND 99)) THEN
+    RAISE EXCEPTION 'Active player with known years of service required';
+  END IF;
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('player_id', p.id, 'first_name', p.first_name,
+    'last_name', p.last_name, 'position', p.position, 'minimum_salary', f.minimum_salary, 'maximum_salary', f.maximum_salary)
+    ORDER BY p.id), '[]'::jsonb) INTO candidates
+  FROM public.game_player_states s JOIN public.players p ON p.id = s.player_id
+  CROSS JOIN LATERAL public.get_free_agency_financial_context(p_game_id, p.id, g.selected_team_id) f
+  WHERE s.game_id = p_game_id AND public.is_available_free_agent(p_game_id, p.id)
+    AND p.years_of_experience BETWEEN 0 AND 99;
+  RETURN jsonb_set(result, '{candidates}', candidates);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_free_agency_market(UUID) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.get_free_agency_market(UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 035.
+
+-- Canonical schema mirror for migration 036. Keep byte-identical below.
+BEGIN;
+
+-- Imported salary grids contain empty future cells, not a salary obligation for every column.
+CREATE OR REPLACE FUNCTION public.release_roster_player(
+  p_game_id UUID, p_player_id UUID, p_request_id UUID, p_contract_id UUID
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE; s public.game_player_states%ROWTYPE;
+  r public.game_runtime_contracts%ROWTYPE; a public.game_contract_agreements%ROWTYPE;
+  c public.contracts%ROWTYPE; previous public.game_roster_releases%ROWTYPE;
+  salaries JSONB := '{}'; origin TEXT := 'observed'; current_contract UUID; release_id UUID;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+  IF p_game_id IS NULL OR p_player_id IS NULL OR p_request_id IS NULL THEN
+    RAISE EXCEPTION 'Release identifiers required';
+  END IF;
+  -- Same game-first lock order as trades, signing and simulation days.
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND season_era_id = 'modern' AND season_year = 2026
+    AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Owned active modern 2026 game required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Materialized contract coverage required';
+  END IF;
+  SELECT * INTO previous FROM public.game_roster_releases WHERE game_id = p_game_id AND request_id = p_request_id;
+  IF FOUND THEN
+    IF previous.player_id <> p_player_id OR previous.contract_id IS DISTINCT FROM p_contract_id THEN
+      RAISE EXCEPTION 'Idempotency key reused with changed release payload';
+    END IF;
+    RETURN previous.id;
+  END IF;
+  SELECT * INTO s FROM public.game_player_states WHERE game_id = p_game_id AND player_id = p_player_id FOR UPDATE;
+  IF NOT FOUND OR s.team_id IS DISTINCT FROM g.selected_team_id OR NOT s.is_active THEN
+    RAISE EXCEPTION 'Player is not on the selected team active roster';
+  END IF;
+  SELECT * INTO r FROM public.game_active_runtime_contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+  IF FOUND THEN
+    current_contract := r.id; origin := 'simulated';
+    SELECT jsonb_object_agg(y::TEXT, CASE WHEN r.is_guaranteed IS false THEN 0 ELSE r.annual_salary END)
+    INTO salaries FROM generate_series(GREATEST(g.season_year, r.start_year), r.end_year) y;
+  ELSE
+    SELECT * INTO a FROM public.game_contract_agreements WHERE game_id = p_game_id AND player_id = p_player_id;
+    IF FOUND THEN
+      current_contract := a.id;
+      IF a.cap_treatment = 'standard-cap-and-matching' THEN
+        IF NOT EXISTS (SELECT 1 FROM public.game_contract_seasons WHERE game_id = p_game_id
+          AND agreement_id = a.id AND start_year = g.season_year AND salary_amount IS NOT NULL) THEN
+          RAISE EXCEPTION 'Release salary coverage is incomplete';
+        END IF;
+        -- ponytail: retain known salaries with unknown/partial guarantees; no stretch or set-off in v1.
+        SELECT jsonb_object_agg(start_year::TEXT, CASE WHEN guarantee_kind = 'not-guaranteed' THEN 0 ELSE salary_amount END)
+        INTO salaries FROM public.game_contract_seasons
+        WHERE game_id = p_game_id AND agreement_id = a.id AND start_year >= g.season_year
+          AND salary_amount IS NOT NULL;
+      END IF;
+    ELSIF EXISTS (SELECT 1 FROM public.game_contract_identities WHERE game_id = p_game_id
+      AND player_id = p_player_id AND cap_treatment = 'excluded-two-way') THEN
+      current_contract := NULL;
+    ELSE
+      SELECT * INTO c FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+      IF NOT FOUND OR (SELECT count(*) FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id) <> 1 THEN
+        RAISE EXCEPTION 'Release salary coverage is incomplete';
+      END IF;
+      current_contract := c.id;
+      SELECT jsonb_object_agg(y::TEXT, CASE WHEN c.is_guaranteed IS false THEN 0 ELSE
+        (ARRAY[c.salary_y1, c.salary_y2, c.salary_y3, c.salary_y4, c.salary_y5])[y - c.start_year + 1] END)
+      INTO salaries FROM generate_series(GREATEST(g.season_year, c.start_year), c.end_year) y;
+      IF EXISTS (SELECT 1 FROM jsonb_each(salaries) WHERE value = 'null'::JSONB) THEN
+        RAISE EXCEPTION 'Release salary coverage is incomplete';
+      END IF;
+    END IF;
+  END IF;
+  IF current_contract IS DISTINCT FROM p_contract_id THEN RAISE EXCEPTION 'Player contract changed; refresh the roster'; END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_each_text(COALESCE(salaries, '{}'))
+    WHERE value IS NULL OR value::NUMERIC < 0 OR value::NUMERIC > 9007199254740991) THEN
+    RAISE EXCEPTION 'Release salary coverage is incomplete';
+  END IF;
+  INSERT INTO public.game_roster_releases(game_id, player_id, team_id, request_id, contract_id,
+    contract_origin, salary_by_year, released_date)
+  VALUES (p_game_id, p_player_id, g.selected_team_id, p_request_id, current_contract,
+    origin, COALESCE(salaries, '{}'), g.simulation_date) RETURNING id INTO release_id;
+  UPDATE public.game_runtime_contracts SET released_at = now() WHERE id = r.id;
+  -- Legacy compatibility rows describe live contracts, unlike immutable imported snapshots.
+  DELETE FROM public.contracts WHERE game_id = p_game_id AND player_id = p_player_id;
+  UPDATE public.game_player_states SET team_id = NULL, updated_at = now() WHERE id = s.id;
+  RETURN release_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 036.

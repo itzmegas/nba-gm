@@ -15,11 +15,18 @@ export interface Contract {
   isPlayerOption: boolean;
   isTeamOption: boolean;
   isGuaranteed: boolean | null;
+  origin?: ContractOrigin;
   /** Derived read-only view over canonical game seasons; never persisted as canonical data. */
   compatibilityProjection?: "observed-season-coverage";
   createdAt: Date;
   updatedAt: Date;
 }
+
+export const CONTRACT_ORIGIN = {
+  SIMULATED_AGREEMENT: "simulated-agreement",
+} as const;
+
+export type ContractOrigin = (typeof CONTRACT_ORIGIN)[keyof typeof CONTRACT_ORIGIN];
 
 export const contractSchema = z.object({
   id: z.uuid(),
@@ -36,6 +43,7 @@ export const contractSchema = z.object({
   isPlayerOption: z.boolean(),
   isTeamOption: z.boolean(),
   isGuaranteed: z.boolean().nullable(),
+  origin: z.enum(CONTRACT_ORIGIN).optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

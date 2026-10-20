@@ -1,12 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { NBA_RULES } from "../../../src/domain/constants/nba-rules";
-import type { Contract } from "../../../src/domain/entities/Contract";
-import { SalaryCapCalculator } from "../../../src/domain/services/SalaryCapCalculator";
+import { getSalaryCapThresholds, NBA_RULES } from "@/domain/constants/nba-rules";
+import type { Contract } from "@/domain/entities/Contract";
+import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 describe("SalaryCapCalculator", () => {
   const calc = new SalaryCapCalculator();
 
   const createContract = (salaryY1: number): Contract => ({ salaryY1 }) as Contract;
+
+  it("uses the game's season thresholds consistently with the free-agency market", () => {
+    const thresholds = getSalaryCapThresholds(2026);
+    const seasonal = new SalaryCapCalculator(thresholds);
+    expect(thresholds.salaryCap).toBe(170_111_480);
+    expect(seasonal.getFinancialStatus([createContract(160_247_370)])).toMatchObject({
+      totalSalary: 160_247_370,
+      capSpace: 9_864_110,
+      isOverCap: false,
+      isOverLuxuryTax: false,
+      apronStatus: "None",
+    });
+    expect(
+      seasonal.getFinancialStatus([createContract(thresholds.firstApron + 1)]).apronStatus
+    ).toBe("First");
+    expect(
+      seasonal.getFinancialStatus([createContract(thresholds.secondApron + 1)]).apronStatus
+    ).toBe("Second");
+    expect(seasonal.calculateTaxBill(thresholds.luxuryTax + 5_000_000)).toBe(7_500_000);
+  });
 
   describe("calculateTotalSalary", () => {
     it("should sum up all contract salaries correctly", () => {

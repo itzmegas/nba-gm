@@ -20,9 +20,9 @@ export interface ContractFallbackInput {
   currentStandardSalary: number | null;
   isOfficialTwoWay: boolean | null;
   isActiveStandardRoster: boolean;
-  isMatchedSourcePlayer: boolean;
-  allowUnmatchedRosterExperienceFallback: boolean;
+  allowCurrentRosterExperienceFallback: boolean;
   yearsOfService: number | null;
+  age: number | null;
   inactiveEvidence: { sourceUrl: string; observedDate: string; evidence: string } | null;
 }
 
@@ -62,8 +62,9 @@ export function resolveContractFallback(input: ContractFallbackInput) {
   if (input.isOfficialTwoWay === null) {
     reason = CONTRACT_FALLBACK_BLOCK_REASON.TWO_WAY_SOURCE_UNAVAILABLE;
   } else if (input.yearsOfService === null) {
-    if (input.allowUnmatchedRosterExperienceFallback && !input.isMatchedSourcePlayer) {
-      const minimum = getMinimumSalary(input.season, 0);
+    if (input.allowCurrentRosterExperienceFallback) {
+      const assumedYearsOfService = input.age !== null && input.age > 30 ? 10 : 0;
+      const minimum = getMinimumSalary(input.season, assumedYearsOfService);
       if (minimum) {
         return {
           status: CONTRACT_FALLBACK_RESULT.RESOLVED,
@@ -75,9 +76,13 @@ export function resolveContractFallback(input: ContractFallbackInput) {
           capTreatment: CONTRACT_CAP_TREATMENT.STANDARD,
           sourceUrl: minimum.schedule.sourceUrl,
           evidence: {
-            assumption: CONTRACT_FALLBACK_ASSUMPTION.ESPN_OMITTED_EXPERIENCE_ZERO_YOS,
-            detail:
-              "ESPN omitted years of NBA service; assumed 0 years for current-roster coverage",
+            assumption:
+              assumedYearsOfService === 10
+                ? CONTRACT_FALLBACK_ASSUMPTION.ESPN_OMITTED_EXPERIENCE_AGE_OVER_30_TEN_YOS
+                : CONTRACT_FALLBACK_ASSUMPTION.ESPN_OMITTED_EXPERIENCE_ZERO_YOS,
+            age: input.age,
+            assumedYearsOfService,
+            detail: `ESPN omitted years of NBA service; assumed ${assumedYearsOfService} years for current-roster coverage using age ${input.age ?? "unknown"}`,
           },
         } as const;
       }
