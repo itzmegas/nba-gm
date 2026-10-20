@@ -82,6 +82,8 @@ const runtimeContractRowSchema = z
     }
   });
 
+const CONTRACT_SEASONS_PAGE_SIZE = 500;
+
 export class SupabaseGameContractRepository implements GameContractRepository {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -194,17 +196,22 @@ export class SupabaseGameContractRepository implements GameContractRepository {
     if (identitiesResult.error) throw new Error(identitiesResult.error.message);
     if (agreementsResult.error) throw new Error(agreementsResult.error.message);
     const agreements = z.array(agreementRowSchema).parse(agreementsResult.data ?? []);
-    const agreementIds = agreements.map(({ id }) => id);
-    const seasonsResult =
-      agreementIds.length === 0
-        ? { data: [], error: null }
-        : await this.client
-            .from("game_contract_seasons")
-            .select("*")
-            .in("agreement_id", agreementIds)
-            .eq("game_id", gameId);
-    if (seasonsResult.error) throw new Error(seasonsResult.error.message);
-    const seasons = z.array(seasonRowSchema).parse(seasonsResult.data ?? []);
+    const seasons: z.infer<typeof seasonRowSchema>[] = [];
+    // A league's multi-year agreements exceed PostgREST's single-response row limit.
+    if (agreements.length > 0) {
+      for (let from = 0; ; from += CONTRACT_SEASONS_PAGE_SIZE) {
+        const { data, error } = await this.client
+          .from("game_contract_seasons")
+          .select("*")
+          .eq("game_id", gameId)
+          .order("id", { ascending: true })
+          .range(from, from + CONTRACT_SEASONS_PAGE_SIZE - 1);
+        if (error) throw new Error(error.message);
+        const page = z.array(seasonRowSchema).parse(data ?? []);
+        seasons.push(...page);
+        if (page.length < CONTRACT_SEASONS_PAGE_SIZE) break;
+      }
+    }
     const seasonsByAgreement = new Map<string, GameContractSeason[]>();
     for (const row of seasons) {
       const values = seasonsByAgreement.get(row.agreement_id) ?? [];

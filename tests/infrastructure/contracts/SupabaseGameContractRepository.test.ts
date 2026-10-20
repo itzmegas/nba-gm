@@ -29,6 +29,14 @@ class QueryBuilder {
     return this;
   }
 
+  order(): this {
+    return this;
+  }
+
+  range(): this {
+    return this;
+  }
+
   // biome-ignore lint/suspicious/noThenProperty: Supabase query builders are awaitable thenables
   then<
     TResult1 = { data: unknown; error: { message: string; code?: string } | null },

@@ -7,6 +7,7 @@ import { SupabaseContractRepository } from "@/infrastructure/repositories/Supaba
 interface QueryContext {
   table: string;
   filters: Array<{ column: string; value: unknown }>;
+  range?: { from: number; to: number };
 }
 
 class QueryBuilder {
@@ -32,6 +33,11 @@ class QueryBuilder {
   }
 
   order(): this {
+    return this;
+  }
+
+  range(from: number, to: number): this {
+    this.context.range = { from, to };
     return this;
   }
 
@@ -107,6 +113,7 @@ interface RepositoryFixture {
   rosterRows?: unknown[];
   legacyRows?: unknown[];
   materializationRows?: unknown[];
+  seasonErrorFrom?: number;
 }
 
 function createRepository(fixture: RepositoryFixture = {}) {
@@ -115,7 +122,7 @@ function createRepository(fixture: RepositoryFixture = {}) {
     from(table: string) {
       const context = { table, filters: [] };
       calls.push(context);
-      return new QueryBuilder(context, ({ table: queriedTable }) => {
+      return new QueryBuilder(context, ({ table: queriedTable, range }) => {
         if (queriedTable === "games") {
           return {
             data: { season_year: 2026, season_era_id: fixture.seasonEraId ?? "modern" },
@@ -161,18 +168,28 @@ function createRepository(fixture: RepositoryFixture = {}) {
           };
         }
         if (queriedTable === "game_contract_seasons") {
+          if (
+            fixture.seasonErrorFrom !== undefined &&
+            (range?.from ?? 0) >= fixture.seasonErrorFrom
+          ) {
+            return { data: null, error: { message: "Contract season page unavailable" } };
+          }
+          const rows = fixture.seasonRows ?? [
+            {
+              agreement_id: ids.agreement,
+              season_label: "2026-27",
+              start_year: 2026,
+              end_year: 2027,
+              salary_amount: 12_000_000,
+              option_kind: "none",
+              guarantee_kind: "guaranteed",
+            },
+          ];
           return {
-            data: fixture.seasonRows ?? [
-              {
-                agreement_id: ids.agreement,
-                season_label: "2026-27",
-                start_year: 2026,
-                end_year: 2027,
-                salary_amount: 12_000_000,
-                option_kind: "none",
-                guarantee_kind: "guaranteed",
-              },
-            ],
+            data: rows.slice(
+              range?.from ?? 0,
+              (range?.from ?? 0) + Math.min(1000, range ? range.to - range.from + 1 : 1000)
+            ),
             error: null,
           };
         }
@@ -244,6 +261,67 @@ describe("SupabaseContractRepository effective modern reads", () => {
     const contracts = await repository.getByTeamId(ids.game, ids.oldTeam);
 
     expect(contracts).toEqual([]);
+  });
+
+  it("preserves a team's contracts and payroll beyond the first 1000 league season rows", async () => {
+    const players = Array.from({ length: 300 }, (_, index) => {
+      const suffix = String(index + 1).padStart(12, "0");
+      return {
+        playerId: `22222222-2222-4222-8222-${suffix}`,
+        agreementId: `55555555-5555-4555-8555-${suffix}`,
+        teamId: index < 286 ? ids.oldTeam : ids.currentTeam,
+      };
+    });
+    const fixture: RepositoryFixture = {
+      identityRows: players.map(({ playerId }) => ({
+        player_id: playerId,
+        resolution_status: "observed-standard",
+        contract_type: "standard",
+        provenance_quality: "observed",
+        source_method: "basketball-reference-current-salary",
+        estimated: false,
+        cap_treatment: "standard-cap-and-matching",
+        exclusion_evidence: null,
+      })),
+      agreementRows: players.map(({ playerId, agreementId, teamId }) => ({
+        id: agreementId,
+        game_id: ids.game,
+        player_id: playerId,
+        team_id: teamId,
+        start_season_label: null,
+        end_season_label: null,
+        remaining_guaranteed_amount: null,
+        contract_type: "standard",
+        provenance_quality: "observed",
+        source_method: "basketball-reference-current-salary",
+        estimated: false,
+        cap_treatment: "standard-cap-and-matching",
+      })),
+      rosterRows: players.map(({ playerId, teamId }) => ({ player_id: playerId, team_id: teamId })),
+      seasonRows: players.flatMap(({ agreementId }) =>
+        Array.from({ length: 5 }, (_, offset) => ({
+          agreement_id: agreementId,
+          season_label: `${2026 + offset}-${27 + offset}`,
+          start_year: 2026 + offset,
+          end_year: 2027 + offset,
+          salary_amount: 12_000_000,
+          option_kind: "none",
+          guarantee_kind: "guaranteed",
+        }))
+      ),
+    };
+    const { repository } = createRepository(fixture);
+
+    const contracts = await repository.getByTeamId(ids.game, ids.currentTeam);
+
+    expect(contracts).toHaveLength(14);
+    expect(contracts.reduce((total, contract) => total + contract.salaryY1, 0)).toBe(168_000_000);
+    expect(contracts.every(({ endYear }) => endYear === 2030)).toBe(true);
+
+    const failing = createRepository({ ...fixture, seasonErrorFrom: 1000 });
+    await expect(failing.repository.getByTeamId(ids.game, ids.currentTeam)).rejects.toThrow(
+      "Contract season page unavailable"
+    );
   });
 
   it("projects simulated agreements with explicit simulated origin instead of observed provenance", async () => {
