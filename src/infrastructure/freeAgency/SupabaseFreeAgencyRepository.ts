@@ -41,7 +41,8 @@ const marketCandidateSchema = z
   .strict();
 
 const marketOfferBaseSchema = z.object({
-  id: z.uuid(),
+  // PostgreSQL also stores deterministic AI hash IDs without RFC UUID version/variant bits.
+  id: z.guid(),
   request_id: z.uuid(),
   owner_id: z.uuid(),
   game_id: z.uuid(),
@@ -132,7 +133,7 @@ const freeAgencyMarketSchema = z.discriminatedUnion("supported", [
 ]);
 
 const offerRowSchema = z.object({
-  id: z.uuid(),
+  id: z.guid(),
   request_id: z.uuid(),
   game_id: z.uuid(),
   player_id: z.uuid(),

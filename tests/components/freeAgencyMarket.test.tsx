@@ -132,6 +132,37 @@ describe("free agency market screen", () => {
     expect(screen.getByTestId("offer-form").textContent).toContain("Alex");
   });
 
+  it("replaces stale pending results when refresh returns an accepted offer and hashed AI IDs", async () => {
+    const humanId = "44444444-4444-4444-8444-444444444444";
+    rpc
+      .mockResolvedValueOnce({
+        data: market({ offers: [offer(humanId, "human", "pending")] }),
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: market({
+          candidates: [],
+          offers: [
+            offer(humanId, "human", "accepted"),
+            {
+              ...offer("f16a95e7-4d35-4d67-cf48-7fa583839795", "ai", "rejected"),
+              request_id: "55555555-5555-4555-8555-555555555555",
+            },
+          ],
+        }),
+        error: null,
+      });
+    renderMarket();
+    await screen.findByText(/^Pending:/);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh market" }));
+    await screen.findByText(
+      "This offer won. The player joined the bidding team and payroll was updated."
+    );
+    expect(screen.queryByText(/^Pending:/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("AI offer")).toBeTruthy();
+  });
+
   it("shows errors and retries without presenting stale candidates", async () => {
     rpc
       .mockResolvedValueOnce({ data: null, error: { message: "offline" } })

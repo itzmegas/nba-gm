@@ -186,7 +186,55 @@ describe("SupabaseFreeAgencyRepository", () => {
     ).resolves.toMatchObject({ offers: [{ status: "rejected" }] });
   });
 
+  it("reads an accepted human offer alongside MD5-derived AI offer IDs", async () => {
+    const timestamp = "2026-10-20T14:22:21.604354+00:00";
+    const response = {
+      ...validMarket,
+      offers: [
+        {
+          ...validMarket.offers[0],
+          id: "f16a95e7-4d35-4d67-cf48-7fa583839795",
+          offer_origin: "ai",
+          ai_decision_date: "2026-10-02",
+          status: "rejected",
+          resolved_at: timestamp,
+          resolved_date: "2026-10-03",
+          resolution_reason: "another_offer_accepted",
+        },
+        {
+          ...validMarket.offers[0],
+          status: "accepted",
+          resolved_at: timestamp,
+          resolved_date: "2026-10-03",
+          resolution_reason: "selected_offer_accepted",
+          resolved_contract_id: "00000000-0000-4000-8000-000000000007",
+        },
+      ],
+    };
+    await expect(
+      repositoryForRpc(vi.fn().mockResolvedValue({ data: response, error: null })).getMarket(gameId)
+    ).resolves.toMatchObject({
+      offers: [
+        { id: response.offers[0].id, origin: "ai", status: "rejected" },
+        { origin: "human", status: "accepted" },
+      ],
+    });
+  });
+
+  it("lists pending AI offers with the same PostgreSQL identifier format", async () => {
+    const row = { ...validOfferRow, id: "855787e3-f102-bbbf-40a4-43bf1c866b99" };
+    await expect(
+      repositoryForRpc(vi.fn().mockResolvedValue({ data: [row], error: null })).listPendingOffers(
+        gameId
+      )
+    ).resolves.toMatchObject([{ id: row.id, status: "pending" }]);
+  });
+
   it.each([
+    [
+      "malformed offer ID",
+      { ...validMarket, offers: [{ ...validMarket.offers[0], id: "not-an-identifier" }] },
+    ],
     ["foreign game", { ...validMarket, game_id: "00000000-0000-4000-8000-000000000009" }],
     [
       "foreign offer",
