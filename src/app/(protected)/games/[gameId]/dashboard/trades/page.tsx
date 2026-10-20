@@ -6,6 +6,7 @@ import { use, useState } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { usePlayerStates } from "@/application/hooks/player-states/usePlayerStates";
+import { useReleaseCapCharge } from "@/application/hooks/roster/useReleasePlayer";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useDraftPickInventory } from "@/application/hooks/trades/useDraftPickInventory";
@@ -49,6 +50,12 @@ export default function TradesPage({ params }: TradesPageProps) {
   const { data: opponentRosterData } = useRoster(gameId, opponentId || null);
   const { data: teamContractsData } = useTeamContracts(gameId, teamId || null);
   const { data: opponentContractsData } = useTeamContracts(gameId, opponentId || null);
+  const teamReleaseCharge = useReleaseCapCharge(gameId, teamId || null, game?.seasonYear ?? 2026);
+  const opponentReleaseCharge = useReleaseCapCharge(
+    gameId,
+    opponentId || null,
+    game?.seasonYear ?? 2026
+  );
   const { data: inventory = [] } = useDraftPickInventory(gameId);
   const { data: history = [] } = useTradeHistory(gameId);
   const { data: teamPlayerStates = [] } = usePlayerStates(gameId, teamId || null);
@@ -103,12 +110,20 @@ export default function TradesPage({ params }: TradesPageProps) {
   }
 
   const teamSnapshot =
-    teamRosterData && teamContractsData
-      ? { contracts: teamContractsData, rosterSize: teamRosterData.length }
+    teamRosterData && teamContractsData && teamReleaseCharge.data !== undefined
+      ? {
+          contracts: teamContractsData,
+          rosterSize: teamRosterData.length,
+          releaseCapCharge: teamReleaseCharge.data,
+        }
       : null;
   const opponentSnapshot =
-    opponentRosterData && opponentContractsData
-      ? { contracts: opponentContractsData, rosterSize: opponentRosterData.length }
+    opponentRosterData && opponentContractsData && opponentReleaseCharge.data !== undefined
+      ? {
+          contracts: opponentContractsData,
+          rosterSize: opponentRosterData.length,
+          releaseCapCharge: opponentReleaseCharge.data,
+        }
       : null;
   const simulation = useSimulateTrade(
     gameId,

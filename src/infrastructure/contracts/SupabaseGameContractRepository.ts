@@ -149,7 +149,7 @@ export class SupabaseGameContractRepository implements GameContractRepository {
 
   private async getRuntimeContracts(gameId: string): Promise<SimulatedGameContract[]> {
     const { data, error } = await this.client
-      .from("game_runtime_contracts")
+      .from("game_active_runtime_contracts")
       .select(
         "id, game_id, player_id, origin_kind, start_year, end_year, annual_salary, is_player_option, is_team_option, is_guaranteed, created_at"
       )

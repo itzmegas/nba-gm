@@ -146,6 +146,15 @@ export const en = {
     weekdaySat: "Sat",
   },
   dashboard: {
+    rosterActions: "Actions",
+    releasePlayer: "Release",
+    confirmReleasePlayer: "Confirm release",
+    releasingPlayer: "Releasing…",
+    releasePlayerFailed: "Unable to release the player.",
+    releasePlayerDescription:
+      "The player will leave your roster and become an immediate free agent in this save. Guaranteed salaries, including salaries with unverified guarantees, remain on your payroll. This cannot be undone.",
+    releasedSalary: "Released player cap charges",
+    releaseChargesFailed: "Unable to load released player cap charges. Payroll is unavailable.",
     standardPlayers: "Standard roster",
     twoWayPlayers: "two-way players (separate roster slots)",
     dashboard: "Dashboard",

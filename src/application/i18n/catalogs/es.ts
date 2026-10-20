@@ -152,6 +152,16 @@ export const es: Messages = {
     weekdaySat: "Sáb",
   },
   dashboard: {
+    rosterActions: "Acciones",
+    releasePlayer: "Cortar",
+    confirmReleasePlayer: "Confirmar corte",
+    releasingPlayer: "Cortando…",
+    releasePlayerFailed: "No se pudo cortar al jugador.",
+    releasePlayerDescription:
+      "El jugador saldrá del roster y quedará disponible de inmediato en la agencia libre de esta partida. Los salarios garantizados, incluidos aquellos cuya garantía no está verificada, seguirán contando en la nómina. Esta acción no se puede deshacer.",
+    releasedSalary: "Cargos por jugadores cortados",
+    releaseChargesFailed:
+      "No se pudieron cargar los cargos por jugadores cortados. La nómina no está disponible.",
     standardPlayers: "Plantilla estándar",
     twoWayPlayers: "jugadores two-way (cupos separados)",
     dashboard: "Panel",

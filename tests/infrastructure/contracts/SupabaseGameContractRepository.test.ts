@@ -130,7 +130,7 @@ function createRepository(runtimeResult?: {
         if (selectedTable === "game_player_states") {
           return { data: [{ player_id: ids.player, team_id: ids.team }], error: null };
         }
-        if (selectedTable === "game_runtime_contracts") {
+        if (selectedTable === "game_active_runtime_contracts") {
           return runtimeResult ?? { data: [], error: null };
         }
         return { data: [], error: null };
@@ -182,7 +182,7 @@ describe("SupabaseGameContractRepository effective contract reads", () => {
     ]);
     expect(
       calls
-        .filter(({ table }) => table === "game_runtime_contracts")
+        .filter(({ table }) => table === "game_active_runtime_contracts")
         .every(({ filters }) =>
           filters.some(({ column, value }) => column === "game_id" && value === ids.game)
         )

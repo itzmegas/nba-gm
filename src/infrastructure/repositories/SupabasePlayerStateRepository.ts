@@ -1,9 +1,43 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import type { PlayerState } from "@/domain/entities/PlayerState";
 import type { PlayerStateRepository } from "@/domain/repositories/PlayerStateRepository";
+import type { ReleasePlayerInput } from "@/domain/roster/ReleasePlayer";
+
+const releaseInputSchema = z.object({
+  gameId: z.uuid(),
+  playerId: z.uuid(),
+  requestId: z.uuid(),
+  contractId: z.uuid().nullable(),
+});
 
 export class SupabasePlayerStateRepository implements PlayerStateRepository {
   constructor(private readonly client: SupabaseClient) {}
+
+  async release(input: ReleasePlayerInput): Promise<string> {
+    const parsed = releaseInputSchema.parse(input);
+    const { data, error } = await this.client.rpc("release_roster_player", {
+      p_game_id: parsed.gameId,
+      p_player_id: parsed.playerId,
+      p_request_id: parsed.requestId,
+      p_contract_id: parsed.contractId,
+    });
+    if (error) throw new Error(error.message);
+    return z.uuid().parse(data);
+  }
+
+  async getReleaseCapCharge(gameId: string, teamId: string, seasonYear: number): Promise<number> {
+    z.uuid().parse(gameId);
+    z.uuid().parse(teamId);
+    z.number().int().parse(seasonYear);
+    const { data, error } = await this.client.rpc("get_roster_release_cap_charge", {
+      p_game_id: gameId,
+      p_team_id: teamId,
+      p_season_year: seasonYear,
+    });
+    if (error) throw new Error(error.message);
+    return z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).parse(data);
+  }
 
   async getByGameId(gameId: string): Promise<PlayerState[]> {
     const { data, error } = await this.client

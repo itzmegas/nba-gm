@@ -19,6 +19,8 @@ const phases = [
   ["032_roster_simulation_strength.sql", "rosterSimulationStrength.postgres.sql"],
   ["033_initial_free_agent_import.sql", "freeAgencyImport.postgres.sql"],
   ["034_standard_roster_slots.sql", "standardRosterSlots.postgres.sql"],
+  ["035_roster_releases.sql", "rosterReleases.postgres.sql"],
+  ["036_roster_release_salary_coverage.sql", "rosterReleaseSalaryCoverage.postgres.sql"],
 ] as const;
 const schemaOnly = process.argv[3] === "--schema-only";
 const database = schemaOnly ? "nba_gm_free_agency_days_schema" : "nba_gm_free_agency_days";
@@ -71,7 +73,7 @@ sql(
 );
 const schema = file("scripts/schema.sql");
 if (schemaOnly) {
-  sql("Complete canonical schema through 034", schema);
+  sql("Complete canonical schema through 036", schema);
   process.exit(0);
 }
 sql(
@@ -99,6 +101,24 @@ BEGIN
 END $$;
 `;
 for (const [migration, fixture] of phases) {
+  if (migration === "036_roster_release_salary_coverage.sql") {
+    try {
+      sql(
+        "Expected imported salary grid RED before migration 036",
+        assertions + file(`tests/infrastructure/supabase/${fixture}`)
+      );
+      throw new Error("Baseline salary grid release unexpectedly passed before migration 036");
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes("Release salary coverage is incomplete")
+      )
+        throw error;
+      console.log(
+        "Observed RED: empty future salary-table cells block a release with known current salary"
+      );
+    }
+  }
   if (migration === "034_standard_roster_slots.sql") {
     try {
       sql(
@@ -136,6 +156,26 @@ for (const [migration, fixture] of phases) {
   }
   sql(`Migration ${migration}`, file(`scripts/migrations/${migration}`));
   sql(fixture, assertions + file(`tests/infrastructure/supabase/${fixture}`));
+  if (migration === "036_roster_release_salary_coverage.sql") {
+    sql(
+      "Post-036 release/sign/replay/ownership regressions",
+      assertions + file("tests/infrastructure/supabase/rosterReleases.postgres.sql")
+    );
+  }
+  if (migration === "035_roster_releases.sql") {
+    for (const regression of [
+      "freeAgencyTeamFinances.postgres.sql",
+      "freeAgencyOfferAssessment.postgres.sql",
+      "freeAgencyDailyMarket.postgres.sql",
+      "freeAgencyMarketRead.postgres.sql",
+      "standardRosterSlots.postgres.sql",
+    ]) {
+      sql(
+        `Post-035 ${regression}`,
+        assertions + file(`tests/infrastructure/supabase/${regression}`)
+      );
+    }
+  }
   if (migration === "032_roster_simulation_strength.sql") {
     const regression = file("tests/infrastructure/supabase/freeAgencySimulationDay.postgres.sql");
     sql(
@@ -238,5 +278,66 @@ if (concurrencyPhase < 0) throw new Error("Missing concurrency fixture boundary"
   sql(
     "Concurrent day replay and provenance",
     assertions + concurrency.slice(concurrencyPhase + concurrencyMarker.length)
+  );
+}
+
+{
+  const fixture = file("tests/infrastructure/supabase/rosterReleases.postgres.sql");
+  const boundary = fixture.indexOf("-- BEFORE_RELEASE_ACTIONS");
+  if (boundary < 0) throw new Error("Missing release concurrency fixture boundary");
+  sql("Release concurrency baseline", `${assertions}${fixture.slice(0, boundary)}COMMIT;`);
+  const holder = startSession(
+    "BEGIN; SELECT id FROM games WHERE id='49500000-0000-4000-8000-000000000001' FOR UPDATE; " +
+      "SELECT 'release-holder-ready'; SELECT pg_sleep(3); COMMIT;"
+  );
+  const deadline = Date.now() + 5000;
+  while (!holder.output().includes("release-holder-ready") && Date.now() < deadline) {
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+  }
+  if (!holder.output().includes("release-holder-ready"))
+    throw new Error("Release lock holder did not become ready");
+  const names = ["release-race-a", "release-race-b"];
+  const waiters = names.map((name) =>
+    startSession(`SET application_name = '${name}'; SET ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', false);
+    SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+    SELECT release_roster_player('49500000-0000-4000-8000-000000000001', '39500000-0000-4000-8000-000000000015',
+      '69500000-0000-4000-8000-000000000015', '59500000-0000-4000-8000-000000000015');`)
+  );
+  const observed = new Set<string>();
+  const waitDeadline = Date.now() + 5000;
+  while (observed.size < names.length && Date.now() < waitDeadline) {
+    const waiting = docker([
+      "exec",
+      containerId,
+      "psql",
+      "-X",
+      "-At",
+      "-U",
+      "postgres",
+      "-d",
+      database,
+      "-c",
+      "SELECT application_name FROM pg_stat_activity WHERE application_name IN ('release-race-a','release-race-b') " +
+        "AND wait_event_type = 'Lock' AND cardinality(pg_blocking_pids(pid)) > 0",
+    ]);
+    for (const name of waiting.split("\n")) if (names.includes(name)) observed.add(name);
+    if (observed.size < names.length)
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+  }
+  const results = await Promise.all([holder.done, ...waiters.map((waiter) => waiter.done)]);
+  if (observed.size !== 2 || results.some((result) => result.code !== 0)) {
+    throw new Error(
+      `Concurrent release failed: waits=${[...observed]}, results=${JSON.stringify(results)}`
+    );
+  }
+  sql(
+    "Concurrent release replay preserves one event, one cap charge and one roster slot",
+    `${assertions}
+    SELECT pg_temp.assert_true((SELECT count(*) = 1 FROM game_roster_releases
+      WHERE game_id = '49500000-0000-4000-8000-000000000001'), 'Concurrent release duplicated event');
+    SELECT pg_temp.assert_true((SELECT roster_count = 14 AND payroll = 22000000 FROM get_free_agency_financial_context(
+      '49500000-0000-4000-8000-000000000001', '39500000-0000-4000-8000-000000000017')), 'Concurrent release corrupted roster/payroll');
+  `
   );
 }

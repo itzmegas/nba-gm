@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
 
 interface SupabaseQueryContext {
@@ -89,6 +89,34 @@ const UUIDS = {
   otherPlayerId: "12121212-1212-4212-8212-121212121212",
   teamId: "13131313-1313-4313-8313-131313131313",
 } as const;
+
+it("sums only the selected season's retained salaries and scopes the read to the game/team", async () => {
+  const rpc = vi.fn(async () => ({ data: 10_625_627, error: null }));
+  const client = { rpc } as unknown as SupabaseClient;
+  const repository = new SupabasePlayerStateRepository(client);
+  expect(await repository.getReleaseCapCharge(UUIDS.gameId, UUIDS.teamId, 2026)).toBe(10_625_627);
+  expect(rpc).toHaveBeenCalledWith("get_roster_release_cap_charge", {
+    p_game_id: UUIDS.gameId,
+    p_team_id: UUIDS.teamId,
+    p_season_year: 2026,
+  });
+});
+
+it("rejects malformed release inputs and cap charges instead of writing or assuming zero", async () => {
+  const rpc = vi.fn(async () => ({ data: -1, error: null }));
+  const client = { rpc } as unknown as SupabaseClient;
+  const repository = new SupabasePlayerStateRepository(client);
+  await expect(
+    repository.release({
+      gameId: "invalid",
+      playerId: UUIDS.playerId,
+      requestId: UUIDS.otherGameId,
+      contractId: null,
+    })
+  ).rejects.toThrow();
+  expect(rpc).not.toHaveBeenCalled();
+  await expect(repository.getReleaseCapCharge(UUIDS.gameId, UUIDS.teamId, 2026)).rejects.toThrow();
+});
 
 const baseRow = {
   id: "14141414-1414-4414-8414-141414141414",

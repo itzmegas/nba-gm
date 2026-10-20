@@ -199,7 +199,7 @@ function createRepository(fixture: RepositoryFixture = {}) {
             error: null,
           };
         }
-        if (queriedTable === "game_runtime_contracts") {
+        if (queriedTable === "game_active_runtime_contracts") {
           return { data: fixture.runtimeRows ?? [], error: fixture.runtimeError ?? null };
         }
         if (queriedTable === "contracts") {
@@ -252,7 +252,7 @@ describe("SupabaseContractRepository effective modern reads", () => {
       salaryY1: 12_000_000,
       compatibilityProjection: "observed-season-coverage",
     });
-    expect(calls.some(({ table }) => table === "game_runtime_contracts")).toBe(true);
+    expect(calls.some(({ table }) => table === "game_active_runtime_contracts")).toBe(true);
   });
 
   it("does not expose an agreement for its stale imported team after a trade", async () => {

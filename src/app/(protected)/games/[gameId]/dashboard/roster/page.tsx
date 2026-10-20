@@ -4,6 +4,7 @@ import { Users } from "lucide-react";
 import { use } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
+import { useReleaseCapCharge } from "@/application/hooks/roster/useReleasePlayer";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeam } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
@@ -36,10 +37,14 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
   const { data: team } = useTeam(selectedTeamId ?? "");
   const { data: rosterPlayers, isLoading: isLoadingRoster } = useRoster(gameId, selectedTeamId);
   const { data: contracts } = useTeamContracts(gameId, selectedTeamId);
+  const releaseCapCharge = useReleaseCapCharge(gameId, selectedTeamId, game?.seasonYear ?? 2026);
 
   const thresholds = getSalaryCapThresholds(game?.seasonYear ?? 2024);
   const calculator = new SalaryCapCalculator(thresholds);
-  const financials = contracts ? calculator.getFinancialStatus(contracts) : null;
+  const financials =
+    contracts && releaseCapCharge.data !== undefined
+      ? calculator.getFinancialStatus(contracts, releaseCapCharge.data)
+      : null;
   const twoWayPlayers =
     rosterPlayers?.filter(
       ({ contract, gameContract }) =>
@@ -71,6 +76,11 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
         </p>
       </div>
 
+      {releaseCapCharge.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {t("dashboard", "releaseChargesFailed")}
+        </p>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-border/50 bg-card/50">
           <CardContent className="pt-4 pb-4">
@@ -96,6 +106,11 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
             <p className="text-xs text-muted-foreground">
               {t("dashboard", "cap")}: {formatSalary(thresholds.salaryCap, locale)}
             </p>
+            {releaseCapCharge.data !== undefined && releaseCapCharge.data > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("dashboard", "releasedSalary")}: {formatSalary(releaseCapCharge.data, locale)}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -146,7 +161,16 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
         </CardHeader>
         <CardContent className="p-0 pb-4">
           {rosterPlayers && rosterPlayers.length > 0 ? (
-            <RosterTable gameId={gameId} players={rosterPlayers} seasonYear={game.seasonYear} />
+            <RosterTable
+              gameId={gameId}
+              players={rosterPlayers}
+              seasonYear={game.seasonYear}
+              canRelease={
+                game.status === "active" &&
+                game.seasonEraId === "modern" &&
+                game.seasonYear === 2026
+              }
+            />
           ) : (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               {t("dashboard", "noPlayersRoster")}

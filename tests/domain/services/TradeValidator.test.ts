@@ -24,6 +24,30 @@ describe("TradeValidator", () => {
   });
 
   describe("validateTrade", () => {
+    it("retains released salaries in payroll without treating them as tradable salary", () => {
+      const teamA = { ...snapshot(generateRoster(100_000_000)), releaseCapCharge: 100_000_000 };
+      const teamB = snapshot(generateRoster(100_000_000));
+      const pkgA: TradePackage = {
+        teamId: "A",
+        teamName: "Team A",
+        outgoingAssets: [createPlayerAsset(5_000_000)],
+        incomingAssets: [],
+      };
+      const pkgB: TradePackage = {
+        teamId: "B",
+        teamName: "Team B",
+        outgoingAssets: [createPlayerAsset(6_000_000)],
+        incomingAssets: [],
+      };
+      const result = validator.validateTrade(teamA, teamB, pkgA, pkgB);
+      expect(result.isValid).toBe(false);
+      expect(result.details.teamA).toMatchObject({
+        newTotalSalary: 201_000_000,
+        outgoingSalary: 5_000_000,
+        rosterSizeAfter: 15,
+      });
+      expect(result.errors.some((error) => error.name === "SalaryMatchingError")).toBe(true);
+    });
     it("should allow a valid non-taxpayer low tier trade (incoming <= 175% + 100k)", () => {
       const teamAContracts = generateRoster(100_000_000); // 100M total
       const teamBContracts = generateRoster(100_000_000);

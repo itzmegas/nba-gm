@@ -23,6 +23,9 @@ vi.mock("@/application/hooks/roster/useRoster", () => ({
 vi.mock("@/application/hooks/contracts/useTeamContracts", () => ({
   useTeamContracts: () => ({ data: [{ salaryY1: 160_247_370 }] }),
 }));
+vi.mock("@/application/hooks/roster/useReleasePlayer", () => ({
+  useReleaseCapCharge: () => ({ data: 0 }),
+}));
 vi.mock("@/components/roster/roster-table", () => ({
   RosterTable: ({ players }: { players: RosterPlayer[] }) => <p>{players.length} roster entries</p>,
 }));
