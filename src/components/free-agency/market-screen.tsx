@@ -111,7 +111,7 @@ export function FreeAgencyMarketScreen({ gameId }: FreeAgencyMarketScreenProps) 
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">{t("dashboard", "players")}</p>
+            <p className="text-sm text-muted-foreground">{t("dashboard", "standardPlayers")}</p>
             <p className="text-xl font-bold">
               {context.rosterCount} {t("dashboard", "playersMax")}
             </p>

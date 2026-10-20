@@ -18,6 +18,7 @@ const phases = [
   ["031_free_agency_market_read.sql", "freeAgencyMarketRead.postgres.sql"],
   ["032_roster_simulation_strength.sql", "rosterSimulationStrength.postgres.sql"],
   ["033_initial_free_agent_import.sql", "freeAgencyImport.postgres.sql"],
+  ["034_standard_roster_slots.sql", "standardRosterSlots.postgres.sql"],
 ] as const;
 const schemaOnly = process.argv[3] === "--schema-only";
 const database = schemaOnly ? "nba_gm_free_agency_days_schema" : "nba_gm_free_agency_days";
@@ -70,7 +71,7 @@ sql(
 );
 const schema = file("scripts/schema.sql");
 if (schemaOnly) {
-  sql("Complete canonical schema through 033", schema);
+  sql("Complete canonical schema through 034", schema);
   process.exit(0);
 }
 sql(
@@ -98,6 +99,18 @@ BEGIN
 END $$;
 `;
 for (const [migration, fixture] of phases) {
+  if (migration === "034_standard_roster_slots.sql") {
+    try {
+      sql(
+        "Expected standard roster slots RED before migration 034",
+        assertions + file(`tests/infrastructure/supabase/${fixture}`)
+      );
+      throw new Error("Baseline standard roster slots unexpectedly passed before migration 034");
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("STANDARD_SLOTS_RED")) throw error;
+      console.log("Observed RED: two-way/inactive players counted against standard roster slots");
+    }
+  }
   if (migration === "032_roster_simulation_strength.sql") {
     const baseline = `
       BEGIN;

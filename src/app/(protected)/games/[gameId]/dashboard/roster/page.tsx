@@ -9,10 +9,11 @@ import { useTeam } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { RosterTable } from "@/components/roster/roster-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
+import { CONTRACT_CAP_TREATMENT } from "@/domain/contracts/ContractClassification";
+import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
 import { formatSeasonLabel } from "@/domain/entities/Season";
 import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
-
-const SALARY_CAP = 140_000_000;
 
 function formatSalary(amount: number, locale: string): string {
   return `${new Intl.NumberFormat(locale === "es" ? "es-AR" : "en-US", {
@@ -36,9 +37,16 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
   const { data: rosterPlayers, isLoading: isLoadingRoster } = useRoster(gameId, selectedTeamId);
   const { data: contracts } = useTeamContracts(gameId, selectedTeamId);
 
-  const calculator = new SalaryCapCalculator();
+  const thresholds = getSalaryCapThresholds(game?.seasonYear ?? 2024);
+  const calculator = new SalaryCapCalculator(thresholds);
   const financials = contracts ? calculator.getFinancialStatus(contracts) : null;
-  const totalPlayers = rosterPlayers?.length ?? 0;
+  const twoWayPlayers =
+    rosterPlayers?.filter(
+      ({ contract, gameContract }) =>
+        contract?.origin !== CONTRACT_ORIGIN.SIMULATED_AGREEMENT &&
+        gameContract?.capTreatment === CONTRACT_CAP_TREATMENT.EXCLUDED_TWO_WAY
+    ).length ?? 0;
+  const standardPlayers = (rosterPlayers?.length ?? 0) - twoWayPlayers;
   const locale = useLocale();
   const t = useT();
 
@@ -67,10 +75,13 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
         <Card className="border-border/50 bg-card/50">
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              {t("dashboard", "players")}
+              {t("dashboard", "standardPlayers")}
             </p>
-            <p className="text-2xl font-black mt-1">{totalPlayers}</p>
+            <p className="text-2xl font-black mt-1">{standardPlayers}</p>
             <p className="text-xs text-muted-foreground">{t("dashboard", "playersMax")}</p>
+            <p className="text-xs text-muted-foreground">
+              {twoWayPlayers} {t("dashboard", "twoWayPlayers")}
+            </p>
           </CardContent>
         </Card>
 
@@ -83,7 +94,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
               {financials ? formatSalary(financials.totalSalary, locale) : "—"}
             </p>
             <p className="text-xs text-muted-foreground">
-              {t("dashboard", "cap")}: {formatSalary(SALARY_CAP, locale)}
+              {t("dashboard", "cap")}: {formatSalary(thresholds.salaryCap, locale)}
             </p>
           </CardContent>
         </Card>
@@ -100,7 +111,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
             >
               {financials
                 ? financials.isOverCap
-                  ? `-${formatSalary(financials.totalSalary - SALARY_CAP, locale)}`
+                  ? `-${formatSalary(financials.totalSalary - thresholds.salaryCap, locale)}`
                   : formatSalary(financials.capSpace, locale)
                 : "—"}
             </p>

@@ -146,6 +146,8 @@ export const en = {
     weekdaySat: "Sat",
   },
   dashboard: {
+    standardPlayers: "Standard roster",
+    twoWayPlayers: "two-way players (separate roster slots)",
     dashboard: "Dashboard",
     roster: "Roster",
     calendar: "Calendar",

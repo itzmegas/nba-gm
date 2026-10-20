@@ -1,7 +1,9 @@
-import { NBA_RULES } from "../constants/nba-rules";
-import type { Contract } from "../entities/Contract";
+import { getSalaryCapThresholds, type SalaryCapThresholds } from "@/domain/constants/nba-rules";
+import type { Contract } from "@/domain/entities/Contract";
 
 export class SalaryCapCalculator {
+  constructor(private readonly thresholds: SalaryCapThresholds = getSalaryCapThresholds(2024)) {}
+
   calculateTotalSalary(contracts: Contract[], additionalCapHolds: number = 0): number {
     // Suma solo el salario del año 1 (actual) de todos los contratos garantizados
     const activeSalaries = contracts.reduce((total, contract) => {
@@ -21,19 +23,19 @@ export class SalaryCapCalculator {
 
   calculateCapSpace(contracts: Contract[], additionalCapHolds: number = 0): number {
     const totalSalary = this.calculateTotalSalary(contracts, additionalCapHolds);
-    return Math.max(0, NBA_RULES.SALARY_CAP - totalSalary);
+    return Math.max(0, this.thresholds.salaryCap - totalSalary);
   }
 
   isOverCap(contracts: Contract[], additionalCapHolds: number = 0): boolean {
-    return this.calculateTotalSalary(contracts, additionalCapHolds) > NBA_RULES.SALARY_CAP;
+    return this.calculateTotalSalary(contracts, additionalCapHolds) > this.thresholds.salaryCap;
   }
 
   isOverLuxuryTax(contracts: Contract[], additionalCapHolds: number = 0): boolean {
-    return this.calculateTotalSalary(contracts, additionalCapHolds) > NBA_RULES.LUXURY_TAX;
+    return this.calculateTotalSalary(contracts, additionalCapHolds) > this.thresholds.luxuryTax;
   }
 
   calculateTaxBill(totalSalary: number): number {
-    const taxThreshold = NBA_RULES.LUXURY_TAX;
+    const taxThreshold = this.thresholds.luxuryTax;
     if (totalSalary <= taxThreshold) return 0;
 
     const overage = totalSalary - taxThreshold;
@@ -82,8 +84,8 @@ export class SalaryCapCalculator {
     const totalSalary = this.calculateTotalSalary(contracts, additionalCapHolds);
 
     let apronStatus: "None" | "First" | "Second" = "None";
-    if (totalSalary > NBA_RULES.SECOND_APRON) apronStatus = "Second";
-    else if (totalSalary > NBA_RULES.FIRST_APRON) apronStatus = "First";
+    if (totalSalary > this.thresholds.secondApron) apronStatus = "Second";
+    else if (totalSalary > this.thresholds.firstApron) apronStatus = "First";
 
     return {
       totalSalary,

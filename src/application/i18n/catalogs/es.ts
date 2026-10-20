@@ -152,6 +152,8 @@ export const es: Messages = {
     weekdaySat: "Sáb",
   },
   dashboard: {
+    standardPlayers: "Plantilla estándar",
+    twoWayPlayers: "jugadores two-way (cupos separados)",
     dashboard: "Panel",
     roster: "Plantel",
     calendar: "Calendario",
