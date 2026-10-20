@@ -55,6 +55,8 @@ export type ContractFallbackBlockReason =
 
 export const CONTRACT_FALLBACK_ASSUMPTION = {
   ESPN_OMITTED_EXPERIENCE_ZERO_YOS: "espn-omitted-experience-assumed-zero-years-of-service",
+  ESPN_OMITTED_EXPERIENCE_AGE_OVER_30_TEN_YOS:
+    "espn-omitted-experience-age-over-30-assumed-ten-years-of-service",
 } as const;
 
 export type ContractFallbackAssumption =

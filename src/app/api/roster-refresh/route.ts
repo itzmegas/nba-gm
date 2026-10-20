@@ -128,7 +128,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       ),
       serviceClient,
       curatedIdentityExceptions: curatedContractIdentityExceptions,
-      allowUnmatchedRosterExperienceFallback: true,
+      rosterRefreshRunId: result.runId,
     });
 
     return NextResponse.json(result, { status: 200 });

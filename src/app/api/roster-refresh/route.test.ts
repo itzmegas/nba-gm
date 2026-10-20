@@ -133,7 +133,7 @@ describe("POST /api/roster-refresh", () => {
     expect(body.teamCount).toBe(30);
     expect(mockMaterializeModernGameContracts).toHaveBeenCalledOnce();
     expect(mockMaterializeModernGameContracts).toHaveBeenCalledWith(
-      expect.objectContaining({ allowUnmatchedRosterExperienceFallback: true })
+      expect.objectContaining({ rosterRefreshRunId: RUN_ID })
     );
   });
 

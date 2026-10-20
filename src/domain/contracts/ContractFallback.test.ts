@@ -7,9 +7,9 @@ const base = {
   currentStandardSalary: null,
   isOfficialTwoWay: false,
   isActiveStandardRoster: true,
-  isMatchedSourcePlayer: false,
-  allowUnmatchedRosterExperienceFallback: false,
+  allowCurrentRosterExperienceFallback: false,
   yearsOfService: 1,
+  age: 23,
   inactiveEvidence: null,
 };
 
@@ -45,7 +45,7 @@ describe("resolveContractFallback", () => {
       resolveContractFallback({
         ...base,
         yearsOfService: null,
-        allowUnmatchedRosterExperienceFallback: true,
+        allowCurrentRosterExperienceFallback: true,
       })
     ).toMatchObject({
       status: "resolved",
@@ -59,22 +59,80 @@ describe("resolveContractFallback", () => {
     });
   });
 
-  it("does not assume rookie experience for a matched source player", () => {
+  it.each([
+    { age: 30, salaryAmount: 1_357_763, assumedYearsOfService: 0 },
+    { age: 31, salaryAmount: 3_876_529, assumedYearsOfService: 10 },
+    { age: 40, salaryAmount: 3_876_529, assumedYearsOfService: 10 },
+    { age: null, salaryAmount: 1_357_763, assumedYearsOfService: 0 },
+  ])("estimates $salaryAmount for missing experience at age $age", ({
+    age,
+    salaryAmount,
+    assumedYearsOfService,
+  }) => {
     expect(
       resolveContractFallback({
         ...base,
-        isMatchedSourcePlayer: true,
+        age,
         yearsOfService: null,
-        allowUnmatchedRosterExperienceFallback: true,
+        allowCurrentRosterExperienceFallback: true,
       })
-    ).toEqual({
-      status: "blocked",
-      reason: CONTRACT_FALLBACK_BLOCK_REASON.MISSING_YEARS_OF_SERVICE,
+    ).toMatchObject({
+      status: "resolved",
+      salaryAmount,
+      estimated: true,
+      quality: "estimated",
+      evidence: {
+        age,
+        assumedYearsOfService,
+        assumption:
+          assumedYearsOfService === 10
+            ? "espn-omitted-experience-age-over-30-assumed-ten-years-of-service"
+            : "espn-omitted-experience-assumed-zero-years-of-service",
+      },
+    });
+  });
+
+  it("uses known service instead of age when estimating the minimum", () => {
+    expect(
+      resolveContractFallback({
+        ...base,
+        age: 35,
+        yearsOfService: 2,
+        allowCurrentRosterExperienceFallback: true,
+      })
+    ).toMatchObject({
+      salaryAmount: 2_449_421,
+      method: "years-of-service-minimum",
+    });
+  });
+
+  it("does not replace an observed salary or official two-way classification with an age estimate", () => {
+    const input = {
+      ...base,
+      age: 35,
+      yearsOfService: null,
+      allowCurrentRosterExperienceFallback: true,
+    };
+    expect(resolveContractFallback({ ...input, currentStandardSalary: 9_000_000 })).toMatchObject({
+      salaryAmount: 9_000_000,
+      estimated: false,
+    });
+    expect(resolveContractFallback({ ...input, isOfficialTwoWay: true })).toMatchObject({
+      contractType: "two-way",
+      salaryAmount: null,
+      estimated: false,
     });
   });
 
   it("does not silently bypass an unavailable official tracker", () => {
-    expect(resolveContractFallback({ ...base, isOfficialTwoWay: null })).toEqual({
+    expect(
+      resolveContractFallback({
+        ...base,
+        yearsOfService: null,
+        isOfficialTwoWay: null,
+        allowCurrentRosterExperienceFallback: true,
+      })
+    ).toEqual({
       status: "blocked",
       reason: CONTRACT_FALLBACK_BLOCK_REASON.TWO_WAY_SOURCE_UNAVAILABLE,
     });
@@ -84,7 +142,7 @@ describe("resolveContractFallback", () => {
     expect(
       resolveContractFallback({
         ...base,
-        allowUnmatchedRosterExperienceFallback: true,
+        allowCurrentRosterExperienceFallback: true,
         inactiveEvidence: {
           sourceUrl: "https://example.com/status",
           observedDate: "2026-06-29",
@@ -100,7 +158,7 @@ describe("resolveContractFallback", () => {
         ...base,
         currentStandardSalary: 9_000_000,
         isOfficialTwoWay: true,
-        allowUnmatchedRosterExperienceFallback: true,
+        allowCurrentRosterExperienceFallback: true,
         inactiveEvidence: {
           sourceUrl: "https://example.com/status",
           observedDate: "2026-06-29",
@@ -114,7 +172,7 @@ describe("resolveContractFallback", () => {
     expect(
       resolveContractFallback({
         ...base,
-        allowUnmatchedRosterExperienceFallback: true,
+        allowCurrentRosterExperienceFallback: true,
         isActiveStandardRoster: false,
         yearsOfService: null,
       })

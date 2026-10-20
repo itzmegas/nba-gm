@@ -167,7 +167,7 @@ export interface MaterializeModernGameContractsInput {
   cache: ContractSnapshotCache<BasketballReferenceContractSnapshot>;
   serviceClient: SupabaseClient;
   curatedIdentityExceptions?: readonly CuratedIdentityException[];
-  allowUnmatchedRosterExperienceFallback?: boolean;
+  rosterRefreshRunId?: string;
   ttlMs?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -293,6 +293,27 @@ export async function materializeModernGameContracts(
       sourceTeam: sourceTeamByNbaTeam.get(row.teams.abbreviation) ?? "",
       yearsOfExperience: row.players.years_of_experience,
     }));
+    const rosterAgeByProviderId = new Map<string, number | null>();
+    if (input.rosterRefreshRunId) {
+      const stagingResult = await input.serviceClient
+        .from("roster_refresh_staging")
+        .select("player_source_id, payload")
+        .eq("run_id", input.rosterRefreshRunId);
+      if (stagingResult.error) {
+        throw new Error(`Failed to load current-roster ages: ${stagingResult.error.message}`);
+      }
+      const stagingRows = z
+        .array(
+          z.object({
+            player_source_id: z.number().int().positive(),
+            payload: z.object({ age: z.number().int().nonnegative().max(120).nullish() }),
+          })
+        )
+        .parse(stagingResult.data ?? []);
+      for (const row of stagingRows) {
+        rosterAgeByProviderId.set(String(row.player_source_id), row.payload.age ?? null);
+      }
+    }
     const reconciliation = reconcileContractPlayerIdentities(
       batch.canonicalSnapshots.map(({ snapshot }) => snapshot),
       rosterPlayers,
@@ -345,10 +366,9 @@ export async function materializeModernGameContracts(
           currentStandardSalary,
           isOfficialTwoWay,
           isActiveStandardRoster: inactive === undefined,
-          isMatchedSourcePlayer: sourceContract !== undefined,
-          allowUnmatchedRosterExperienceFallback:
-            input.allowUnmatchedRosterExperienceFallback === true,
+          allowCurrentRosterExperienceFallback: Boolean(input.rosterRefreshRunId),
           yearsOfService: player.yearsOfExperience ?? null,
+          age: rosterAgeByProviderId.get(player.providerId) ?? null,
           inactiveEvidence: inactive
             ? {
                 sourceUrl: inactive.sourceUrl,
