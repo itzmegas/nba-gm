@@ -7,9 +7,16 @@ export const en = {
     preferences:
       "Decisions use simulated factors: salary 60%, roster opportunity 25%, team quality 15%. Duration is not scored. Ties use stable team and offer identifiers.",
     enrollment:
-      "Only explicitly enrolled players appear here. Missing salary data does not establish availability.",
-    emptyPool:
-      "No eligible enrolled players are available. This save needs explicit simulation bootstrap enrollment; this screen does not enroll players.",
+      "The initial market is imported once from the NBA tracker. Signings then follow this save's simulation.",
+    emptyPool: "No eligible free agents are currently available in this save.",
+    importInitial: "Load initial market",
+    importing: "Importing initial market…",
+    importHelp:
+      "For saves created before automatic import, load the initial market once. Existing signings are preserved; an imported market is never reset.",
+    importFailed:
+      "Unable to import the initial market. Check the NBA connection and migration 033, then retry.",
+    imported:
+      "Initial market loaded. Players already on a roster or with an unresolved identity were excluded.",
     unsupported:
       "The market requires an active 2026-27 modern save with materialized contract coverage.",
     loadFailed:

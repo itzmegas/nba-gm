@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useFreeAgencyMarket } from "@/application/hooks/free-agency/useFreeAgencyMarket";
+import {
+  useFreeAgencyMarket,
+  useImportInitialFreeAgents,
+} from "@/application/hooks/free-agency/useFreeAgencyMarket";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { OfferForm } from "@/components/free-agency/offer-form";
 import { OfferResults } from "@/components/free-agency/offer-results";
@@ -17,6 +20,7 @@ export function FreeAgencyMarketScreen({ gameId }: FreeAgencyMarketScreenProps) 
   const t = useT();
   const locale = useLocale();
   const market = useFreeAgencyMarket(gameId);
+  const initialImport = useImportInitialFreeAgents(gameId);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const snapshot = market.data;
   const money = new Intl.NumberFormat(locale === "es" ? "es-AR" : "en-US", {
@@ -121,7 +125,24 @@ export function FreeAgencyMarketScreen({ gameId }: FreeAgencyMarketScreenProps) 
         </CardHeader>
         <CardContent className="space-y-4">
           {snapshot.candidates.length === 0 ? (
-            <p>{t("freeAgency", "emptyPool")}</p>
+            <div className="space-y-3">
+              <p>{t("freeAgency", "emptyPool")}</p>
+              <p className="text-sm text-muted-foreground">{t("freeAgency", "importHelp")}</p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={initialImport.isPending || initialImport.isSuccess || market.isFetching}
+                onClick={() => initialImport.mutate()}
+              >
+                {initialImport.isPending
+                  ? t("freeAgency", "importing")
+                  : t("freeAgency", "importInitial")}
+              </Button>
+              {initialImport.isError && <p role="alert">{t("freeAgency", "importFailed")}</p>}
+              {initialImport.isSuccess && (
+                <output className="block">{t("freeAgency", "imported")}</output>
+              )}
+            </div>
           ) : (
             <ul className="divide-y">
               {snapshot.candidates.map((player) => (

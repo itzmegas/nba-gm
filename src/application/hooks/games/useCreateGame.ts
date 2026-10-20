@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { importInitialFreeAgents } from "@/application/freeAgency/importInitialFreeAgents";
 import type { Game } from "@/domain/entities/Game";
 import { GAME_STATUS } from "@/domain/entities/Game";
 import { SEASON_ERA_IDS, type SeasonEraId } from "@/domain/entities/SeasonEra";
@@ -84,6 +85,10 @@ export function useCreateGame() {
         const activatedGame = await repository.update(game.id, {
           status: GAME_STATUS.ACTIVE,
         });
+
+        if (input.seasonEraId === SEASON_ERA_IDS.MODERN && input.seasonYear === 2026) {
+          await importInitialFreeAgents(game.id);
+        }
 
         return activatedGame;
       } catch (error) {

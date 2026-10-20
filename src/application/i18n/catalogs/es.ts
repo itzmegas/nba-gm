@@ -9,9 +9,16 @@ export const es: Messages = {
     preferences:
       "Las decisiones usan factores simulados: salario 60%, oportunidad en la plantilla 25% y calidad del equipo 15%. La duración no puntúa. Los empates usan identificadores estables de equipo y oferta.",
     enrollment:
-      "Solo aparecen jugadores inscritos explícitamente. La ausencia de datos salariales no demuestra disponibilidad.",
-    emptyPool:
-      "No hay jugadores inscritos elegibles. Esta partida requiere una inscripción explícita mediante el bootstrap de simulación; esta pantalla no inscribe jugadores.",
+      "El mercado inicial se importa una sola vez desde el tracker de la NBA. Los fichajes posteriores dependen de la simulación de esta partida.",
+    emptyPool: "No hay agentes libres elegibles disponibles en esta partida.",
+    importInitial: "Cargar mercado inicial",
+    importing: "Importando mercado inicial…",
+    importHelp:
+      "En partidas creadas antes de la importación automática, carga el mercado inicial una sola vez. Se respetan los fichajes existentes y nunca se reinicia un mercado ya importado.",
+    importFailed:
+      "No se pudo importar el mercado inicial. Revisa la conexión con la NBA y la migración 033 antes de reintentar.",
+    imported:
+      "Mercado inicial cargado. Se excluyeron los jugadores con equipo o identidad sin resolver.",
     unsupported:
       "El mercado requiere una partida moderna activa de 2026-27 con cobertura contractual materializada.",
     loadFailed:

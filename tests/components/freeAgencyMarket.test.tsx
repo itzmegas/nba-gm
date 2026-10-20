@@ -99,7 +99,10 @@ function renderMarket(locale: "en" | "es" = "en") {
 }
 
 describe("free agency market screen", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
   beforeEach(() => {
     rpc.mockReset();
   });
@@ -151,7 +154,30 @@ describe("free agency market screen", () => {
     expect(await screen.findByText(/market requires an active/)).toBeTruthy();
     first.unmount();
     renderMarket();
-    expect(await screen.findByText(/No eligible enrolled players/)).toBeTruthy();
+    expect(await screen.findByText(/No eligible free agents/)).toBeTruthy();
+  });
+
+  it("recovers an older empty save only on explicit import and refreshes the market", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ enrolled_count: 1, skipped_count: 0 })));
+    vi.stubGlobal("fetch", fetcher);
+    rpc
+      .mockResolvedValueOnce({ data: market({ candidates: [] }), error: null })
+      .mockResolvedValueOnce({ data: market(), error: null });
+    renderMarket();
+    const button = await screen.findByRole("button", { name: "Load initial market" });
+    expect(fetcher).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await screen.findByText("Alex Player");
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/free-agency/bootstrap",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ gameId }),
+      })
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("translates offer outcomes with the active Spanish locale", async () => {
