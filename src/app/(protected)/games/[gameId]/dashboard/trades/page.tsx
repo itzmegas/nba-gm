@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, History } from "lucide-react";
+import { ArrowRightLeft, History, RotateCcw, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import { use, useState } from "react";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
@@ -12,8 +12,10 @@ import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useDraftPickInventory } from "@/application/hooks/trades/useDraftPickInventory";
 import { useTradeHistory } from "@/application/hooks/trades/useTradeHistory";
 import { useExecuteTrade, useSimulateTrade } from "@/application/hooks/trades/useTrades";
+import { formatSalary } from "@/components/trades/format";
 import { TradeAssetPanel } from "@/components/trades/trade-asset-panel";
 import { TradeSummary } from "@/components/trades/trade-summary";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -22,7 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
 import type { TradeAsset, TradePackage } from "@/domain/entities/Trade";
+import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 
 interface TradesPageProps {
   params: Promise<{ gameId: string }>;
@@ -155,6 +159,14 @@ export default function TradesPage({ params }: TradesPageProps) {
     setOpponentPickIds([]);
   };
 
+  const resetTrade = () => {
+    setTeamPlayerIds([]);
+    setOpponentPlayerIds([]);
+    setTeamPickIds([]);
+    setOpponentPickIds([]);
+    setExecutionError(null);
+  };
+
   if (isLoadingGame || !game) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -163,40 +175,102 @@ export default function TradesPage({ params }: TradesPageProps) {
     );
   }
 
+  const thresholds = getSalaryCapThresholds(game.seasonYear);
+  const capCalculator = new SalaryCapCalculator(thresholds);
+  const hasPackages = Boolean(packageA?.outgoingAssets.length && packageB?.outgoingAssets.length);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div>
-        <h1 className="flex items-center gap-3 text-3xl font-black tracking-tight">
-          <ArrowRightLeft className="size-8 text-primary" /> Trades
-        </h1>
-        <p className="text-muted-foreground">Build and execute an atomic two-team transaction.</p>
+    <div className="space-y-4 animate-in fade-in duration-500">
+      <div className="space-y-4 rounded-2xl border border-border/60 bg-gradient-to-br from-primary/10 via-card to-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight">
+              <ArrowRightLeft className="size-6 text-primary" /> Trade Machine
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Build the deal. Balance the books. Make your move.
+            </p>
+          </div>
+          <span className="rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-xs font-bold tabular-nums">
+            {game.seasonYear}–{String(game.seasonYear + 1).slice(-2)} ·{" "}
+            {formatSalary(thresholds.salaryCap)} cap
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {team && (
+            <span className="flex items-center gap-2 rounded-full border border-border/60 bg-background/40 px-3 py-2 text-xs font-bold">
+              {team.logoUrl && (
+                <Image
+                  src={team.logoUrl}
+                  alt={`${team.name} selected team`}
+                  width={20}
+                  height={20}
+                />
+              )}
+              {team.city} {team.name}
+            </span>
+          )}
+          <Select
+            value={opponentId}
+            onValueChange={(value) => {
+              setOpponentId(value);
+              setOpponentPlayerIds([]);
+              setOpponentPickIds([]);
+              setExecutionError(null);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-64" aria-label="Trade partner">
+              <SelectValue placeholder="Select trade partner" />
+            </SelectTrigger>
+            <SelectContent>
+              {teams
+                ?.filter(({ id }) => id !== teamId)
+                .map((candidate) => (
+                  <SelectItem key={candidate.id} value={candidate.id}>
+                    {candidate.city} {candidate.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-emerald-500" />
+            Auto-check enabled
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="sm:ml-auto"
+            onClick={resetTrade}
+            disabled={executeTrade.isPending}
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </Button>
+        </div>
       </div>
 
-      <Select
-        value={opponentId}
-        onValueChange={(value) => {
-          setOpponentId(value);
-          setOpponentPlayerIds([]);
-          setOpponentPickIds([]);
-        }}
-      >
-        <SelectTrigger className="w-full md:w-80">
-          <SelectValue placeholder="Select trade partner" />
-        </SelectTrigger>
-        <SelectContent>
-          {teams
-            ?.filter(({ id }) => id !== teamId)
-            .map((candidate) => (
-              <SelectItem key={candidate.id} value={candidate.id}>
-                {candidate.city} {candidate.name}
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
+        <output className="text-sm font-semibold">
+          {!opponent
+            ? "Choose a trade partner to get started"
+            : !hasPackages
+              ? "Waiting for your next move"
+              : !simulation.data
+                ? "Checking trade…"
+                : simulation.data.isValid
+                  ? "Trade is legal under cap and roster rules"
+                  : "Trade needs adjustments"}
+        </output>
+        {opponent && (
+          <Button variant="outline" size="sm" asChild>
+            <a href="#trade-breakdown">Full breakdown</a>
+          </Button>
+        )}
+      </div>
 
       {opponent && (
         <>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-4 xl:grid-cols-2">
             <TradeAssetPanel
               teamName={team ? `${team.city} ${team.name}` : "Your team"}
               teamLogoUrl={team?.logoUrl}
@@ -208,6 +282,16 @@ export default function TradesPage({ params }: TradesPageProps) {
               onTogglePlayer={(id) => setTeamPlayerIds(toggleSelection(teamPlayerIds, id))}
               onTogglePick={(id) => setTeamPickIds(toggleSelection(teamPickIds, id))}
               seasonYear={game.seasonYear}
+              payroll={
+                teamSnapshot
+                  ? capCalculator.calculateTotalSalary(
+                      teamSnapshot.contracts,
+                      teamSnapshot.releaseCapCharge
+                    )
+                  : null
+              }
+              incomingAssets={packageA?.incomingAssets ?? []}
+              pickById={pickById}
             />
             <TradeAssetPanel
               teamName={`${opponent.city} ${opponent.name}`}
@@ -220,25 +304,38 @@ export default function TradesPage({ params }: TradesPageProps) {
               onTogglePlayer={(id) => setOpponentPlayerIds(toggleSelection(opponentPlayerIds, id))}
               onTogglePick={(id) => setOpponentPickIds(toggleSelection(opponentPickIds, id))}
               seasonYear={game.seasonYear}
+              payroll={
+                opponentSnapshot
+                  ? capCalculator.calculateTotalSalary(
+                      opponentSnapshot.contracts,
+                      opponentSnapshot.releaseCapCharge
+                    )
+                  : null
+              }
+              incomingAssets={packageB?.incomingAssets ?? []}
+              pickById={pickById}
+              isPartner
             />
           </div>
 
           {packageA && packageB && (
-            <TradeSummary
-              teamAName={packageA.teamName}
-              teamBName={packageB.teamName}
-              teamALogoUrl={team?.logoUrl}
-              teamBLogoUrl={opponent.logoUrl}
-              packageA={packageA}
-              packageB={packageB}
-              pickById={pickById}
-              playerStateByPlayerId={playerStateByPlayerId}
-              simulation={simulation.data}
-              executionError={executionError}
-              isExecuting={executeTrade.isPending}
-              onExecute={submitTrade}
-              seasonYear={game.seasonYear}
-            />
+            <div id="trade-breakdown" className="scroll-mt-4">
+              <TradeSummary
+                teamAName={packageA.teamName}
+                teamBName={packageB.teamName}
+                teamALogoUrl={team?.logoUrl}
+                teamBLogoUrl={opponent.logoUrl}
+                packageA={packageA}
+                packageB={packageB}
+                pickById={pickById}
+                playerStateByPlayerId={playerStateByPlayerId}
+                simulation={simulation.data}
+                executionError={executionError}
+                isExecuting={executeTrade.isPending}
+                onExecute={submitTrade}
+                seasonYear={game.seasonYear}
+              />
+            </div>
           )}
         </>
       )}

@@ -6,7 +6,7 @@ import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { NBA_RULES } from "@/domain/constants/nba-rules";
+import { getSalaryCapThresholds, NBA_RULES } from "@/domain/constants/nba-rules";
 import type { PlayerState } from "@/domain/entities/PlayerState";
 import { getYearsRemaining } from "@/domain/entities/Season";
 import type {
@@ -232,7 +232,9 @@ export function TradeSummary({
                 <tr>
                   <td className="py-2.5 px-4 text-muted-foreground">
                     Payroll after
-                    <span className="block text-xs">Cap {formatSalary(NBA_RULES.SALARY_CAP)}</span>
+                    <span className="block text-xs">
+                      Cap {formatSalary(getSalaryCapThresholds(seasonYear).salaryCap)}
+                    </span>
                   </td>
                   {[detailsA, detailsB].map((details) => (
                     <td
