@@ -31,10 +31,11 @@ function formatSimulationDate(locale: string): string {
 describe("internationalization formatter parity", () => {
   it.each([
     ["en", "Jan 2, 2026, 3:04 AM", "$123.4M"],
-    ["es", "2 ene 2026, 3:04 a. m.", "US$ 123,4M"],
+    ["es", "2 ene 2026, 3:04 a. m.", "US$ 123,4M"],
   ] as const)("formats calendar and roster values for %s", (locale, date, salary) => {
-    expect(formatDate(locale)).toBe(date);
-    expect(formatSalary(locale)).toBe(salary);
+    // ICU versions vary in non-breaking spacing, not the locale-specific values.
+    expect(formatDate(locale).replace(/[\u00a0\u202f]/g, " ")).toBe(date);
+    expect(formatSalary(locale).replace(/[\u00a0\u202f]/g, " ")).toBe(salary);
   });
 
   it.each([

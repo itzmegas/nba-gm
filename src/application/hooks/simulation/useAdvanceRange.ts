@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   BATCH_SIMULATION_MODE,
   useBatchSimulationStore,
@@ -10,6 +11,7 @@ export interface AdvanceRangeInput {
   simulationDate: Date;
   mode: (typeof BATCH_SIMULATION_MODE)[keyof typeof BATCH_SIMULATION_MODE];
   seasonYear: number;
+  targetDate?: string;
 }
 
 export interface AdvanceSimDayResult {
@@ -25,35 +27,38 @@ export function getMonthEnd(date: Date, seasonYear: number): string {
 
 function getAdvanceResult(data: unknown): AdvanceSimDayResult {
   const result = Array.isArray(data) ? data[0] : data;
-  if (
-    typeof result !== "object" ||
-    result === null ||
-    !("new_date" in result) ||
-    typeof result.new_date !== "string" ||
-    !("season_complete" in result) ||
-    typeof result.season_complete !== "boolean"
-  ) {
+  const parsed = z
+    .object({ new_date: z.iso.date(), season_complete: z.boolean() })
+    .safeParse(result);
+  if (!parsed.success) {
     throw new Error("Invalid simulation response.");
   }
-  return result as AdvanceSimDayResult;
+  return parsed.data;
 }
 
 export function useAdvanceRange() {
   const queryClient = useQueryClient();
 
   return useMutation<number, Error, AdvanceRangeInput>({
-    mutationFn: async ({ gameId, simulationDate, mode, seasonYear }) => {
+    mutationFn: async ({ gameId, simulationDate, mode, seasonYear, targetDate }) => {
       const store = useBatchSimulationStore.getState();
       if (!store.isActive) {
         throw new Error("No active batch simulation.");
       }
 
-      const monthEnd =
+      let endDate =
         mode === BATCH_SIMULATION_MODE.MONTH ? getMonthEnd(simulationDate, seasonYear) : null;
       let currentDate = simulationDate.toISOString().slice(0, 10);
+      if (mode === BATCH_SIMULATION_MODE.NEXT_GAME) {
+        endDate = z.iso.date().parse(targetDate);
+        const seasonEnd = `${seasonYear + 1}-04-15`;
+        if (endDate <= currentDate || endDate > seasonEnd) {
+          throw new Error("Next game must be after the current day and within the season.");
+        }
+      }
       let completedDays = 0;
 
-      while (monthEnd === null || currentDate < monthEnd) {
+      while (endDate === null || currentDate < endDate) {
         if (useBatchSimulationStore.getState().stopRequested) break;
 
         const previousDate = currentDate;

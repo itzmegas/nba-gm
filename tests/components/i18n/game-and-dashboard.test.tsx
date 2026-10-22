@@ -21,8 +21,14 @@ vi.mock("@/application/hooks/games/useDeleteGame", () => ({
 }));
 
 const teams = [
-  { id: "team-1", city: "Los Angeles", name: "Lakers", abbreviation: "LAL" },
-  { id: "team-2", city: "Boston", name: "Celtics", abbreviation: "BOS" },
+  {
+    id: "team-1",
+    city: "Los Angeles",
+    name: "Los Angeles Lakers",
+    abbreviation: "LAL",
+    conference: "West",
+  },
+  { id: "team-2", city: "Boston", name: "Boston Celtics", abbreviation: "BOS", conference: "East" },
 ];
 
 vi.mock("@/application", () => ({
@@ -43,6 +49,7 @@ vi.mock("@/application/hooks/games/useGame", () => ({
       id: "game-1",
       selectedTeamId: "team-1",
       seasonYear: 2026,
+      status: "active",
       simulationDate: new Date("2026-01-15T00:00:00.000Z"),
     },
     isLoading: false,
@@ -50,8 +57,9 @@ vi.mock("@/application/hooks/games/useGame", () => ({
 }));
 
 vi.mock("@/application/hooks/simulation", () => ({
-  useNextGame: () => ({ data: undefined }),
+  useNextGame: () => ({ data: { date: "2026-01-16", homeTeamId: "team-1", awayTeamId: "team-2" } }),
   useStandings: () => ({ data: [] }),
+  useAdvanceRange: () => ({ isPending: false, isError: false, mutate: () => undefined }),
 }));
 
 vi.mock("@/components/dashboard/alerts-widget", () => ({
@@ -90,7 +98,7 @@ describe("game and dashboard internationalization", () => {
     const team = {
       id: "team-1",
       city: "Los Angeles",
-      name: "Lakers",
+      name: "Los Angeles Lakers",
     } as Parameters<typeof GameList>[0]["teams"][number];
 
     const renderGame = (locale: "en" | "es") =>
@@ -103,6 +111,8 @@ describe("game and dashboard internationalization", () => {
     expect(renderGame("en")).toContain("Franchise");
     expect(renderGame("es")).toContain("Franquicia");
     expect(renderGame("es")).not.toContain("Franchise");
+    expect(renderGame("en")).toContain("Los Angeles Lakers");
+    expect(renderGame("en")).not.toContain("Los Angeles Los Angeles Lakers");
   });
 
   it("renders Calendar copy from the active catalog", () => {
@@ -122,7 +132,7 @@ describe("game and dashboard internationalization", () => {
     expect(renderCalendar("es")).not.toContain("No games are scheduled this month.");
   });
 
-  it("renders dashboard fallback and matchup copy from the active catalog", async () => {
+  it("renders the redesigned dashboard and simulation action from the active catalog", async () => {
     const renderDashboard = (locale: "en" | "es") =>
       new Promise<string>((resolve, reject) => {
         const stream = renderToPipeableStream(
@@ -149,13 +159,15 @@ describe("game and dashboard internationalization", () => {
         );
       });
 
-    expect(await renderDashboard("en")).toContain("Lakers");
-    expect(await renderDashboard("en")).toContain("VS");
-    expect(await renderDashboard("es")).toContain("Lakers");
-    expect(await renderDashboard("es")).toContain("VS");
-    expect(await renderDashboard("es")).toContain("Este es el estado actual de tu franquicia.");
-    expect(await renderDashboard("es")).not.toContain(
-      "This is the current state of your franchise."
-    );
+    const english = await renderDashboard("en");
+    const spanish = await renderDashboard("es");
+    expect(english).toContain("Los Angeles Lakers");
+    expect(english).toContain("Simulate next game");
+    expect(spanish).toContain("Los Angeles Lakers");
+    expect(spanish).toContain("Simular próximo partido");
+    expect(spanish).toContain("Fecha de simulación");
+    expect(spanish).not.toContain("Simulate next game");
+    expect(english).not.toContain("Joel Embiid");
+    expect(english).not.toContain("Zach LaVine");
   });
 });

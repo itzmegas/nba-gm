@@ -1,173 +1,146 @@
-import type { ComponentProps, ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment happy-dom
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@/application/providers/I18nProvider";
+import {
+  BATCH_SIMULATION_MODE,
+  useBatchSimulationStore,
+} from "@/application/stores/useBatchSimulationStore";
 import { DashboardSidebar } from "@/components/dashboard/layout-components";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-interface BatchRenderState {
-  isActive: boolean;
-  stopRequested: boolean;
-  mode: "month" | "season" | null;
-  completedDays: number;
-  totalDays: number | null;
-  error: string | null;
-}
-
-let batchState: BatchRenderState = {
-  isActive: true,
-  stopRequested: false,
-  mode: "month",
-  completedDays: 2,
-  totalDays: 5,
-  error: null,
-};
-
-const noop = () => undefined;
-
-vi.mock("lucide-react", () => {
-  const Icon = () => <span />;
-  return {
-    ArrowLeftRight: Icon,
-    Bell: Icon,
-    Calendar: Icon,
-    DollarSign: Icon,
-    Globe: Icon,
-    LayoutDashboard: Icon,
-    LogOut: Icon,
-    Settings: Icon,
-    Users: Icon,
-  };
-});
-vi.mock("next/image", () => ({ default: () => <span /> }));
-vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: { children?: ReactNode; href: string }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  ),
-}));
+const { day, range } = vi.hoisted(() => ({ day: vi.fn(), range: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard" }));
+vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: [] }) }));
 vi.mock("@/application/hooks/simulation", () => ({
   getMonthEnd: () => "2026-10-31",
-  useAdvanceRange: () => ({ isPending: false, mutate: noop }),
+  useAdvanceRange: () => ({ isPending: false, mutate: range }),
 }));
 vi.mock("@/application/hooks/simulation/useAdvanceDay", () => ({
-  useAdvanceDay: () => ({ isPending: false, isError: false, mutate: noop }),
+  useAdvanceDay: () => ({ isPending: false, isError: false, mutate: day }),
 }));
 vi.mock("@/application/hooks/simulation/useCurrentTeamGame", () => ({
-  useCurrentTeamGame: () => ({ data: undefined, isPending: false, isError: false }),
+  useCurrentTeamGame: () => ({
+    data: {
+      homeTeamId: "opponent",
+      awayTeamId: "team",
+      status: "completed",
+      homeScore: 102,
+      awayScore: 114,
+    },
+    isPending: false,
+    isError: false,
+  }),
 }));
-vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: [] }) }));
-vi.mock("@/application/stores/useBatchSimulationStore", () => ({
-  BATCH_SIMULATION_MODE: { MONTH: "month", SEASON: "season" },
-  useBatchSimulationStore: (selector: (state: BatchRenderState) => unknown) => selector(batchState),
-  getState: () => ({ startBatch: () => true }),
-}));
-vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: React.ComponentProps<"button">) => (
-    <button {...props}>{children}</button>
-  ),
-}));
-vi.mock("@/components/ui/sidebar", () => ({
-  Sidebar: ({ children, ...props }: ComponentProps<"div">) => <div {...props}>{children}</div>,
-  SidebarContent: ({ children, ...props }: ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  SidebarFooter: ({ children, ...props }: ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  SidebarHeader: ({ children, ...props }: ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  SidebarMenu: ({ children, ...props }: ComponentProps<"div">) => <div {...props}>{children}</div>,
-  SidebarMenuButton: ({
-    children,
-    asChild: _asChild,
-    isActive: _isActive,
-    ...props
-  }: ComponentProps<"div"> & {
-    asChild?: boolean;
-    isActive?: boolean;
-  }) => <div {...props}>{children}</div>,
-  SidebarMenuItem: ({ children, ...props }: ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  SidebarRail: () => <button type="button" aria-label="Toggle Sidebar" />,
-  SidebarSeparator: () => <hr />,
-  SidebarTrigger: ({ children, ...props }: ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-}));
-vi.mock("@/components/ui/breadcrumb", () => ({
-  Breadcrumb: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  BreadcrumbItem: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  BreadcrumbLink: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  BreadcrumbList: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  BreadcrumbPage: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  BreadcrumbSeparator: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSeparator: () => <hr />,
-  DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("@/components/ui/separator", () => ({ Separator: () => <hr /> }));
 
-const renderSidebar = () =>
-  renderToStaticMarkup(
-    <DashboardSidebar
-      gameId="game"
-      selectedTeamId="team"
-      simulationDate={new Date("2026-10-29T00:00:00.000Z")}
-      seasonYear={2026}
-    />
+function renderSidebar(date = "2026-10-29", open = true) {
+  return render(
+    <I18nProvider locale="en">
+      <TooltipProvider>
+        <SidebarProvider defaultOpen={open}>
+          <DashboardSidebar
+            gameId="game"
+            selectedTeamId="team"
+            simulationDate={new Date(`${date}T00:00:00Z`)}
+            seasonYear={2026}
+          />
+        </SidebarProvider>
+      </TooltipProvider>
+    </I18nProvider>
   );
+}
 
-describe("DashboardSidebar simulation feedback", () => {
-  beforeEach(() => {
-    batchState = {
-      isActive: true,
-      stopRequested: false,
+beforeEach(() => {
+  vi.clearAllMocks();
+  useBatchSimulationStore.setState({
+    isActive: false,
+    stopRequested: false,
+    mode: null,
+    completedDays: 0,
+    totalDays: null,
+    error: null,
+  });
+});
+afterEach(cleanup);
+
+describe("dashboard simulation controls", () => {
+  it("keeps daily advance visible and puts longer ranges in a keyboard-accessible menu", async () => {
+    renderSidebar();
+    expect(screen.queryByText("Simulate month")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Simulate day" }));
+    expect(day).toHaveBeenCalledWith({
+      gameId: "game",
+      simulationDate: new Date("2026-10-29T00:00:00Z"),
+    });
+    fireEvent.keyDown(screen.getByRole("button", { name: "More simulation options" }), {
+      key: "ArrowDown",
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Simulate month" }));
+    expect(range).toHaveBeenCalledWith({
+      gameId: "game",
+      simulationDate: new Date("2026-10-29T00:00:00Z"),
       mode: "month",
-      completedDays: 2,
-      totalDays: 5,
-      error: null,
-    };
+      seasonYear: 2026,
+    });
   });
 
-  it("renders committed progress, disables simulation actions, and offers pause", () => {
-    const markup = renderSidebar();
-
-    expect(markup).toContain("2 días completados de 5");
-    expect(markup).toContain("Pausar simulación");
-    expect((markup.match(/disabled=""/g) ?? []).length).toBe(3);
+  it("shows next-game progress, disables overlapping actions, and pauses", () => {
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 5);
+    useBatchSimulationStore.getState().updateProgress(2);
+    renderSidebar();
+    expect(screen.getByRole("status").textContent).toBe("2 days completed of 5");
+    expect(
+      (screen.getByRole("button", { name: "Simulate day" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "More simulation options" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "Pause simulation" }));
+    expect(useBatchSimulationStore.getState().stopRequested).toBe(true);
+    expect((screen.getByRole("button", { name: "Pausing…" }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
   });
 
-  it("disables pause after it is requested", () => {
-    batchState.stopRequested = true;
-
-    const markup = renderSidebar();
-
-    expect(markup).toContain("Pausando…");
-    expect((markup.match(/disabled=""/g) ?? []).length).toBe(4);
+  it("does not show batch progress or pause for a single day", () => {
+    useBatchSimulationStore.getState().startDay();
+    renderSidebar();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pause simulation" })).toBeNull();
+    expect(screen.queryByText(/days completed/)).toBeNull();
   });
 
-  it("renders batch errors without changing committed progress", () => {
-    batchState.error = "temporary failure";
-
-    const markup = renderSidebar();
-
-    expect(markup).toContain("No se pudo avanzar la simulación.");
-    expect(markup).toContain("2 días completados de 5");
+  it("keeps pause accessible in the collapsed rail", () => {
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 5);
+    renderSidebar("2026-10-29", false);
+    fireEvent.click(screen.getByRole("button", { name: "Pause simulation" }));
+    expect(useBatchSimulationStore.getState().stopRequested).toBe(true);
   });
 
-  it("keeps navigation ordinary and does not create a persistent batch boundary", () => {
-    const markup = renderSidebar();
+  it("renders a committed score from the selected team's perspective", () => {
+    renderSidebar();
+    expect(screen.getByText(/Final 114-102/)).toBeDefined();
+  });
 
-    expect(markup).toContain('href="/games/game/dashboard/schedule"');
-    expect(markup).not.toContain("localStorage");
-    expect(markup).not.toContain("background");
+  it("disables all advance actions after the season endpoint", () => {
+    renderSidebar("2027-04-15");
+    expect(
+      (screen.getByRole("button", { name: "Simulate day" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "More simulation options" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+  });
+
+  it("shows errors without fabricating completed progress", () => {
+    useBatchSimulationStore.getState().failBatch("temporary failure");
+    renderSidebar();
+    expect(screen.getByRole("alert").textContent).toBe("Unable to advance the simulation.");
+    expect(screen.queryByText(/days completed/)).toBeNull();
   });
 });

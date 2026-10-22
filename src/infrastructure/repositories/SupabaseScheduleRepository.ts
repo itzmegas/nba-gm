@@ -38,8 +38,8 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       .limit(1)
       .maybeSingle();
 
-    if (error || !data) return null;
-    return this.mapToEntity(data);
+    if (error) throw new Error(error.message);
+    return data ? this.mapToEntity(data) : null;
   }
 
   async getByGameId(gameId: string): Promise<ScheduledGame[]> {

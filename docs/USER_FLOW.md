@@ -4,6 +4,8 @@
 
 El jugador toma el rol de General Manager (GM) de un equipo NBA. La experiencia está diseñada para ser inmersiva, estratégica y realista.
 
+La [propuesta de evolución UI/UX](UI_UX_ROADMAP.md) documenta la revisión del layout actual y las mejoras por etapas; todavía no está implementada.
+
 ---
 
 ## User Journey Map

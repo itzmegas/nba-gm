@@ -1,6 +1,5 @@
 "use client";
 
-import { CalendarDays } from "lucide-react";
 import { use } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useT } from "@/application/providers/I18nProvider";
@@ -33,20 +32,20 @@ export default function SchedulePage({ params }: SchedulePageProps) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div>
-        <h1 className="flex items-center gap-3 text-3xl font-black tracking-tight">
-          <CalendarDays className="h-8 w-8 text-primary" />
-          {t("dashboard", "calendar")}
-        </h1>
-        <p className="mt-1 text-muted-foreground">{t("dashboard", "currentSeasonGames")}</p>
-      </div>
+    <section
+      data-slot="schedule-screen"
+      aria-labelledby="calendar-title"
+      className="animate-in fade-in duration-500"
+    >
+      <h1 id="calendar-title" className="sr-only">
+        {t("dashboard", "calendar")}
+      </h1>
       <Calendar
         key={`${game.data.simulationDate.getUTCFullYear()}-${game.data.simulationDate.getUTCMonth()}`}
         gameId={gameId}
         selectedTeamId={game.data.selectedTeamId}
         simulationDate={game.data.simulationDate}
       />
-    </div>
+    </section>
   );
 }

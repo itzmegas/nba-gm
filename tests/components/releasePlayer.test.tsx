@@ -31,7 +31,7 @@ afterEach(() => {
   useBatchSimulationStore.setState({ isActive: false });
 });
 
-function renderRoster(canRelease = true) {
+function renderRoster(canRelease = true, leagueTeamId?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   for (const key of ["roster", "contracts", "free-agency", "release-cap-charge", "player-states"]) {
     client.setQueryData(["games", gameId, key], "cached");
@@ -39,7 +39,13 @@ function renderRoster(canRelease = true) {
   render(
     <QueryClientProvider client={client}>
       <I18nProvider locale="en">
-        <RosterTable gameId={gameId} players={[player]} seasonYear={2026} canRelease={canRelease} />
+        <RosterTable
+          gameId={gameId}
+          players={[player]}
+          seasonYear={2026}
+          canRelease={canRelease}
+          leagueTeamId={leagueTeamId}
+        />
       </I18nProvider>
     </QueryClientProvider>
   );
@@ -101,4 +107,19 @@ it("blocks confirmation when simulation starts while the dialog is open", async 
 it("does not expose cuts on a read-only league roster", () => {
   renderRoster(false);
   expect(screen.queryByRole("button", { name: "Release Test Player" })).toBeNull();
+});
+
+it("uses 48px portraits while preserving read-only league navigation", () => {
+  const leagueTeamId = "55555555-5555-4555-8555-555555555555";
+  renderRoster(false, leagueTeamId);
+  const row = screen.getByText("Test Player").closest("tr");
+  const portrait = row?.querySelector(".rounded-full");
+  expect(portrait?.classList.contains("h-12")).toBe(true);
+  expect(portrait?.classList.contains("w-12")).toBe(true);
+  fireEvent.click(screen.getByText("Test Player"));
+  expect(push).toHaveBeenCalledExactlyOnceWith(
+    `/games/${gameId}/dashboard/player/${playerId}?leagueTeamId=${leagueTeamId}`
+  );
+  expect(screen.queryByRole("button", { name: "Release Test Player" })).toBeNull();
+  expect(rpc).not.toHaveBeenCalled();
 });

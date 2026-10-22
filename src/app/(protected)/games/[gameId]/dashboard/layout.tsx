@@ -53,7 +53,9 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
           />
 
           <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+            <div className="mx-auto w-full max-w-7xl has-[[data-slot=schedule-screen]]:max-w-none">
+              {children}
+            </div>
           </div>
         </SidebarInset>
       </SidebarProvider>

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export const BATCH_SIMULATION_MODE = {
+  NEXT_GAME: "next-game",
   MONTH: "month",
   SEASON: "season",
 } as const;

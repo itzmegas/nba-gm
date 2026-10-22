@@ -95,7 +95,7 @@ export default function TradesPage({ params }: TradesPageProps) {
   const packageA: TradePackage | null = team
     ? {
         teamId,
-        teamName: `${team.city} ${team.name}`,
+        teamName: team.name,
         outgoingAssets: assetsFor(teamPlayerIds, teamPickIds, teamRoster),
         incomingAssets: [],
       }
@@ -103,7 +103,7 @@ export default function TradesPage({ params }: TradesPageProps) {
   const packageB: TradePackage | null = opponent
     ? {
         teamId: opponentId,
-        teamName: `${opponent.city} ${opponent.name}`,
+        teamName: opponent.name,
         outgoingAssets: assetsFor(opponentPlayerIds, opponentPickIds, opponentRoster),
         incomingAssets: [],
       }
@@ -272,7 +272,7 @@ export default function TradesPage({ params }: TradesPageProps) {
         <>
           <div className="grid items-start gap-4 xl:grid-cols-2">
             <TradeAssetPanel
-              teamName={team ? `${team.city} ${team.name}` : "Your team"}
+              teamName={team?.name ?? "Your team"}
               teamLogoUrl={team?.logoUrl}
               roster={teamRoster}
               picks={teamPicks}
@@ -294,7 +294,7 @@ export default function TradesPage({ params }: TradesPageProps) {
               pickById={pickById}
             />
             <TradeAssetPanel
-              teamName={`${opponent.city} ${opponent.name}`}
+              teamName={opponent.name}
               teamLogoUrl={opponent.logoUrl}
               roster={opponentRoster}
               picks={opponentPicks}

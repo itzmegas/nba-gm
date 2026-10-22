@@ -17,6 +17,12 @@ describe("roster contract presentation", () => {
     expect(formatRosterSalary(0)).toBe("$0");
   });
 
+  it("keeps existing English salary displays deterministic", () => {
+    expect(formatRosterSalary(1_200_000)).toBe("$1.2M");
+    expect(formatRosterSalary(125_000)).toBe("$125,000");
+    expect(formatRosterSalary(12.5)).toBe("$12.5");
+  });
+
   it("exposes two-way, estimated, and proven observed standard classifications", () => {
     expect(
       getRosterContractClassification(

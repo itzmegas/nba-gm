@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChevronRight, MapPin, Search } from "lucide-react";
+import { CheckCircle2, ChevronRight, Search } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -162,10 +162,6 @@ export function TeamSelector() {
 
                     <div>
                       <h3 className="font-bold text-lg leading-none">{team.name}</h3>
-                      <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mt-1">
-                        <MapPin className="h-3 w-3" />
-                        <span>{team.city}</span>
-                      </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -197,10 +193,7 @@ export function TeamSelector() {
         <div className="max-w-6xl w-full flex items-center justify-between">
           <div className="hidden sm:block">
             <p className="text-sm text-muted-foreground">{t("games", "selectedFranchise")}</p>
-            <p className="font-bold">
-              {teams?.find((t) => t.id === selectedTeamId)?.city}{" "}
-              {teams?.find((t) => t.id === selectedTeamId)?.name}
-            </p>
+            <p className="font-bold">{teams?.find((t) => t.id === selectedTeamId)?.name}</p>
           </div>
 
           <Button

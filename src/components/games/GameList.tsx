@@ -52,9 +52,7 @@ export function GameList({ games, teams }: GameListProps) {
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p>
                   {t("games", "franchise")}:{" "}
-                  <span className="font-medium text-foreground">
-                    {team?.city} {team?.name}
-                  </span>
+                  <span className="font-medium text-foreground">{team?.name}</span>
                 </p>
                 <p>
                   {t("games", "season")}:{" "}

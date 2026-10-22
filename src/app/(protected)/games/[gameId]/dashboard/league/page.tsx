@@ -101,7 +101,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
             <SelectContent>
               {filteredTeams.map((team) => (
                 <SelectItem key={team.id} value={team.id}>
-                  {team.city} {team.name} ({team.abbreviation})
+                  {team.name} ({team.abbreviation})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -115,11 +115,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle>
-              {selectedTeam
-                ? `${selectedTeam.city} ${selectedTeam.name}`
-                : t("dashboard", "rosterFallback")}
-            </CardTitle>
+            <CardTitle>{selectedTeam?.name ?? t("dashboard", "rosterFallback")}</CardTitle>
             <p className="text-sm text-muted-foreground">
               {t("dashboard", "season")} {game.seasonYear}
             </p>
