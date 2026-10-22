@@ -75,9 +75,19 @@ vi.mock("@/application/hooks/trades/useTrades", () => ({
   useExecuteTrade: () => ({ mutateAsync: mocks.execute, isPending: false }),
 }));
 vi.mock("@/components/trades/trade-asset-panel", () => ({
-  TradeAssetPanel: ({ teamLogoUrl }: { teamLogoUrl?: string }) => {
+  TradeAssetPanel: ({
+    teamLogoUrl,
+    onTogglePick,
+  }: {
+    teamLogoUrl?: string;
+    onTogglePick: (id: string) => void;
+  }) => {
     mocks.panelLogo(teamLogoUrl);
-    return null;
+    return (
+      <button type="button" onClick={() => onTogglePick("pick")}>
+        Select pick
+      </button>
+    );
   },
 }));
 vi.mock("@/components/trades/trade-summary", () => ({
@@ -191,5 +201,31 @@ describe("TradesPage", () => {
     expect(screen.getByRole("img", { name: "Lakers logo" }).getAttribute("data-image-src")).toBe(
       TEAM_B_LOGO
     );
+  });
+
+  it("resets both packages while keeping the trade partner", async () => {
+    await selectOpponent();
+    for (const button of screen.getAllByRole("button", { name: "Select pick" })) {
+      fireEvent.click(button);
+    }
+    expect(mocks.simulate).toHaveBeenLastCalledWith(
+      "game",
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ outgoingAssets: [{ type: "pick", pickId: "pick" }] }),
+      expect.objectContaining({ outgoingAssets: [{ type: "pick", pickId: "pick" }] }),
+      2026
+    );
+    expect(screen.getByRole("status").textContent).toBe("Checking trade…");
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(mocks.simulate).toHaveBeenLastCalledWith(
+      "game",
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ teamId: "A", outgoingAssets: [] }),
+      expect.objectContaining({ teamId: "B", outgoingAssets: [] }),
+      2026
+    );
+    expect(screen.getByRole("status").textContent).toBe("Waiting for your next move");
   });
 });
