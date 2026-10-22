@@ -80,11 +80,11 @@ interface DashboardNavItem {
 
 const NAV_ITEMS: DashboardNavItem[] = [
   { key: "dashboard", path: "", icon: LayoutDashboard },
+  { key: "calendar", path: "/schedule", icon: Calendar },
   { key: "roster", path: "/roster", icon: Users },
   { key: "league", path: "/league", icon: Globe },
   { key: "trades", path: "/trades", icon: ArrowLeftRight },
   { key: "freeAgency", path: "/free-agency", icon: DollarSign },
-  { key: "calendar", path: "/schedule", icon: Calendar },
   { key: "settings", path: "/settings", icon: Settings },
 ];
 

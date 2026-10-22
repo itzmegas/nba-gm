@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import Image from "next/image";
+import { type CSSProperties, useState } from "react";
 import { useTeams } from "@/application";
 import {
   getMonthCells,
@@ -10,9 +11,10 @@ import {
 import { useSchedule } from "@/application/hooks/schedule/useSchedule";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SCHEDULED_GAME_STATUS } from "@/domain";
-import { Card, CardContent } from "../ui/card";
+import { TEAM_COLORS } from "@/domain/constants/team-colors";
 
 interface CalendarProps {
   gameId: string;
@@ -133,15 +135,32 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
               games,
               selectedTeamId
             );
+            const selectedTeamIsHome = selectedTeamGame?.homeTeamId === selectedTeamId;
+            const opponent = selectedTeamGame
+              ? teamsById.get(
+                  selectedTeamIsHome ? selectedTeamGame.awayTeamId : selectedTeamGame.homeTeamId
+                )
+              : undefined;
+            const opponentColor = TEAM_COLORS[opponent?.abbreviation ?? ""]?.primary;
 
             return (
               <div
                 key={date ?? `empty-${index}`}
-                className={`h-28 overflow-hidden p-2 ${
-                  isCurrentDay
-                    ? "border-2 border-primary bg-primary/15"
-                    : `border-r border-b ${isPastDay ? "bg-muted/30" : ""} nth-[7n]:border-r-0`
-                }`}
+                data-calendar-date={date ?? undefined}
+                style={
+                  selectedTeamGame
+                    ? ({
+                        "--opponent-color": opponentColor ?? "var(--muted-foreground)",
+                      } as CSSProperties)
+                    : undefined
+                }
+                className={`min-h-40 min-w-0 border-r border-b p-3 nth-[7n]:border-r-0 ${
+                  selectedTeamGame
+                    ? "bg-[color-mix(in_srgb,var(--opponent-color)_10%,var(--card))]"
+                    : isPastDay
+                      ? "bg-muted/30"
+                      : ""
+                } ${isCurrentDay ? "ring-2 ring-inset ring-primary" : ""}`}
               >
                 {date && (
                   <>
@@ -159,7 +178,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-2 space-y-2">
                       {selectedTeamGame &&
                         (() => {
                           const scheduledGame = selectedTeamGame;
@@ -167,8 +186,6 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                           const home = teamsById.get(scheduledGame.homeTeamId);
                           const completed =
                             scheduledGame.status === SCHEDULED_GAME_STATUS.COMPLETED;
-                          const selectedTeamIsHome = scheduledGame.homeTeamId === selectedTeamId;
-                          const opponent = selectedTeamIsHome ? away : home;
                           const location = selectedTeamIsHome
                             ? t("dashboard", "home")
                             : t("dashboard", "away");
@@ -184,29 +201,47 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                             <button
                               type="button"
                               onClick={() => setSelectedDate(date)}
-                              aria-label={`${t("dashboard", "viewAllGames")} ${date}`}
+                              aria-label={`${t("dashboard", "viewAllGames")} ${date} · ${location} · ${opponent?.name ?? "—"} · ${stateLabel}${completed ? ` · ${scheduledGame.awayScore ?? "—"}-${scheduledGame.homeScore ?? "—"}` : ""}`}
                               title={`${away?.name ?? t("dashboard", "away")} @ ${home?.name ?? t("dashboard", "home")}`}
-                              className={`w-full overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm ${
-                                state === SELECTED_TEAM_GAME_STATE.VICTORY
-                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
-                                  : state === SELECTED_TEAM_GAME_STATE.DEFEAT
-                                    ? "border-destructive/40 bg-destructive/10 text-destructive"
-                                    : "border-primary/30 bg-primary/5"
-                              }`}
+                              className="flex min-h-24 w-full flex-col items-center gap-1 rounded-sm py-1 text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              <div className="flex items-center justify-between gap-1 font-bold">
-                                <span className="min-w-0 truncate">
-                                  {location} · {opponent?.abbreviation ?? "—"}
+                              {opponent?.logoUrl ? (
+                                <Image
+                                  src={opponent.logoUrl}
+                                  alt=""
+                                  width={64}
+                                  height={64}
+                                  className="size-16 shrink-0 object-contain dark:drop-shadow-[0_0_1px_white]"
+                                />
+                              ) : (
+                                <span
+                                  aria-hidden="true"
+                                  className="flex size-16 items-center justify-center text-lg font-bold"
+                                >
+                                  {opponent?.abbreviation ?? "—"}
+                                </span>
+                              )}
+                              <span className="block w-full truncate text-center text-sm font-semibold">
+                                {location} · {opponent?.abbreviation ?? "—"}
+                              </span>
+                              <span className="flex w-full flex-wrap items-center justify-center gap-x-3 text-xs">
+                                <span
+                                  className={
+                                    state === SELECTED_TEAM_GAME_STATE.VICTORY
+                                      ? "font-semibold text-emerald-800 dark:text-emerald-300"
+                                      : state === SELECTED_TEAM_GAME_STATE.DEFEAT
+                                        ? "font-semibold text-red-800 dark:text-red-300"
+                                        : "text-muted-foreground"
+                                  }
+                                >
+                                  {stateLabel}
                                 </span>
                                 {completed && (
-                                  <span className="shrink-0 tabular-nums">
+                                  <span className="shrink-0 font-bold tabular-nums">
                                     {scheduledGame.awayScore ?? "—"}-
                                     {scheduledGame.homeScore ?? "—"}
                                   </span>
                                 )}
-                              </div>
-                              <span className="block truncate text-[10px] font-semibold uppercase">
-                                {stateLabel}
                               </span>
                             </button>
                           );
@@ -216,7 +251,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                           type="button"
                           onClick={() => setSelectedDate(date)}
                           aria-label={`${t("dashboard", "viewGames")} ${games.length} ${t("dashboard", "gamesCount")} ${date}`}
-                          className="w-full rounded px-1 py-0.5 text-left text-[10px] text-muted-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="w-full rounded-sm py-1 text-left text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {selectedTeamGame
                             ? `+${remainingGameCount} ${t("dashboard", "gamesCount")}`
@@ -233,7 +268,10 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
       </div>
 
       <Dialog open={selectedDate !== null} onOpenChange={(open) => !open && setSelectedDate(null)}>
-        <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-xl">
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-xl"
+        >
           <DialogHeader>
             <DialogTitle className="capitalize">
               {t("dashboard", "gamesOn")} {selectedDateLabel}

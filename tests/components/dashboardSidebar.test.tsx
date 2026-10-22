@@ -44,6 +44,16 @@ function renderSidebar(defaultOpen = true) {
 }
 
 describe("game sidebar visual adjustments", () => {
+  it("places Calendar immediately after Dashboard", () => {
+    const { container } = renderSidebar();
+    const links = [...container.querySelectorAll('[data-slot="sidebar-menu-button"]')];
+    expect(links.slice(0, 2).map((link) => link.textContent?.trim())).toEqual([
+      "Dashboard",
+      "Calendar",
+    ]);
+    expect(links[1]?.getAttribute("href")).toBe("/games/game/dashboard/schedule");
+  });
+
   it("centers a larger logo without visible identity text and preserves the link name", () => {
     renderSidebar();
     const identity = screen.getByRole("link", { name: "Chicago Bulls" });

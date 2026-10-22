@@ -57,6 +57,20 @@ Una garantía `null` se presenta como desconocida, no como «no garantizado». S
 
 **Verificación:** 22 pruebas enfocadas pasan, con cobertura de ambos idiomas, garantías conocidas/desconocidas, cero frente a salario desconocido, navegación y confirmaciones de corte. TypeScript y Biome de los archivos modificados pasan. Suite completa: 442 tests aprobados, los mismos cuatro fallidos y una suite que no carga. Biome global sigue bloqueado únicamente por `.engram/manifest.json`. Pendiente de revisión visual con una partida; no se ha empezado el shell de la etapa 2.
 
+### Mejora priorizada por el usuario: calendario
+
+- Calendario pasa al segundo lugar de navegación, debajo de Dashboard, sin cambiar su ruta.
+- Se retiran el título y subtítulo visibles de la página; se conserva una cabecera accesible y el mes consultado. Solo esta pantalla deja de usar el límite compartido de ancho; las demás páginas mantienen su composición.
+- Los partidos del equipo muestran el logo completo del rival a 64 px y un fondo suave con su color primario en la celda del día, sin una tarjeta anidada. Se conservan local/visitante, estado, resultado y acceso a todos los partidos del día. Sin logo se usa la abreviatura; sin color conocido se usa un tono neutral. Las celdas tienen altura mínima de 160 px, no una altura fija que pueda recortar el contenido.
+
+El cambio es una entrega visual acotada solicitada expresamente; no da por completadas las etapas del shell ni la adaptación de las demás secciones. Se mantienen el scroll horizontal de la grilla en pantallas estrechas, la navegación mensual y el reinicio de mes existente al cambiar el mes simulado. No se añade agenda móvil ni se cambia la lógica de simulación.
+
+**Verificación:** 22 pruebas enfocadas pasan, incluidas siete regresiones nuevas de navegación, logo/color, fallback, resultados, diálogo, navegación mensual y encabezado accesible. TypeScript y Biome de los archivos modificados pasan. Suite completa: 449 tests aprobados, los mismos cuatro fallidos y una suite que no carga. Biome global mantiene el fallo conocido de `.engram/manifest.json`. Pendiente de aprobación visual del calendario con una partida autenticada.
+
+**Revisión independiente de la primera versión (logos de 56 px):** sin bloqueantes reproducidos; 22 pruebas existentes y cinco probes adicionales aislados pasan. En Chrome, con fixtures del componente y CSS compilado —no una partida autenticada—, se comprobaron logos de 56×56 sin recortes, ausencia de overflow de página a 1440×900, 1280×720 y 390×844, scroll local móvil, foco y movimiento reducido. El contraste de texto del partido alcanzó un mínimo de 14.29:1 al combinar las 30 franquicias seleccionadas con los 30 rivales en ambos temas. El límite normal de 1280 px se conserva fuera del calendario. Los probes adicionales y el navegador se ejecutaron en un entorno temporal; no sustituyen la revisión de assets y recorridos reales ni validan ajustes visuales posteriores.
+
+**Ajuste tras la captura del juego:** se simplifica a una única superficie de color al 10 % en el día del partido. Se eliminan el borde de la tarjeta interna y el fondo blanco del logo; el logo crece a 64 px, con un contorno luminoso discreto en oscuro. «Hoy» se señala mediante un contorno interior sin llenar la celda de rojo. Aumentan texto y separación entre estado y marcador, con texto semántico para victoria/derrota. Pasan 23 pruebas enfocadas, TypeScript y Biome de los archivos modificados. Suite completa: 450 aprobados y los fallos globales ya documentados. Pendientes de revisión visual y nuevas mediciones de contraste de este ajuste; no se reutilizan las cifras de la primera versión como validación actual.
+
 ## Alcance y evidencia
 
 Se revisaron la captura del roster, el layout compartido, los tokens de tema, los componentes base y el código de dashboard, roster, liga, ficha de jugador, agencia libre, traspasos y calendario.
