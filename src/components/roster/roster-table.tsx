@@ -3,11 +3,12 @@
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
-import { useT } from "@/application/providers/I18nProvider";
+import { createT } from "@/application/i18n/createT";
+import type { Locale } from "@/application/i18n/types";
+import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { ReleasePlayerButton } from "@/components/roster/release-player-button";
 import { Badge } from "@/components/ui/badge";
-import { CONTRACT_UI_CLASSIFICATION } from "@/domain/contracts/ContractClassification";
 import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
 import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
 import {
@@ -16,31 +17,45 @@ import {
   getYearsRemaining,
 } from "@/domain/entities/Season";
 
-export function formatRosterSalary(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined) return "Unknown";
-  if (amount >= 1_000_000) {
-    return `$${(amount / 1_000_000).toFixed(1)}M`;
-  }
-  return `$${amount.toLocaleString()}`;
+export function formatRosterSalary(
+  amount: number | null | undefined,
+  locale: Locale = "en"
+): string {
+  if (amount === null || amount === undefined) return createT(locale)("dashboard", "unknownValue");
+  const millions = amount >= 1_000_000;
+  const formatted = new Intl.NumberFormat(locale === "es" ? "es-AR" : "en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: millions ? 1 : 0,
+    maximumFractionDigits: millions ? 1 : 3,
+  }).format(millions ? amount / 1_000_000 : amount);
+  return millions ? `${formatted}M` : formatted;
 }
 
-export function getRosterContractClassification(rosterPlayer: RosterPlayer): {
+export function getRosterContractClassification(
+  rosterPlayer: RosterPlayer,
+  locale: Locale = "en"
+): {
   label: string;
   title: string;
 } {
+  const t = createT(locale);
   const state = rosterPlayer.gameContract;
   if (rosterPlayer.contract?.origin === CONTRACT_ORIGIN.SIMULATED_AGREEMENT) {
-    return { label: CONTRACT_UI_CLASSIFICATION.STANDARD, title: "Simulated standard NBA contract" };
+    return {
+      label: t("dashboard", "contractStandard"),
+      title: t("dashboard", "simulatedContractDescription"),
+    };
   }
   if (state?.contractType === "two-way")
     return {
-      label: CONTRACT_UI_CLASSIFICATION.TWO_WAY,
-      title: "Official NBA G League two-way classification",
+      label: t("dashboard", "contractTwoWay"),
+      title: t("dashboard", "twoWayContractDescription"),
     };
   if (state?.estimated)
     return {
-      label: CONTRACT_UI_CLASSIFICATION.ESTIMATED,
-      title: "Estimated from the verified experience minimum",
+      label: t("dashboard", "contractEstimated"),
+      title: t("dashboard", "estimatedContractDescription"),
     };
   if (
     state?.resolutionStatus === CONTRACT_IDENTITY_RESOLUTION_STATUS.OBSERVED_STANDARD &&
@@ -48,13 +63,13 @@ export function getRosterContractClassification(rosterPlayer: RosterPlayer): {
     state.provenanceQuality === "observed"
   ) {
     return {
-      label: CONTRACT_UI_CLASSIFICATION.STANDARD,
-      title: "Observed standard NBA contract",
+      label: t("dashboard", "contractStandard"),
+      title: t("dashboard", "observedContractDescription"),
     };
   }
   return {
-    label: CONTRACT_UI_CLASSIFICATION.UNKNOWN,
-    title: "Contract classification is unavailable or unrecognized",
+    label: t("dashboard", "unknownValue"),
+    title: t("dashboard", "unknownContractDescription"),
   };
 }
 
@@ -70,23 +85,54 @@ function getContractYearsLeft(baseSeasonYear: number, endYear: number): number {
   return getYearsRemaining(baseSeasonYear, endYear);
 }
 
-function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number) {
+function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number, locale: Locale) {
+  const t = createT(locale);
   const { contract } = rosterPlayer;
   if (!contract)
-    return { label: "Sin Contrato", variant: "destructive" as const, icon: AlertTriangle };
+    return {
+      label: t("dashboard", "contractUnavailable"),
+      variant: "outline" as const,
+      icon: AlertTriangle,
+    };
 
   const yearsLeft = getContractYearsLeft(baseSeasonYear, contract.endYear);
 
   if (contract.isPlayerOption)
-    return { label: "Player Option", variant: "secondary" as const, icon: Clock };
+    return {
+      label: t("dashboard", "contractPlayerOption"),
+      variant: "secondary" as const,
+      icon: Clock,
+    };
   if (contract.isTeamOption)
-    return { label: "Team Option", variant: "secondary" as const, icon: Clock };
+    return {
+      label: t("dashboard", "contractTeamOption"),
+      variant: "secondary" as const,
+      icon: Clock,
+    };
   if (yearsLeft === 1)
-    return { label: "Expiring", variant: "destructive" as const, icon: AlertTriangle };
-  if (!contract.isGuaranteed)
-    return { label: "Non-Guaranteed", variant: "outline" as const, icon: AlertTriangle };
+    return {
+      label: t("dashboard", "contractExpiring"),
+      variant: "destructive" as const,
+      icon: AlertTriangle,
+    };
+  if (contract.isGuaranteed === false)
+    return {
+      label: t("dashboard", "contractNonGuaranteed"),
+      variant: "outline" as const,
+      icon: AlertTriangle,
+    };
+  if (contract.isGuaranteed !== true)
+    return {
+      label: t("dashboard", "contractGuaranteeUnknown"),
+      variant: "outline" as const,
+      icon: AlertTriangle,
+    };
 
-  return { label: "Guaranteed", variant: "default" as const, icon: CheckCircle2 };
+  return {
+    label: t("dashboard", "contractGuaranteed"),
+    variant: "default" as const,
+    icon: CheckCircle2,
+  };
 }
 
 function ContractYearsBar({
@@ -96,6 +142,7 @@ function ContractYearsBar({
   baseSeasonYear: number;
   endYear: number;
 }) {
+  const t = useT();
   const yearsLeft = getContractYearsLeft(baseSeasonYear, endYear);
   const maxYears = 5;
   const pct = Math.min((yearsLeft / maxYears) * 100, 100);
@@ -109,7 +156,10 @@ function ContractYearsBar({
       <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
         <div className={`h-full ${barColor} rounded-full`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-muted-foreground tabular-nums">{yearsLeft}a</span>
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {yearsLeft}
+        {t("dashboard", "yearsShort")}
+      </span>
     </div>
   );
 }
@@ -131,6 +181,7 @@ export function RosterTable({
 }: RosterTableProps) {
   const router = useRouter();
   const t = useT();
+  const locale = useLocale();
 
   const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
 
@@ -146,21 +197,27 @@ export function RosterTable({
         <thead>
           <tr className="border-b border-border/50 bg-muted/30">
             <th className="py-3 px-4 text-left font-medium text-muted-foreground w-8">#</th>
-            <th className="py-3 px-4 text-left font-medium text-muted-foreground">Jugador</th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-16">Pos</th>
+            <th className="py-3 px-4 text-left font-medium text-muted-foreground">
+              {t("dashboard", "rosterPlayer")}
+            </th>
+            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-16">
+              {t("dashboard", "rosterPosition")}
+            </th>
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-20 hidden md:table-cell">
-              Alt
+              {t("dashboard", "rosterHeight")}
             </th>
             <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28">
-              Salario {formatSalarySeasonLabel(salarySeasonYears[0])}
+              {t("dashboard", "rosterSalary")} {formatSalarySeasonLabel(salarySeasonYears[0])}
             </th>
             <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28 hidden lg:table-cell">
-              Salario {formatSalarySeasonLabel(salarySeasonYears[1])}
+              {t("dashboard", "rosterSalary")} {formatSalarySeasonLabel(salarySeasonYears[1])}
             </th>
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-28 hidden md:table-cell">
-              Duración
+              {t("dashboard", "rosterDuration")}
             </th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-36">Estado</th>
+            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-36">
+              {t("dashboard", "rosterStatus")}
+            </th>
             {canRelease && (
               <th className="py-3 px-4 text-right font-medium text-muted-foreground">
                 {t("dashboard", "rosterActions")}
@@ -171,8 +228,8 @@ export function RosterTable({
         <tbody>
           {sorted.map((rosterPlayer, idx) => {
             const { player, contract } = rosterPlayer;
-            const status = getContractStatus(rosterPlayer, seasonYear);
-            const classification = getRosterContractClassification(rosterPlayer);
+            const status = getContractStatus(rosterPlayer, seasonYear, locale);
+            const classification = getRosterContractClassification(rosterPlayer, locale);
             const StatusIcon = status.icon;
             const isEven = idx % 2 === 0;
 
@@ -224,12 +281,12 @@ export function RosterTable({
 
                 {/* Salario Y1 */}
                 <td className="py-3 px-4 text-right font-mono font-semibold">
-                  {formatRosterSalary(contract?.salaryY1)}
+                  {formatRosterSalary(contract?.salaryY1, locale)}
                 </td>
 
                 {/* Salario Y2 */}
                 <td className="py-3 px-4 text-right font-mono text-muted-foreground hidden lg:table-cell">
-                  {formatRosterSalary(contract?.salaryY2)}
+                  {formatRosterSalary(contract?.salaryY2, locale)}
                 </td>
 
                 {/* Barra de años */}

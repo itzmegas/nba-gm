@@ -49,6 +49,14 @@ El hover original `primary/80` incumplía 4.5:1 en 13 combinaciones, aunque los 
 
 **Regresiones de identidad:** 13 pruebas enfocadas pasan, incluyendo desplegable de Liga con nombres reales y la excepción de denominación «LA Clippers». Suite completa: 439 tests aprobados, los mismos cuatro fallidos y una suite que no carga. No se repitió una revisión visual autenticada de estos últimos ajustes.
 
+### Tercera entrega: textos del roster e incertidumbre explícita
+
+La tabla compartida por roster y Liga usa los catálogos existentes en español e inglés para encabezados, clasificaciones, ayudas y estados contractuales. Los salarios siguen expresados en USD, con separadores y símbolo según el idioma; los importes desconocidos no se convierten en cero y un salario conocido de cero sigue mostrando cero. Se conserva el formato de temporada y la navegación actual.
+
+Una garantía `null` se presenta como desconocida, no como «no garantizado». Si falta la vista del contrato, se indica «Contrato no disponible», sin afirmar que el jugador carece de contrato. No se modifican acuerdos, garantías, cortes ni reglas de mercado; se corrige únicamente lo que afirma la presentación.
+
+**Verificación:** 22 pruebas enfocadas pasan, con cobertura de ambos idiomas, garantías conocidas/desconocidas, cero frente a salario desconocido, navegación y confirmaciones de corte. TypeScript y Biome de los archivos modificados pasan. Suite completa: 442 tests aprobados, los mismos cuatro fallidos y una suite que no carga. Biome global sigue bloqueado únicamente por `.engram/manifest.json`. Pendiente de revisión visual con una partida; no se ha empezado el shell de la etapa 2.
+
 ## Alcance y evidencia
 
 Se revisaron la captura del roster, el layout compartido, los tokens de tema, los componentes base y el código de dashboard, roster, liga, ficha de jugador, agencia libre, traspasos y calendario.
