@@ -1,6 +1,6 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** ejecución iniciada por autorización del usuario; primera entrega del bloque 1 en validación de fuente, sin integración al juego todavía.
+**Estado:** bloque 1 con fuente validada y primer cruce contra una partida real; identidades, política de datos ausentes y permisos pendientes, sin integración al juego todavía.
 **Fecha:** 2026-10-22.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
@@ -87,7 +87,8 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 
 - [x] Modelo inicial de 14 atributos y descarga validada de NBA 2K27, sin importar datos.
 - [x] Reporte de calidad y candidatos de identidad con entrada opcional del roster canónico.
-- [ ] Ejecutar el cruce contra una exportación real del roster canónico y revisar identidades.
+- [x] Ejecutar el cruce contra el roster canónico de una partida moderna real: 526 candidatos de 546 jugadores, 19 sin coincidencia de nombre y 1 incompleto.
+- [ ] Corroborar identidades, incluidas las 11 posibles variantes de nombre localizadas; no son vínculos aprobados para importar.
 - [ ] Confirmar permisos de reutilización y política de jugadores sin datos.
 - [ ] Persistir atributos versionados por partida/temporada e integrarlos al motor SQL.
 

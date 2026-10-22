@@ -1,6 +1,6 @@
 # Atributos: validar la fuente antes de importar
 
-**Estado:** primera entrega del bloque 1, solo lectura. No cambia jugadores, partidas ni resultados.
+**Estado:** fuente validada y primer cruce con una partida real ejecutado, solo lectura. Identidades e importación pendientes. No cambia jugadores, partidas ni resultados.
 
 ## Modelo inicial
 
@@ -64,4 +64,54 @@ El reporte separa candidatos por nombre, ausencias, ambigüedades y atributos in
 
 Sale con código 1 si falla la descarga/entrada o si el roster contiene casos sin resolver. Una auditoría del proveedor puede finalizar con código 0 aunque haya exclusiones: revisá `excludedPlayers`. `readyForImport` siempre es falso; incluso un roster sin faltantes requiere revisar identidades y permisos.
 
-**Verificación de esta entrega:** 26 pruebas focalizadas y 520 pruebas totales aprobadas; Biome, typecheck y build correctos. Prueba real de la CLI con roster sintético: 1 candidato, 1 registro incompleto y 1 ausente; código 1 esperado y cero escrituras. No se ejecutó contra una exportación real del roster canónico.
+**Verificación de la entrega inicial:** 26 pruebas focalizadas y 520 pruebas totales aprobadas; Biome, typecheck y build correctos. Prueba real de la CLI con roster sintético: 1 candidato, 1 registro incompleto y 1 ausente; código 1 esperado y cero escrituras.
+
+## Cruce con una partida real: 22 de octubre de 2026
+
+**Resultado:** 526 candidatos por nombre sobre 546 jugadores (96,3 %). Esto mide cobertura nominal, **no identidades verificadas ni preparación para importar**.
+
+La partida `b043e7c3-9b69-4742-a01b-6d11085a6b05` está activa, con `season_year = 2026` y `season_era_id = modern`. Se consultaron todos sus `game_player_states`, incluidos jugadores sin equipo, con sus nombres e identificadores ESPN desde `players`; no se utilizó la lista global de jugadores históricos.
+
+| Resultado del cruce estricto | Todos los jugadores de la partida | Activos con equipo asignado |
+| --- | ---: | ---: |
+| Jugadores | 546 | 523 |
+| Candidatos por nombre | 526 | 504 |
+| Sin coincidencia de nombre | 19 | 18 |
+| Atributos incompletos | 1 | 1 |
+| Ambiguos | 0 | 0 |
+
+### Revisión de los 20 casos pendientes
+
+En una segunda descarga con el mismo hash se localizaron estas **11 posibles variantes**. Son pistas para corroborar cada identidad, no excepciones aprobadas:
+
+| Nombre canónico | Nombre en la fuente |
+| --- | --- |
+| Mo Bamba | Mohamed Bamba |
+| Bub Carrington | Carlton Carrington |
+| Alex Sarr | Alexandre Sarr |
+| Xavier Tillman | Xavier Tillman Sr. |
+| Svi Mykhailiuk | Sviatoslav Mykhailiuk |
+| Ronald Holland II | Ron Holland |
+| Jimmy Butler III | Jimmy Butler |
+| David Jones Garcia | David Jones-Garcia |
+| Bronny James | Bronny James Jr. |
+| Bobby Portis | Bobby Portis Jr. |
+| Nic Claxton | Nicolas Claxton |
+
+No se localizó candidato para **8 jugadores**: Latrell Wrightsell Jr., Tacko Fall, Armoni Brooks, Nate Bittle, Leaky Black, Caleb Homesley, Reece Beekman y Duop Reath. No se les asignaron atributos estimados.
+
+**Tyler Nickel** sí aparece por nombre, pero sigue excluido porque faltan 10 de los 14 atributos. No se completaron ni reemplazaron sus valores.
+
+No se modificó la normalización compartida ni se aceptaron coincidencias por apellido: por ejemplo, la fuente contiene tanto Alexandre Sarr como Olivier Sarr. Las variantes requieren corroboración individual antes de vincular UUID canónico y slug del proveedor.
+
+### Evidencia y límites
+
+- Ejecución puntual con Bun, reutilizando `fetchNba2kRatings` y `getNba2kRatingCoverage`; consultas REST exclusivamente `GET`. Credenciales utilizadas solo en el proceso de servidor, nunca incluidas en el reporte ni enviadas al proveedor de atributos.
+- Exportación paginada de 500 + 46 filas, con total exacto estable, UUID únicos y aserciones de cantidad. No se omitieron filas mediante joins internos.
+- Fuente: 652 registros válidos, 1 excluido, 7 solicitudes por descarga; observación inicial `2026-10-22T18:31:47.135Z`.
+- SHA-256 del contenido normalizado: `4b876f74645bfb635ee93c2b384c82397687b1538616b2da55120d192f8048a4`. La segunda descarga produjo el mismo hash.
+- Cero escrituras en la base de datos. No se incorporaron exportaciones del roster ni del dataset de atributos al repositorio.
+- Verificación de esta revisión: `bun run test src/infrastructure/ratings` (26/26), `bun biome check` (310 archivos) y `git diff --check` correctos. No se repitieron la suite completa, el typecheck ni el build: solo se modificó documentación.
+- `identityVerified = false` y `readyForImport = false`. Este resultado corresponde a esta partida y este momento, no garantiza cobertura de otras partidas o eras.
+
+**Siguiente paso:** corroborar las variantes y las identidades candidatas; acordar una política explícita para datos ausentes/incompletos y confirmar permisos de reutilización antes de persistir atributos.
