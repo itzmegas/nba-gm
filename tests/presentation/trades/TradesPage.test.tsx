@@ -5,6 +5,7 @@ import TradesPage from "@/app/(protected)/games/[gameId]/dashboard/trades/page";
 
 const mocks = vi.hoisted(() => ({
   loaded: true,
+  releaseChargesLoaded: true,
   simulate: vi.fn(() => ({ data: undefined })),
   execute: vi.fn(async () => ({ success: false, error: "Trade unavailable" })),
   panelLogo: vi.fn<(logoUrl?: string) => void>(),
@@ -43,6 +44,12 @@ vi.mock("@/application/hooks/roster/useRoster", () => ({
 }));
 vi.mock("@/application/hooks/contracts/useTeamContracts", () => ({
   useTeamContracts: () => ({ data: mocks.loaded ? [] : undefined }),
+}));
+vi.mock("@/application/hooks/roster/useReleasePlayer", () => ({
+  useReleaseCapCharge: (_gameId: string, teamId: string | null) => ({
+    data:
+      mocks.releaseChargesLoaded && teamId ? (teamId === "A" ? 2_500_000 : 1_000_000) : undefined,
+  }),
 }));
 vi.mock("@/application/hooks/player-states/usePlayerStates", () => ({
   usePlayerStates: () => ({ data: [] }),
@@ -106,6 +113,7 @@ vi.mock("@/components/ui/select", () => ({
 describe("TradesPage", () => {
   beforeEach(() => {
     mocks.loaded = true;
+    mocks.releaseChargesLoaded = true;
     mocks.simulate.mockClear();
     mocks.execute.mockClear();
     mocks.panelLogo.mockClear();
@@ -120,12 +128,12 @@ describe("TradesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select opponent" }));
   }
 
-  it("passes visible roster counts and game season to simulation and execution", async () => {
+  it("passes visible roster counts, released cap charges and game season to simulation and execution", async () => {
     await selectOpponent();
     expect(mocks.simulate).toHaveBeenLastCalledWith(
       "game",
-      { contracts: [], rosterSize: 14 },
-      { contracts: [], rosterSize: 12 },
+      { contracts: [], rosterSize: 14, releaseCapCharge: 2_500_000 },
+      { contracts: [], rosterSize: 12, releaseCapCharge: 1_000_000 },
       expect.objectContaining({ teamId: "A" }),
       expect.objectContaining({ teamId: "B" }),
       2026
@@ -134,8 +142,8 @@ describe("TradesPage", () => {
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         gameId: "game",
-        teamA: { contracts: [], rosterSize: 14 },
-        teamB: { contracts: [], rosterSize: 12 },
+        teamA: { contracts: [], rosterSize: 14, releaseCapCharge: 2_500_000 },
+        teamB: { contracts: [], rosterSize: 12, releaseCapCharge: 1_000_000 },
         seasonYear: 2026,
       })
     );
@@ -143,6 +151,21 @@ describe("TradesPage", () => {
 
   it("does not submit before roster and contract data are loaded", async () => {
     mocks.loaded = false;
+    await selectOpponent();
+    expect(mocks.simulate).toHaveBeenLastCalledWith(
+      "game",
+      null,
+      null,
+      expect.objectContaining({ teamId: "A" }),
+      expect.objectContaining({ teamId: "B" }),
+      2026
+    );
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Execute trade" })));
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("does not submit before released cap charges are loaded", async () => {
+    mocks.releaseChargesLoaded = false;
     await selectOpponent();
     expect(mocks.simulate).toHaveBeenLastCalledWith(
       "game",
