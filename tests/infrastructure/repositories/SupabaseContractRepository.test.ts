@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import type { Contract } from "@/domain/entities/Contract";
 import { contractSchema } from "@/domain/entities/Contract";
+import { getYearsRemaining } from "@/domain/entities/Season";
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
 
 interface QueryContext {
@@ -261,6 +262,66 @@ describe("SupabaseContractRepository effective modern reads", () => {
     const contracts = await repository.getByTeamId(ids.game, ids.oldTeam);
 
     expect(contracts).toEqual([]);
+  });
+
+  it.each([
+    1, 2, 3, 4, 5, 6,
+  ])("projects %i observed years instead of the six-column source horizon across all reads", async (term) => {
+    const { repository } = createRepository({
+      seasonRows: Array.from({ length: 6 }, (_, offset) => ({
+        agreement_id: ids.agreement,
+        season_label: `${2026 + offset}-${27 + offset}`,
+        start_year: 2026 + offset,
+        end_year: 2027 + offset,
+        salary_amount: offset < term ? 12_000_000 : null,
+        option_kind: "none",
+        guarantee_kind: "unknown",
+      })),
+    });
+    const endYear = 2026 + term - 1;
+
+    const contracts = [
+      ...(await repository.getAll(ids.game)),
+      await repository.getById(ids.game, ids.agreement),
+      await repository.getByPlayerId(ids.game, ids.player),
+      ...(await repository.getByTeamId(ids.game, ids.currentTeam)),
+      ...(await repository.getActiveContracts(ids.game)),
+      ...(await repository.getExpiringContracts(ids.game, endYear)),
+    ];
+
+    expect(contracts).toHaveLength(6);
+    for (const contract of contracts) {
+      expect(contract).toMatchObject({
+        startYear: 2026,
+        endYear,
+        salaryY1: 12_000_000,
+        isGuaranteed: null,
+        compatibilityProjection: "observed-season-coverage",
+      });
+      expect(getYearsRemaining(2026, contract?.endYear ?? 0)).toBe(term);
+    }
+    expect(await repository.getExpiringContracts(ids.game, endYear + 1)).toEqual([]);
+  });
+
+  it.each([
+    "player",
+    "team",
+  ])("preserves a future %s option even when its salary is unknown", async (optionKind) => {
+    const { repository } = createRepository({
+      seasonRows: Array.from({ length: 6 }, (_, offset) => ({
+        agreement_id: ids.agreement,
+        season_label: `${2026 + offset}-${27 + offset}`,
+        start_year: 2026 + offset,
+        end_year: 2027 + offset,
+        salary_amount: offset === 0 ? 12_000_000 : null,
+        option_kind: offset === 2 ? optionKind : "unknown",
+        guarantee_kind: "unknown",
+      })),
+    });
+
+    const contracts = await repository.getAll(ids.game);
+
+    expect(contracts[0]).toMatchObject({ startYear: 2026, endYear: 2028 });
   });
 
   it("preserves a team's contracts and payroll beyond the first 1000 league season rows", async () => {

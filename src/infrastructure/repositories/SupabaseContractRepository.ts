@@ -183,7 +183,13 @@ export class SupabaseContractRepository implements ContractRepository {
       if (!agreement || !teamId) return [];
       const current = agreement.seasons.find(({ startYear }) => startYear === game.seasonYear);
       if (!current || current.salaryAmount === null) return [];
-      const years = agreement.seasons.map(({ startYear }) => startYear);
+      // Empty source columns describe the table's horizon, not the player's contract term.
+      const years = agreement.seasons
+        .filter(
+          ({ salaryAmount, optionKind }) =>
+            salaryAmount !== null || optionKind === "player" || optionKind === "team"
+        )
+        .map(({ startYear }) => startYear);
       return [
         {
           id: agreement.id,
