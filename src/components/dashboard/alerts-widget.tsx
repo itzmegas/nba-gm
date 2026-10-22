@@ -1,11 +1,15 @@
 "use client";
 
-import { AlertCircle, Bandage, CheckCircle, Clock } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Bandage, CheckCircle, Clock } from "lucide-react";
+import Link from "next/link";
 import { usePlayerStates } from "@/application/hooks/player-states/usePlayerStates";
-import { useRoster } from "@/application/hooks/roster/useRoster";
-import { formatSalary } from "@/components/trades/format";
+import { type RosterPlayer, useRoster } from "@/application/hooks/roster/useRoster";
+import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { formatRosterSalary } from "@/components/roster/roster-table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
 
 interface AlertsWidgetProps {
   gameId: string;
@@ -13,124 +17,119 @@ interface AlertsWidgetProps {
   seasonYear: number;
 }
 
-const MAX_VISIBLE = 3;
-
-export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) {
-  const { data: roster, isLoading: isLoadingRoster } = useRoster(gameId, teamId);
-  const { data: playerStates, isLoading: isLoadingStates } = usePlayerStates(gameId, teamId);
-
-  if (isLoadingRoster || isLoadingStates) {
+export function getVerifiedContractEndYear({
+  contract,
+  gameContract,
+}: RosterPlayer): number | null {
+  if (!contract) return null;
+  if (contract.origin === CONTRACT_ORIGIN.SIMULATED_AGREEMENT) return contract.endYear;
+  if (gameContract?.estimated) return null;
+  if (contract.compatibilityProjection === "observed-season-coverage") {
+    const agreement = gameContract?.agreement;
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle className="text-lg">Alertas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-3">
-            <div className="h-10 bg-muted rounded-md w-full" />
-            <div className="h-10 bg-muted rounded-md w-full" />
-          </div>
-        </CardContent>
-      </Card>
+      agreement?.seasons.find((season) => season.seasonLabel === agreement.endSeasonLabel)
+        ?.startYear ?? null
     );
   }
+  return contract.endYear;
+}
 
-  const expiring = (roster ?? []).filter(({ contract }) => contract?.endYear === seasonYear);
-  const injuredIds = new Set(
-    (playerStates ?? []).filter((state) => state.isInjured).map((state) => state.playerId)
+export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) {
+  const roster = useRoster(gameId, teamId);
+  const states = usePlayerStates(gameId, teamId);
+  const t = useT();
+  const locale = useLocale();
+  const expiring = (roster.data ?? []).filter(
+    (entry) => getVerifiedContractEndYear(entry) === seasonYear
   );
-  const injured = (roster ?? []).filter(({ player }) => injuredIds.has(player.id));
-  const hasAlerts = expiring.length > 0 || injured.length > 0;
+  const unknownEnds = (roster.data ?? []).filter(
+    (entry) => getVerifiedContractEndYear(entry) === null
+  ).length;
+  const injuredIds = new Set(
+    (states.data ?? []).filter((state) => state.isInjured).map((state) => state.playerId)
+  );
+  const injured = (roster.data ?? []).filter(({ player }) => injuredIds.has(player.id));
+  const count = injured.length + expiring.length;
+  const groups = [
+    { label: t("dashboard", "injuredPlayers"), icon: Bandage, entries: injured, injury: true },
+    { label: t("dashboard", "expiringThisSeason"), icon: Clock, entries: expiring, injury: false },
+  ];
 
   return (
-    <Card className="h-full border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <AlertCircle className="h-5 w-5 text-orange-500" />
-          Alertas de Roster
-          {hasAlerts && (
-            <Badge variant="secondary" className="ml-auto">
-              {expiring.length + injured.length}
-            </Badge>
-          )}
+    <Card className="h-full bg-card shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <AlertCircle className="size-4 text-primary" />
+          {t("dashboard", "rosterAlerts")}
         </CardTitle>
+        {!roster.isPending &&
+          !states.isPending &&
+          !roster.isError &&
+          !states.isError &&
+          count > 0 && <Badge variant="secondary">{count}</Badge>}
       </CardHeader>
-
-      <CardContent>
-        {!hasAlerts ? (
-          <div className="text-center py-6 text-muted-foreground text-sm flex flex-col items-center gap-2">
-            <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
-            <span>Todo en orden. No hay alertas críticas.</span>
-          </div>
+      <CardContent className="space-y-4">
+        {roster.isError || states.isError ? (
+          <p role="alert" className="py-6 text-sm text-destructive">
+            {t("dashboard", "alertsFailed")}
+          </p>
+        ) : roster.isPending || states.isPending ? (
+          <output className="block py-6 text-sm text-muted-foreground">
+            {t("common", "loading")}
+          </output>
         ) : (
-          <div className="space-y-4">
-            {injured.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <Bandage className="h-3 w-3 text-destructive" /> Lesionados
-                  <span className="ml-auto rounded-full bg-destructive/10 px-1.5 text-destructive">
-                    {injured.length}
-                  </span>
-                </h4>
-                <div className="space-y-2">
-                  {injured.slice(0, MAX_VISIBLE).map(({ player }) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-2.5 text-sm p-2 rounded-md bg-destructive/10 border border-destructive/20"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-[10px] font-medium text-muted-foreground">
-                        {player.firstName[0]}
-                        {player.lastName[0]}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate font-medium">{player.lastName}</span>
-                      <span className="rounded bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
-                        {player.position ?? "—"}
-                      </span>
-                    </div>
-                  ))}
-                  {injured.length > MAX_VISIBLE && (
-                    <div className="text-xs text-center text-muted-foreground pt-1">
-                      + {injured.length - MAX_VISIBLE} lesionados más
-                    </div>
-                  )}
-                </div>
+          <>
+            {count === 0 && (
+              <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                <CheckCircle className="size-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                {t("dashboard", "noVerifiedAlerts")}
               </div>
             )}
-
-            {expiring.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-orange-500" /> Expiran este año
-                  <span className="ml-auto rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">
-                    {expiring.length}
-                  </span>
-                </h4>
-                <div className="space-y-2">
-                  {expiring.slice(0, MAX_VISIBLE).map(({ player, contract }) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-2.5 text-sm p-2 rounded-md bg-orange-500/10 border border-orange-500/20"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-[10px] font-medium text-muted-foreground">
-                        {player.firstName[0]}
-                        {player.lastName[0]}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate font-medium">{player.lastName}</span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {formatSalary(contract?.salaryY1)}
-                      </span>
-                    </div>
-                  ))}
-                  {expiring.length > MAX_VISIBLE && (
-                    <div className="text-xs text-center text-muted-foreground pt-1">
-                      + {expiring.length - MAX_VISIBLE} jugadores más
-                    </div>
+            {groups
+              .filter((group) => group.entries.length > 0)
+              .map((group) => (
+                <div key={group.label} className="space-y-2">
+                  <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                    <group.icon className="size-3.5" />
+                    {group.label}
+                    <span className="ml-auto">{group.entries.length}</span>
+                  </h3>
+                  <div className="divide-y divide-border/50">
+                    {group.entries.slice(0, 3).map(({ player, contract }) => (
+                      <Link
+                        key={player.id}
+                        href={`/games/${gameId}/dashboard/player/${player.id}`}
+                        className="flex items-center justify-between gap-2 rounded-sm py-2 text-sm hover:bg-muted/50"
+                      >
+                        <span className="min-w-0 truncate font-medium">{player.fullName}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {group.injury
+                            ? (player.position ?? "—")
+                            : formatRosterSalary(contract?.salaryY1, locale)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                  {group.entries.length > 3 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{group.entries.length - 3} {t("dashboard", "morePlayers")}
+                    </p>
                   )}
                 </div>
-              </div>
+              ))}
+            {unknownEnds > 0 && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("dashboard", "unverifiedContractEnds")}: {unknownEnds}
+              </p>
             )}
-          </div>
+          </>
         )}
+        <Button asChild variant="ghost" size="sm" className="w-full">
+          <Link href={`/games/${gameId}/dashboard/roster`}>
+            {t("dashboard", "viewRoster")}
+            <ArrowUpRight className="size-4" />
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );

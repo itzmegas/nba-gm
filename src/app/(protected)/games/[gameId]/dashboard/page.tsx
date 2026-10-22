@@ -1,14 +1,14 @@
 "use client";
 
-import { Calendar as CalendarIcon, Newspaper, Trophy } from "lucide-react";
 import { use } from "react";
 import { useGame } from "@/application/hooks/games/useGame";
-import { useNextGame, useStandings } from "@/application/hooks/simulation";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 import { CapSpaceWidget } from "@/components/dashboard/cap-space-widget";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NextGameWidget } from "@/components/dashboard/next-game-widget";
+import { StandingsWidget } from "@/components/dashboard/standings-widget";
+import { formatSeasonLabel } from "@/domain/entities/Season";
 
 interface GameDashboardPageProps {
   params: Promise<{ gameId: string }>;
@@ -16,140 +16,59 @@ interface GameDashboardPageProps {
 
 export default function GameDashboardPage({ params }: GameDashboardPageProps) {
   const { gameId } = use(params);
-  const { data: game, isLoading: isLoadingGame } = useGame(gameId);
-  const selectedTeamId = game?.selectedTeamId ?? "";
-  const { data: teams, isLoading: isLoadingTeams } = useTeams();
-  const { data: nextGame } = useNextGame(gameId, selectedTeamId, game?.simulationDate);
-  const { data: standings } = useStandings(gameId);
+  const gameQuery = useGame(gameId);
+  const teamsQuery = useTeams();
   const t = useT();
   const locale = useLocale();
-  const team = teams?.find((candidate) => candidate.id === selectedTeamId);
-  const opponentId = nextGame
-    ? nextGame.homeTeamId === selectedTeamId
-      ? nextGame.awayTeamId
-      : nextGame.homeTeamId
-    : undefined;
-  const opponent = teams?.find((candidate) => candidate.id === opponentId);
-  const visibleStandings = standings?.slice(0, 3) ?? [];
+  const game = gameQuery.data;
+  const team = teamsQuery.data?.find((candidate) => candidate.id === game?.selectedTeamId);
 
-  if (isLoadingGame || isLoadingTeams || !game) {
+  if (gameQuery.isError || teamsQuery.isError) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
+      <p role="alert" className="py-12 text-center text-destructive">
+        {t("dashboard", "unableToLoadGame")}
+      </p>
+    );
+  }
+  if (gameQuery.isPending || teamsQuery.isPending || !game) {
+    return (
+      <output className="block py-12 text-center text-muted-foreground">
+        {t("dashboard", "loadingGame")}
+      </output>
     );
   }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-black tracking-tight">
-          {t("dashboard", "dashboard")} · GM {team?.name || t("dashboard", "teamFallback")}
-        </h1>
-        <p className="text-muted-foreground text-lg">{t("dashboard", "dashboardDescription")}</p>
+      <div className="flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-end">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {t("dashboard", "dashboard")} · {t("dashboard", "season")}{" "}
+            {formatSeasonLabel(game.seasonYear)}
+          </p>
+          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+            {team?.name ?? t("dashboard", "teamFallback")}
+          </h1>
+        </div>
+        <div className="text-sm sm:text-right">
+          <p className="text-xs text-muted-foreground">{t("dashboard", "simulationDate")}</p>
+          <p className="mt-1 font-semibold">
+            {new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
+              dateStyle: "long",
+              timeZone: "UTC",
+            }).format(game.simulationDate)}
+          </p>
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <NextGameWidget game={game} />
+        </div>
+        <StandingsWidget gameId={gameId} teamId={game.selectedTeamId} />
+        <div className="min-w-0 lg:col-span-2">
           <CapSpaceWidget gameId={gameId} teamId={game.selectedTeamId} />
         </div>
-
-        <div>
-          <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
-        </div>
-
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-primary" />
-              {t("dashboard", "nextGame")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center text-center space-y-4 py-4">
-              <div className="flex items-center justify-center gap-6 w-full">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
-                    {team?.abbreviation ?? "—"}
-                  </div>
-                </div>
-                <div className="text-sm font-bold text-muted-foreground">
-                  {t("dashboard", "versus")}
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
-                    {opponent?.abbreviation ?? "—"}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <p className="font-bold">{opponent?.name ?? t("dashboard", "noNextGame")}</p>
-                <p className="text-sm text-muted-foreground">
-                  {nextGame
-                    ? new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
-                        dateStyle: "medium",
-                      }).format(new Date(`${nextGame.date}T12:00:00`))
-                    : t("dashboard", "pendingCalendar")}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              {t("dashboard", "standingsWest")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 mt-2">
-              {visibleStandings.map((standing, index) => (
-                <div
-                  key={standing.teamId}
-                  className={`flex justify-between items-center text-sm p-2 rounded-md ${standing.teamId === selectedTeamId ? "bg-primary/10 border border-primary/20" : ""}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold w-4">{index + 1}.</span>
-                    <span>
-                      {teams?.find((candidate) => candidate.id === standing.teamId)?.abbreviation ??
-                        "—"}
-                    </span>
-                  </div>
-                  <div className="text-muted-foreground">
-                    {standing.wins}-{standing.losses}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Newspaper className="h-5 w-5 text-blue-500" />
-              {t("dashboard", "leagueNews")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4 mt-2">
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold">{t("dashboard", "newsInjuryTitle")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {t("dashboard", "newsInjuryDescription")}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold">{t("dashboard", "newsTradeTitle")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {t("dashboard", "newsTradeDescription")}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
       </div>
     </div>
   );

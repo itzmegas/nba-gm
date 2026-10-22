@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
-import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation/useAdvanceRange";
+import { type AdvanceDayInput, useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
+import {
+  type AdvanceRangeInput,
+  getMonthEnd,
+  useAdvanceRange,
+} from "@/application/hooks/simulation/useAdvanceRange";
 import {
   BATCH_SIMULATION_MODE,
   useBatchSimulationStore,
@@ -18,35 +22,17 @@ const rpc = vi.fn<() => Promise<RpcResponse>>(async () => ({
 }));
 const client = { rpc } as unknown as SupabaseClient;
 const invalidateQueries = vi.fn();
+type SimulationInput = AdvanceDayInput & Partial<AdvanceRangeInput>;
 
 vi.mock("@/infrastructure/supabase/client", () => ({ createClient: () => client }));
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries }),
   useMutation: (options: {
-    mutationFn: (input: {
-      gameId: string;
-      simulationDate: Date;
-      mode?: "month" | "season";
-      seasonYear?: number;
-    }) => Promise<unknown>;
+    mutationFn: (input: SimulationInput) => Promise<unknown>;
     onSuccess?: (data: unknown, input: { gameId: string; simulationDate: Date }) => Promise<void>;
-    onSettled?: (
-      data: unknown,
-      error: Error | null,
-      input: {
-        gameId: string;
-        simulationDate: Date;
-        mode?: "month" | "season";
-        seasonYear?: number;
-      }
-    ) => Promise<void>;
+    onSettled?: (data: unknown, error: Error | null, input: SimulationInput) => Promise<void>;
   }) => ({
-    mutateAsync: async (input: {
-      gameId: string;
-      simulationDate: Date;
-      mode?: "month" | "season";
-      seasonYear?: number;
-    }) => {
+    mutateAsync: async (input: SimulationInput) => {
       let data: unknown;
       let error: Error | null = null;
       try {
@@ -126,6 +112,79 @@ describe("batch simulation", () => {
     mode: BATCH_SIMULATION_MODE.MONTH,
     seasonYear: 2026,
   } as const;
+
+  it("simulates every league day through the next fixture, across a month boundary", async () => {
+    for (const date of ["2026-10-31", "2026-11-01", "2026-11-02"]) {
+      rpc.mockResolvedValueOnce({
+        data: [{ new_date: date, season_complete: false }],
+        error: null,
+      });
+    }
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 3);
+    await useAdvanceRange().mutateAsync({
+      ...input,
+      mode: BATCH_SIMULATION_MODE.NEXT_GAME,
+      targetDate: "2026-11-02",
+    });
+    expect(rpc).toHaveBeenCalledTimes(3);
+    for (const [index, date] of ["2026-10-30", "2026-10-31", "2026-11-01"].entries()) {
+      expect(rpc).toHaveBeenNthCalledWith(index + 1, "advance_simulation_day", {
+        p_game_id: input.gameId,
+        p_expected_date: date,
+      });
+    }
+    expect(useBatchSimulationStore.getState().completedDays).toBe(3);
+    expect(useBatchSimulationStore.getState().isActive).toBe(false);
+    expect(invalidateQueries).toHaveBeenCalledTimes(15);
+  });
+
+  it.each([
+    undefined,
+    "not-a-date",
+    "2026-10-30",
+    "2026-10-29",
+    "2027-04-16",
+  ])("rejects an invalid next-game boundary %s without advancing", async (targetDate) => {
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 1);
+    await expect(
+      useAdvanceRange().mutateAsync({ ...input, mode: BATCH_SIMULATION_MODE.NEXT_GAME, targetDate })
+    ).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(useBatchSimulationStore.getState().isActive).toBe(false);
+  });
+
+  it("pauses next-game simulation after the committed day", async () => {
+    rpc.mockImplementationOnce(async () => {
+      useBatchSimulationStore.getState().requestStop();
+      return { data: [{ new_date: "2026-10-31", season_complete: false }], error: null };
+    });
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 3);
+    await useAdvanceRange().mutateAsync({
+      ...input,
+      mode: BATCH_SIMULATION_MODE.NEXT_GAME,
+      targetDate: "2026-11-02",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(1);
+    expect(useBatchSimulationStore.getState().isActive).toBe(false);
+  });
+
+  it("rejects malformed RPC dates without counting progress or advancing again", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ new_date: "2026-99-99", season_complete: false }],
+      error: null,
+    });
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 1);
+    await expect(
+      useAdvanceRange().mutateAsync({
+        ...input,
+        mode: BATCH_SIMULATION_MODE.NEXT_GAME,
+        targetDate: "2026-10-31",
+      })
+    ).rejects.toThrow("Invalid simulation response.");
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(0);
+  });
 
   it("caps month simulation at the calendar month end", async () => {
     expect(getMonthEnd(input.simulationDate, input.seasonYear)).toBe("2026-10-31");

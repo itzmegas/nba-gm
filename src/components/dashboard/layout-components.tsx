@@ -2,10 +2,10 @@
 
 import {
   ArrowLeftRight,
-  Bell,
   Calendar,
   CalendarDays,
   CalendarRange,
+  ChevronDown,
   DollarSign,
   Globe,
   LayoutDashboard,
@@ -59,9 +59,9 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCHEDULED_GAME_STATUS } from "@/domain/entities/ScheduledGame";
 import { formatSeasonLabel } from "@/domain/entities/Season";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 function getSimulationDateFormatter(locale: string): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
@@ -128,12 +128,13 @@ export function DashboardSidebar({
     ? `${currentGame.data.homeTeamId === selectedTeamId ? "vs" : "@"} ${opponent?.abbreviation ?? "---"}`
     : t("dashboard", "freeDay");
   const monthEnd = getMonthEnd(simulationDate, seasonYear);
+  const seasonComplete = simulationDate.toISOString().slice(0, 10) >= `${seasonYear + 1}-04-15`;
   const monthDays = Math.max(
     0,
     Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
   );
   const startBatch = (mode: BatchSimulationMode) => {
-    if (advanceDay.isPending) return;
+    if (advanceDay.isPending || batchActive || seasonComplete) return;
     const total = mode === BATCH_SIMULATION_MODE.MONTH ? monthDays : null;
     if (useBatchSimulationStore.getState().startBatch(mode, total)) {
       advanceRange.mutate({ gameId, simulationDate, mode, seasonYear });
@@ -150,11 +151,17 @@ export function DashboardSidebar({
       ? t("dashboard", "simulatingMonth")
       : t("dashboard", "simulateMonth");
 
-  const labelDay = advanceDay.isPending
-    ? t("dashboard", "simulatingDay")
-    : t("dashboard", "simulateDay");
+  const labelDay =
+    batchActive && batchMode === null
+      ? t("dashboard", "simulatingDay")
+      : t("dashboard", "simulateDay");
 
-  const labelBatch = batchMode === BATCH_SIMULATION_MODE.SEASON ? labelSeason : labelMonth;
+  const labelBatch =
+    batchMode === BATCH_SIMULATION_MODE.NEXT_GAME
+      ? t("dashboard", "simulatingToGame")
+      : batchMode === BATCH_SIMULATION_MODE.SEASON
+        ? labelSeason
+        : labelMonth;
 
   const labelPause = stopRequested
     ? t("dashboard", "pausingSimulation")
@@ -224,70 +231,76 @@ export function DashboardSidebar({
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="gap-6">
-        <div className="min-h-11 p-2 text-xs border-2 rounded-sm group-data-[collapsible=icon]:hidden">
-          <div className="border-l-6 border-green-700 px-1">
-            <p className="font-medium capitalize">
-              {simulationDateFormatter.format(simulationDate)}
-            </p>
-            <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
-              {currentGame.isPending
-                ? t("common", "loading")
-                : currentGame.isError
-                  ? t("dashboard", "unableToLoadGame")
-                  : matchup}
-              {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
-                ` · ${t("dashboard", "final")} ${currentGame.data.homeScore}-${currentGame.data.awayScore}`}
-            </p>
-          </div>
+      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:px-1">
+        <div className="space-y-1 px-1 text-xs group-data-[collapsible=icon]:hidden">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            {t("dashboard", "simulationDate")}
+          </p>
+          <p className="text-sm font-semibold">{simulationDateFormatter.format(simulationDate)}</p>
+          <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
+            {currentGame.isPending
+              ? t("common", "loading")
+              : currentGame.isError
+                ? t("dashboard", "unableToLoadGame")
+                : matchup}
+            {currentGame.data?.status === SCHEDULED_GAME_STATUS.COMPLETED &&
+              ` · ${t("dashboard", "final")} ${currentGame.data.homeTeamId === selectedTeamId ? currentGame.data.homeScore : currentGame.data.awayScore}-${currentGame.data.homeTeamId === selectedTeamId ? currentGame.data.awayScore : currentGame.data.homeScore}`}
+          </p>
         </div>
-        <div className="flex flex-col gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-                onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-              >
-                <CalendarDays className="size-5" />
-                <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{labelDay}</TooltipContent>
-          </Tooltip>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-1 group-data-[collapsible=icon]:flex-col">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  aria-label={labelDay}
+                  className="min-w-0 flex-1 justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:p-0"
+                  onClick={() => advanceDay.mutate({ gameId, simulationDate })}
+                  disabled={
+                    advanceDay.isPending || batchActive || advanceRange.isPending || seasonComplete
+                  }
+                >
+                  <CalendarDays className="size-5" />
+                  <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{labelDay}</TooltipContent>
+            </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-                onClick={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
-                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-              >
-                <Calendar className="size-5" />
-                <span className="group-data-[collapsible=icon]:hidden">{labelMonth}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{labelMonth}</TooltipContent>
-          </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={t("dashboard", "advanceSimulation")}
+                  title={t("dashboard", "advanceSimulation")}
+                  className="shrink-0 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8"
+                  disabled={
+                    advanceDay.isPending || batchActive || advanceRange.isPending || seasonComplete
+                  }
+                >
+                  <ChevronDown className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="end">
+                <DropdownMenuLabel>{t("dashboard", "advanceSimulation")}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={monthDays === 0}
+                  onSelect={() => startBatch(BATCH_SIMULATION_MODE.MONTH)}
+                >
+                  <Calendar className="size-4" />
+                  {labelMonth}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}>
+                  <CalendarRange className="size-4" />
+                  {labelSeason}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-                onClick={() => startBatch(BATCH_SIMULATION_MODE.SEASON)}
-                disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
-              >
-                <CalendarRange className="size-5" />
-                <span className="group-data-[collapsible=icon]:hidden">{labelSeason}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{labelSeason}</TooltipContent>
-          </Tooltip>
-
-          {batchActive && (
+          {batchActive && batchMode !== null && (
             <div className="mt-2 flex flex-col gap-2 border-t pt-3 group-data-[collapsible=icon]:mt-1 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:pt-0">
               <div className="flex items-center gap-2 text-xs group-data-[collapsible=icon]:hidden">
                 <span className="relative flex h-2 w-2">
@@ -297,15 +310,16 @@ export function DashboardSidebar({
                 <span className="font-medium">{labelBatch}</span>
               </div>
 
-              <p className="text-center text-xs text-muted-foreground tabular-nums group-data-[collapsible=icon]:hidden">
+              <output className="text-center text-xs text-muted-foreground tabular-nums group-data-[collapsible=icon]:hidden">
                 {completedDays} {t("dashboard", "completedDays")}
                 {totalDays === null ? "" : ` ${t("dashboard", "ofDays")} ${totalDays}`}
-              </p>
+              </output>
 
               {totalDays !== null && totalDays > 0 && (
                 <div
                   className="h-1.5 w-full overflow-hidden rounded-full bg-muted group-data-[collapsible=icon]:hidden"
                   role="progressbar"
+                  aria-label={labelBatch}
                   aria-valuemin={0}
                   aria-valuemax={totalDays}
                   aria-valuenow={completedDays}
@@ -322,6 +336,7 @@ export function DashboardSidebar({
                   <Button
                     size="sm"
                     variant="secondary"
+                    aria-label={labelPause}
                     className="w-full justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
                     onClick={() => useBatchSimulationStore.getState().requestStop()}
                     disabled={stopRequested}
@@ -336,7 +351,10 @@ export function DashboardSidebar({
           )}
 
           {(batchError || advanceDay.isError) && (
-            <p className="text-xs text-destructive group-data-[collapsible=icon]:hidden">
+            <p
+              role="alert"
+              className="text-xs text-destructive group-data-[collapsible=icon]:hidden"
+            >
               {t("dashboard", "unableToAdvance")}
             </p>
           )}
@@ -436,10 +454,6 @@ export function DashboardHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="ghost" size="icon-sm" className="relative">
-          <Bell className="h-4 w-4 text-muted-foreground" />
-          <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-destructive" />
-        </Button>
       </div>
     </header>
   );

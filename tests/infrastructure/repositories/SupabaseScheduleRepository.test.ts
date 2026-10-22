@@ -58,6 +58,22 @@ describe("SupabaseScheduleRepository", () => {
     ).rejects.toThrow("query failed");
   });
 
+  it("does not disguise a next-game query failure as an empty calendar", async () => {
+    const repository = new SupabaseScheduleRepository(
+      createClient(null, undefined, { message: "query failed" }).client
+    );
+    await expect(
+      repository.getNextForTeam("game", "team", new Date("2026-10-15T00:00:00Z"))
+    ).rejects.toThrow("query failed");
+  });
+
+  it("returns null when there are genuinely no upcoming games", async () => {
+    const repository = new SupabaseScheduleRepository(createClient(null).client);
+    await expect(
+      repository.getNextForTeam("game", "team", new Date("2026-10-15T00:00:00Z"))
+    ).resolves.toBeNull();
+  });
+
   it("maps the next scheduled game from snake case", async () => {
     const mock = createClient({
       id: "11111111-1111-4111-8111-111111111111",
