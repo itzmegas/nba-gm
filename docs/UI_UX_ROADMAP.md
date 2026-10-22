@@ -45,6 +45,10 @@ El hover original `primary/80` incumplía 4.5:1 en 13 combinaciones, aunque los 
 
 **Pruebas globales:** 432 tests aprobados, cuatro fallidos y una suite que no carga, con los mismos fallos descritos en la primera entrega. Biome global sigue fallando únicamente por el salto de línea final de `.engram/manifest.json`; los archivos de implementación modificados pasan. `globals.css` está excluido de Biome y se comprobó por separado en Chrome.
 
+**Ajustes tras revisar el juego:** logo completo sin recorte circular; navegación con filas de 44 px, texto de 16 px, iconos de 20 px y esquinas rectas, conservando los botones y tarjetas redondeados. El usuario aprobó este resultado y pidió dejar únicamente el logo centrado en el sidebar, de 112 px abierto y 48 px contraído; el nombre se conserva como etiqueta accesible del enlace. Las tarjetas de selección muestran un único nombre completo, sin subtítulo de ciudad. Se retiró la concatenación de ciudad y nombre en selectores, roster, Liga, traspasos, calendario, partidas y ofertas de carrera: el campo `name` ya contiene el nombre completo en los datos de origen. La ciudad sigue disponible para buscar; no se modificaron datos ni reglas de juego.
+
+**Regresiones de identidad:** 13 pruebas enfocadas pasan, incluyendo desplegable de Liga con nombres reales y la excepción de denominación «LA Clippers». Suite completa: 439 tests aprobados, los mismos cuatro fallidos y una suite que no carga. No se repitió una revisión visual autenticada de estos últimos ajustes.
+
 ## Alcance y evidencia
 
 Se revisaron la captura del roster, el layout compartido, los tokens de tema, los componentes base y el código de dashboard, roster, liga, ficha de jugador, agencia libre, traspasos y calendario.

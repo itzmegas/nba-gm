@@ -185,7 +185,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                               type="button"
                               onClick={() => setSelectedDate(date)}
                               aria-label={`${t("dashboard", "viewAllGames")} ${date}`}
-                              title={`${away?.city ?? ""} ${away?.name ?? t("dashboard", "away")} @ ${home?.city ?? ""} ${home?.name ?? t("dashboard", "home")}`}
+                              title={`${away?.name ?? t("dashboard", "away")} @ ${home?.name ?? t("dashboard", "home")}`}
                               className={`w-full overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm ${
                                 state === SELECTED_TEAM_GAME_STATE.VICTORY
                                   ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"

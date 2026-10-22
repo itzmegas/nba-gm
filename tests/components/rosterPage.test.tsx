@@ -15,7 +15,7 @@ vi.mock("@/application/hooks/games/useGame", () => ({
   useGame: () => ({ data: { selectedTeamId: "bucks", seasonYear: 2026 }, isLoading: false }),
 }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({
-  useTeam: () => ({ data: { city: "Milwaukee", name: "Bucks" } }),
+  useTeam: () => ({ data: { city: "Milwaukee", name: "Milwaukee Bucks" } }),
 }));
 vi.mock("@/application/hooks/roster/useRoster", () => ({
   useRoster: () => ({ data: rosterPlayers, isLoading: false }),
@@ -42,6 +42,7 @@ it("shows 15 standard slots plus two-way players separately and uses the market'
     );
   });
   await screen.findByText("Standard roster");
+  expect(screen.getByText(/^Milwaukee Bucks —/)).toBeTruthy();
   expect(screen.getByText("15")).toBeTruthy();
   expect(screen.getByText("2 two-way players (separate roster slots)")).toBeTruthy();
   expect(screen.getByText("17 roster entries")).toBeTruthy();

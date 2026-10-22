@@ -90,7 +90,7 @@ describe("game and dashboard internationalization", () => {
     const team = {
       id: "team-1",
       city: "Los Angeles",
-      name: "Lakers",
+      name: "Los Angeles Lakers",
     } as Parameters<typeof GameList>[0]["teams"][number];
 
     const renderGame = (locale: "en" | "es") =>
@@ -103,6 +103,8 @@ describe("game and dashboard internationalization", () => {
     expect(renderGame("en")).toContain("Franchise");
     expect(renderGame("es")).toContain("Franquicia");
     expect(renderGame("es")).not.toContain("Franchise");
+    expect(renderGame("en")).toContain("Los Angeles Lakers");
+    expect(renderGame("en")).not.toContain("Los Angeles Los Angeles Lakers");
   });
 
   it("renders Calendar copy from the active catalog", () => {

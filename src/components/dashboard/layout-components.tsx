@@ -169,29 +169,22 @@ export function DashboardSidebar({
       <SidebarHeader className="px-4 py-2 group-data-[collapsible=icon]:px-0">
         <Link
           href={dashboardBasePath}
-          className="flex items-center gap-2 rounded-lg py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-1"
+          aria-label={selectedTeam?.name || t("dashboard", "teamFallback")}
+          className="flex items-center justify-center rounded-lg py-2 group-data-[collapsible=icon]:py-1"
         >
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
-              alt="Logo"
-              width={90}
-              height={90}
-              className="rounded-full object-cover transition-[width,height] group-data-[collapsible=icon]:h-16 group-data-[collapsible=icon]:w-16"
+              alt=""
+              width={112}
+              height={112}
+              className="size-28 shrink-0 object-contain transition-[width,height] group-data-[collapsible=icon]:size-12"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
               {selectedTeam?.abbreviation || t("dashboard", "nba")}
             </div>
           )}
-          <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold">
-              {selectedTeam?.name || t("dashboard", "teamFallback")}
-            </span>
-            <span className="truncate text-xs text-sidebar-foreground/70">
-              {selectedTeam?.city || t("dashboard", "franchiseFallback")}
-            </span>
-          </div>
         </Link>
       </SidebarHeader>
 
@@ -216,10 +209,10 @@ export function DashboardSidebar({
                   asChild
                   isActive={isActive}
                   tooltip={t("dashboard", item.key)}
-                  className="group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
+                  className="h-11 gap-3 rounded-none text-base [&_svg]:size-5 group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
                 >
                   <Link href={href}>
-                    <Icon className="h-4 w-4 group-data-[collapsible=icon]:h-5 group-data-[collapsible=icon]:w-5" />
+                    <Icon />
                     <span className="group-data-[collapsible=icon]:hidden">
                       {t("dashboard", item.key)}
                     </span>

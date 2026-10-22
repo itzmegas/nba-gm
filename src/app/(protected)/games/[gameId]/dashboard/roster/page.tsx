@@ -71,8 +71,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
           {t("dashboard", "roster")}
         </h1>
         <p className="text-muted-foreground">
-          {team?.city} {team?.name} — {t("dashboard", "season")}{" "}
-          {formatSeasonLabel(game.seasonYear)}
+          {team?.name} — {t("dashboard", "season")} {formatSeasonLabel(game.seasonYear)}
         </p>
       </div>
 
