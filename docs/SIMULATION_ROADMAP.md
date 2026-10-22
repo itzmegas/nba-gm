@@ -1,6 +1,6 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** propuesta de prioridades guardada como recordatorio; no es una especificación ni autoriza la implementación.
+**Estado:** ejecución iniciada por autorización del usuario; primera entrega del bloque 1 en validación de fuente, sin integración al juego todavía.
 **Fecha:** 2026-10-22.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
@@ -82,3 +82,13 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [ ] Resolver la integración con la simulación diaria transaccional en SQL: modificar únicamente `SeasonSimulator.ts` no cambia el flujo que hoy usa el juego.
 
 **Siguiente paso recomendado:** delimitar el primer partido con atributos y box score, no construir todo el roadmap en una sola entrega.
+
+## Avance del bloque 1
+
+- [x] Modelo inicial de 14 atributos y descarga validada de NBA 2K27, sin importar datos.
+- [x] Reporte de calidad y candidatos de identidad con entrada opcional del roster canónico.
+- [ ] Ejecutar el cruce contra una exportación real del roster canónico y revisar identidades.
+- [ ] Confirmar permisos de reutilización y política de jugadores sin datos.
+- [ ] Persistir atributos versionados por partida/temporada e integrarlos al motor SQL.
+
+Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).

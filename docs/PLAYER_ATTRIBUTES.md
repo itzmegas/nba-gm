@@ -32,7 +32,7 @@ La descarga completa validó **652 jugadores y excluyó 1**, en 7 solicitudes: `
 Las pruebas usan datos sintéticos, sin copiar el dataset al repositorio:
 
 ```bash
-bun run test src/infrastructure/ratings/nba2kRatingsSource.test.ts
+bun run test src/infrastructure/ratings
 ```
 
 ## Siguiente paso
@@ -40,3 +40,28 @@ bun run test src/infrastructure/ratings/nba2kRatingsSource.test.ts
 Medir correspondencias con el roster canónico y resolver permisos antes de importar. Después, persistir una versión de atributos por partida/temporada para que una actualización externa no modifique partidas existentes. Los jugadores sin datos deben quedar identificados; cualquier fallback simulado requiere una política explícita.
 
 La conexión al motor se hará en el flujo SQL transaccional, no solamente en `SeasonSimulator.ts`. No se reconstruirán estadísticas de partidos ya jugados.
+
+## Ejecutar el reporte sin importar datos
+
+```bash
+bun scripts/dry-run-player-attributes.ts
+bun scripts/dry-run-player-attributes.ts /ruta/roster.json
+```
+
+Sin archivo, muestra únicamente calidad y cantidad del proveedor; `coverage: null` significa que **no se midió cobertura del roster**. No usa credenciales ni consulta Supabase. El archivo opcional debe ser una exportación de la plantilla canónica moderna de 2026-27, no la lista global de jugadores históricos:
+
+```json
+{
+  "seasonYear": 2026,
+  "seasonEraId": "modern",
+  "players": [
+    { "playerId": "00000000-0000-4000-8000-000000000001", "fullName": "Example Player" }
+  ]
+}
+```
+
+El reporte separa candidatos por nombre, ausencias, ambigüedades y atributos incompletos. Reutiliza la normalización existente de acentos, mayúsculas y sufijos; no hace fuzzy matching ni resuelve homónimos automáticamente. **Un candidato no es una identidad validada:** falta corroborar el identificador antes de importar.
+
+Sale con código 1 si falla la descarga/entrada o si el roster contiene casos sin resolver. Una auditoría del proveedor puede finalizar con código 0 aunque haya exclusiones: revisá `excludedPlayers`. `readyForImport` siempre es falso; incluso un roster sin faltantes requiere revisar identidades y permisos.
+
+**Verificación de esta entrega:** 26 pruebas focalizadas y 520 pruebas totales aprobadas; Biome, typecheck y build correctos. Prueba real de la CLI con roster sintético: 1 candidato, 1 registro incompleto y 1 ausente; código 1 esperado y cero escrituras. No se ejecutó contra una exportación real del roster canónico.
