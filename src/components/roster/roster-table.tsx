@@ -194,7 +194,7 @@ export function RosterTable({
                 {/* Nombre y Foto */}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-16 w-16 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
                       <PlayerHeadshot
                         src={player.headshotUrl}
                         alt={player.fullName}

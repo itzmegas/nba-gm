@@ -1052,8 +1052,8 @@
   --sidebar-border: color-mix(in oklch, var(--primary) 28%, var(--background));
 }
 
-/* Stage-one proposal: only /ui-preview sets this attribute, including for portaled menus. */
-html[data-ui-preview="proposed"] {
+/* Approved game foundation, including portaled menus; keep the historical preview unchanged. */
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
   --background: #f4f4f5;
   --card: #ffffff;
   --muted: #ededf0;
@@ -1070,10 +1070,10 @@ html[data-ui-preview="proposed"] {
   --secondary-foreground: var(--foreground);
   --accent: var(--muted);
   --accent-foreground: var(--foreground);
-  --preview-selection: color-mix(in srgb, var(--primary) 10%, var(--card));
+  --selection: color-mix(in srgb, var(--primary) 10%, var(--card));
 }
 
-html.dark[data-ui-preview="proposed"] {
+html.dark:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
   --background: #141416;
   --card: #1c1c1f;
   --muted: #29292e;
@@ -1085,18 +1085,18 @@ html.dark[data-ui-preview="proposed"] {
 }
 
 /* Alpha hovers reduce contrast for otherwise readable franchise color pairs. */
-html[data-ui-preview="proposed"] [data-slot="button"][data-variant="default"]:hover {
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="button"][data-variant="default"]:hover {
   background: var(--primary);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
-html[data-ui-preview="proposed"] [data-slot="button"]:active:not(:disabled) {
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="button"]:active:not(:disabled) {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
-html[data-ui-preview="proposed"] [data-slot="sidebar-menu-button"][data-active="true"] {
-  background: var(--preview-selection);
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="sidebar-menu-button"][data-active="true"] {
+  background: var(--selection);
   box-shadow: inset 3px 0 var(--primary);
   font-weight: 700;
 }
@@ -1111,20 +1111,20 @@ html[data-ui-preview="proposed"] .preview-headshot {
 }
 
 html[data-ui-preview="proposed"] [data-slot="preview-row"][data-selected="true"] {
-  background: var(--preview-selection);
+  background: var(--selection);
   box-shadow: inset 3px 0 var(--primary);
 }
 
-html[data-ui-preview="proposed"] :is(button, a, input, select):focus-visible {
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) :is(button, a, input, select):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-ui-preview="proposed"] *,
-  html[data-ui-preview="proposed"] *::before,
-  html[data-ui-preview="proposed"] *::after {
+  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *,
+  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *::before,
+  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *::after {
     transition: none;
     animation: none;
   }

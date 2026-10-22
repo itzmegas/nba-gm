@@ -1,7 +1,7 @@
 # UI/UX: una mesa de trabajo para el GM
 
-**Estado:** etapa 1 en curso: muestra visual aislada implementada; pendiente de aprobación y de aplicación a las pantallas del juego.
-**Fecha:** 2026-10-21.
+**Estado:** etapa 1 en curso: muestra ajustada aprobada; primera aplicación de la base visual al juego implementada, pendiente de revisión con una partida autenticada.
+**Fecha:** 2026-10-22.
 
 Conservar la claridad y el minimalismo actuales, pero pasar de un dashboard administrativo a un juego de gestión deportiva. La prioridad no es agregar decoración: es mantener visible el contexto necesario para decidir y dar protagonismo a la franquicia y sus jugadores.
 
@@ -14,15 +14,15 @@ Conservar la claridad y el minimalismo actuales, pero pasar de un dashboard admi
 
 No se propone reemplazar shadcn, incorporar una biblioteca visual ni rediseñar todo de una vez.
 
-### Primera entrega: muestra para revisar
+### Primera entrega: muestra aprobada
 
 Con `bun run dev`, abrir `/ui-preview`. La ruta solo está disponible en desarrollo y no requiere una partida: utiliza jugadores y cifras ficticios identificados como muestra. Si el servidor conserva el CSS anterior, reiniciarlo antes de comparar.
 
 - Alternar **Current tokens / Proposed tokens**, claro/oscuro y cualquiera de las 30 franquicias. La comparación usa el mismo contenido de muestra; no reproduce toda la pantalla actual del roster.
 - Revisar navegación abierta/contraída/móvil, tarjeta y filas. Probar hover, pulsación, Tab y selección con Espacio; los ejemplos deshabilitado y pendiente no ejecutan acciones.
-- La propuesta conserva el color primario de franquicia, neutraliza fondos secundarios/de interacción y separa selección de hover mediante fondo, marca lateral y check. Solo la muestra activa estos estilos; salir de la ruta elimina sus atributos de tema.
+- La propuesta conserva el color primario de franquicia, neutraliza fondos secundarios/de interacción y separa selección de hover mediante fondo, marca lateral y check. La comparación conserva los tokens históricos en **Current tokens**; salir de la ruta elimina sus atributos de tema.
 
-**Ajuste tras la primera revisión:** conservar los botones redondeados y las tarjetas actuales, incluidos radios, espaciado y contorno. Las fotos de las filas pasan de 36 a 48 px para mejorar el reconocimiento sin volver a los 64 px originales. Se mantienen los fondos de interacción y los estados diferenciados de la propuesta. Este ajuste no implica aprobar todavía su aplicación al juego.
+**Ajuste aprobado:** conservar los botones redondeados y las tarjetas actuales, incluidos radios, espaciado y contorno. Las fotos de las filas pasan de 36 a 48 px para mejorar el reconocimiento sin volver a los 64 px originales. Se mantienen los fondos de interacción y los estados diferenciados de la propuesta. El usuario aprobó esta dirección para comenzar su aplicación al juego; no supone aceptar las siguientes etapas.
 
 Capturas de referencia: [actual claro](images/ui-ux-stage-1/current-light.png), [propuesta clara](images/ui-ux-stage-1/proposed-light.png), [actual oscuro](images/ui-ux-stage-1/current-dark.png), [propuesta oscura con foco y selección](images/ui-ux-stage-1/proposed-dark-focus.png) y [propuesta móvil](images/ui-ux-stage-1/proposed-mobile.png).
 
@@ -32,7 +32,18 @@ El hover original `primary/80` incumplía 4.5:1 en 13 combinaciones, aunque los 
 
 **Pruebas:** 18 regresiones enfocadas pasan, incluidos tres tests nuevos de la muestra; TypeScript y Biome de los archivos de implementación pasan. La suite completa termina con 428 tests aprobados, cuatro fallidos y una suite que no carga: formato horario español, falta de `QueryClientProvider` en tests de traspasos y mock de iconos incompleto en dashboard. Sus fuentes coinciden con `HEAD` y no se modificaron. `bun biome check` global falla por el salto de línea final de `.engram/manifest.json`, también fuera de esta entrega.
 
-**Pendiente:** aprobación visual, captura del roster autenticado, zoom real al 200 %, lector de pantalla y recorridos completos. No se cambió el shell ni el comportamiento del roster real. La etapa 1 todavía no se considera aceptada.
+**Pendiente:** captura del roster autenticado, zoom real al 200 %, lector de pantalla y recorridos completos. La etapa 1 completa todavía no se considera aceptada.
+
+### Segunda entrega: base visual aplicada al juego
+
+- Tokens neutrales de superficie, interacción y foco bajo el tema de franquicia activo. Se conservan los colores primarios y de gráficos; login, carrera y creación de partidas sin tema activo conservan sus estilos. Los menús en portales heredan el mismo tema.
+- Hover primario opaco con subrayado, estado pulsado, foco de 2 px y navegación activa con marca lateral y mayor peso tipográfico. Se conserva la geometría de `Button` y `Card`, y se respeta movimiento reducido.
+- Fotos de 48 px en `RosterTable`, compartida por roster y Liga. No se cambian navegación de filas, cortes, selección ni composición de pantallas; la densidad adicional queda para la etapa del roster.
+- `/ui-preview` mantiene la comparación histórica sin aplicar los estilos nuevos a **Current tokens**.
+
+**Verificación:** 17 pruebas enfocadas pasan, incluidas cuatro regresiones nuevas sobre las 30 franquicias en ambos temas, aislamiento/limpieza del tema y tamaño de foto con navegación conservada. TypeScript pasa. En Chrome se comprobaron 720 pares de tokens con el selector real del juego sobre la muestra: nueve pares de texto y tres de foco por franquicia y tema; mínimos de 4.53:1 y 7.03:1 respectivamente. Hover primario opaco/subrayado, foco de 2 px y movimiento reducido comprobados. La muestra no desborda horizontalmente a 1440×900, 1280×720, 390×844 y 720×450. Estas mediciones no validan los recorridos ni las capturas de una partida autenticada.
+
+**Pruebas globales:** 432 tests aprobados, cuatro fallidos y una suite que no carga, con los mismos fallos descritos en la primera entrega. Biome global sigue fallando únicamente por el salto de línea final de `.engram/manifest.json`; los archivos de implementación modificados pasan. `globals.css` está excluido de Biome y se comprobó por separado en Chrome.
 
 ## Alcance y evidencia
 
@@ -74,7 +85,7 @@ Las recomendaciones son propuestas de diseño, no defectos visuales medidos en t
 
 Estados que deben distinguirse: **reposo, hover, foco de teclado, selección, pulsado, deshabilitado y pendiente**. Hover y selección no pueden verse iguales. El foco debe seguir siendo evidente aunque se suavicen los bordes.
 
-Se conservan los radios existentes de botones y tarjetas; la paleta y la composición final quedan pendientes de aprobar la muestra ajustada. No se asume un modo oscuro obligatorio: se conservan claro y oscuro.
+Se conservan los radios existentes de botones y tarjetas. La paleta de la muestra ajustada está aprobada; la composición del roster sigue pendiente de su propia entrega. No se asume un modo oscuro obligatorio: se conservan claro y oscuro.
 
 ## Roster: primer flujo a rediseñar
 
@@ -136,8 +147,8 @@ Cada etapa requiere revisión antes de avanzar; una etapa no equivale a un únic
 
 ### 1. Base visual e identidad — sin cambiar flujos
 
-- [ ] Capturar estados actuales y preparar una muestra pequeña en claro y oscuro.
-- [ ] Validar colores, superficies, contornos, radios, tipografía y densidad de esa muestra.
+- [x] Capturar estados actuales y preparar una muestra pequeña en claro y oscuro.
+- [x] Validar colores, superficies, contornos, radios, tipografía y densidad de esa muestra.
 - [ ] Separar marca de interacción en los tokens existentes; revisar también sus consumidores fuera del dashboard.
 - [ ] Ajustar navegación, botones, tarjetas y filas en entregas pequeñas, sin retirar foco ni información.
 - [ ] Corregir nombres duplicados y textos de las superficies modificadas con los catálogos existentes.
@@ -208,4 +219,4 @@ Los cambios a `Card`, `Button` y tokens globales también alcanzan login, creaci
 
 Comparación simultánea de jugadores, ratings/scouting nuevos, noticias/notificaciones reales, nuevas reglas de mercado, rediseño de onboarding/carrera, animaciones complejas, navegación de mando, virtualización y dependencias nuevas. Ninguna de estas funcionalidades es necesaria para comprobar si el nuevo roster mejora la experiencia.
 
-**Siguiente paso recomendado:** validar una muestra visual de la etapa 1 con el roster como referencia. Aprobar esa dirección antes de redistribuir la pantalla o extenderla al resto del juego.
+**Siguiente paso recomendado:** revisar la base visual aplicada con una partida autenticada, incluyendo menús, ambos temas y navegación abierta/contraída/móvil. Completar la etapa 1 antes de redistribuir el shell o el roster.
