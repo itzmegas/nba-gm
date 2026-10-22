@@ -2,11 +2,14 @@
   "name": "nba-gm",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.3.13",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome check .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
     "format": "biome format --write ."
   },
   "dependencies": {
