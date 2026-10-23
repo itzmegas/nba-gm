@@ -71,8 +71,9 @@ describe("new-save initial market", () => {
       "/api/roster-refresh",
       "seed_game_data",
       "initialize_game_schedule",
-      "activate",
       "/api/free-agency/bootstrap",
+      "/api/player-attributes/bootstrap",
+      "activate",
     ]);
     expect(softDelete).not.toHaveBeenCalled();
   });

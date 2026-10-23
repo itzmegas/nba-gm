@@ -59,6 +59,8 @@ Son capacidades **estimadas**, no observaciones de NBA 2K ni estadísticas reale
 
 La salida distingue origen, método/motivo, versión del generador, referencia `overall` y evidencia. En lectura real sobre los 546 jugadores auditados produjo **530 importables y 16 estimados**: 496 por nombre/equipo, 24 por nombre/altura y 10 por alias revisado; 9 sin candidato exacto, 1 incompleto y 6 sin corroboración suficiente. Estos últimos incluyen discrepancias de altura o altura canónica ausente: no se presentan como ausencias del proveedor. Veintiuna pruebas verifican las decisiones. Aún no se guardaron esos valores en la partida.
 
+La creación moderna se está conectando con este orden: roster/contratos → schedule → agentes libres iniciales (si corresponde) → atributos completos → activación. La ruta server-only `/api/player-attributes/bootstrap` solo acepta partidas modernas en `initializing`; no hace backfill de partidas activas.
+
 ### Persistencia compartida de la fuente
 
 La migración `037_player_rating_source_cache.sql` crea versiones inmutables por edición/hash y una cabecera de caché privada, con RLS y acceso exclusivamente mediante operaciones de servidor. No se aplicó a la base remota.

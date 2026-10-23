@@ -69,14 +69,15 @@ describe("initial market import boundary", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("rejects foreign and initializing saves before any provider access", async () => {
+  it("rejects foreign saves but accepts initializing saves", async () => {
     from
       .mockReturnValueOnce(row(null))
       .mockReturnValueOnce(row({ ...game, status: "initializing" }));
+    from.mockReturnValueOnce(row(null));
     expect((await POST(request())).status).toBe(404);
-    expect((await POST(request())).status).toBe(409);
-    expect(source).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect((await POST(request())).status).toBe(200);
+    expect(source).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("requires authentication and a valid ID", async () => {
