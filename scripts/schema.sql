@@ -5,6 +5,8 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Migrations 013-017 are included in this canonical schema.
+-- Apply migrations 018+ after this baseline. Migration 037 adds service-only,
+-- immutable player_rating_source_versions and a coordinated 24h source cache.
 
 -- 1. Teams Table
 CREATE TABLE IF NOT EXISTS teams (

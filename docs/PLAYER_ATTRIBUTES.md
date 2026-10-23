@@ -49,6 +49,17 @@ Solo la fuente inicial se comparte entre usuarios. La progresión por edad queda
 
 La conexión al motor se hará en el flujo SQL transaccional, no solamente en `SeasonSimulator.ts`. No se reconstruirán estadísticas de partidos ya jugados.
 
+### Persistencia compartida de la fuente
+
+La migración `037_player_rating_source_cache.sql` crea versiones inmutables por edición/hash y una cabecera de caché privada, con RLS y acceso exclusivamente mediante operaciones de servidor. No se aplicó a la base remota.
+
+- Frescura de 24 horas: el primer consumidor tras el vencimiento obtiene un lease de 60 segundos; los demás pueden leer la versión anterior. Es una actualización bajo demanda, no un cron ni una descarga por usuario.
+- Publicar requiere el lease vigente. Una respuesta tardía no puede sobrescribir la de otro refresco; el mismo contenido reutiliza la versión existente.
+- Un error libera el lease y aplica 5 minutos de espera antes de volver a consultar al proveedor, conservando el último contenido válido. Una caché vacía no se presenta como una fuente válida.
+- Prueba real en PostgreSQL 17 aislado: `tests/infrastructure/supabase/playerRatingCache.postgres.sql` verifica versiones, vencimientos, cooldown, privilegios y RLS. Una prueba adicional con dos conexiones concurrentes confirmó un único propietario del refresco.
+
+El adaptador de aplicación y la materialización por partida siguen pendientes; estas tablas no cambian por sí solas la creación de partidas.
+
 ## Ejecutar el reporte sin importar datos
 
 ```bash
