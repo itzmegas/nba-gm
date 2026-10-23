@@ -58,7 +58,9 @@ La migración `037_player_rating_source_cache.sql` crea versiones inmutables por
 - Un error libera el lease y aplica 5 minutos de espera antes de volver a consultar al proveedor, conservando el último contenido válido. Una caché vacía no se presenta como una fuente válida.
 - Prueba real en PostgreSQL 17 aislado: `tests/infrastructure/supabase/playerRatingCache.postgres.sql` verifica versiones, vencimientos, cooldown, privilegios y RLS. Una prueba adicional con dos conexiones concurrentes confirmó un único propietario del refresco.
 
-El adaptador de aplicación y la materialización por partida siguen pendientes; estas tablas no cambian por sí solas la creación de partidas.
+La orquestación `getSharedPlayerRatings` reutiliza versiones frescas sin descargar, sirve versiones anteriores mientras otra instancia actualiza y espera hasta 25 segundos a un primer refresco en curso. Con caché vacía en cooldown falla de inmediato. La cancelación libera el lease; los errores de persistencia no se ocultan como fallos del proveedor. Trece pruebas focalizadas verifican esas rutas, incluidos 50 consumidores sin solicitudes externas.
+
+El adaptador de BD y la materialización por partida siguen pendientes; estas piezas todavía no cambian la creación de partidas.
 
 ## Ejecutar el reporte sin importar datos
 
