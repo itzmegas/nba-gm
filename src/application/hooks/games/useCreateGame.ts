@@ -27,6 +27,18 @@ async function refreshCurrentRoster(gameId: string, selectedTeamId: string): Pro
   }
 }
 
+async function materializePlayerAttributes(gameId: string): Promise<void> {
+  const response = await fetch("/api/player-attributes/bootstrap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gameId }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Player attributes initialization failed");
+  }
+}
+
 export function useCreateGame() {
   const queryClient = useQueryClient();
 
@@ -81,18 +93,33 @@ export function useCreateGame() {
           throw new Error(`Failed to initialize game schedule: ${scheduleError.message}`);
         }
 
-        // 4. Activate the game after successful initialization.
-        const activatedGame = await repository.update(game.id, {
-          status: GAME_STATUS.ACTIVE,
-        });
-
+        // 4. Bootstrap the initial free-agent market while the game is still initializing.
         if (input.seasonEraId === SEASON_ERA_IDS.MODERN && input.seasonYear === 2026) {
           await importInitialFreeAgents(game.id);
         }
 
+        // 5. Materialize every game player, including initial free agents, before activation.
+        if (input.seasonEraId === SEASON_ERA_IDS.MODERN) {
+          await materializePlayerAttributes(game.id);
+        }
+
+        // 6. Activate only after roster, contracts, schedule, free agents and attributes succeed.
+        const activatedGame = await repository.update(game.id, {
+          status: GAME_STATUS.ACTIVE,
+        });
+
         return activatedGame;
       } catch (error) {
         // Any failure leaves the game non-active and cleans up the partial record.
+        try {
+          const { error: rollbackError } = await supabase.rpc("rollback_seed_game_data", {
+            p_game_id: game.id,
+          });
+          if (rollbackError) console.error("[create-game] Initialization rollback failed.");
+        } catch {
+          // The game soft-delete remains the final cleanup boundary.
+          console.error("[create-game] Initialization rollback failed.");
+        }
         await repository.softDelete(game.id);
         throw error;
       }

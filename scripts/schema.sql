@@ -4,7 +4,8 @@
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Migrations 013-017 are included in this canonical schema.
+-- Canonical migration mirrors below are part of this schema.
+-- Migration 037 adds service-only player rating versions and a coordinated 24h source cache.
 
 -- 1. Teams Table
 CREATE TABLE IF NOT EXISTS teams (
@@ -4261,3 +4262,621 @@ GRANT EXECUTE ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) T
 
 COMMIT;
 -- End canonical schema mirror for migration 036.
+
+-- Canonical schema mirror for migration 037. Keep byte-identical below.
+BEGIN;
+
+CREATE TABLE public.player_rating_source_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_version TEXT NOT NULL CHECK (game_version ~ '^2K[0-9]{2}$'),
+  content_hash TEXT NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  stored_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (game_version, content_hash),
+  UNIQUE (id, game_version)
+);
+
+CREATE TABLE public.player_rating_source_cache (
+  game_version TEXT PRIMARY KEY CHECK (game_version ~ '^2K[0-9]{2}$'),
+  version_id UUID,
+  revalidated_at TIMESTAMPTZ,
+  lease_id UUID,
+  lease_expires_at TIMESTAMPTZ,
+  next_refresh_at TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
+  FOREIGN KEY (version_id, game_version)
+    REFERENCES public.player_rating_source_versions(id, game_version),
+  CHECK ((version_id IS NULL) = (revalidated_at IS NULL)),
+  CHECK ((lease_id IS NULL) = (lease_expires_at IS NULL))
+);
+
+ALTER TABLE public.player_rating_source_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_rating_source_cache ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.player_rating_source_versions, public.player_rating_source_cache
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.player_rating_source_versions, public.player_rating_source_cache TO service_role;
+
+CREATE FUNCTION public.acquire_player_rating_refresh(p_game_version TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  head public.player_rating_source_cache%ROWTYPE;
+  token UUID;
+  v_now TIMESTAMPTZ;
+  snapshot JSONB;
+BEGIN
+  IF p_game_version IS NULL OR p_game_version !~ '^2K[0-9]{2}$' THEN
+    RAISE EXCEPTION 'Invalid player rating edition';
+  END IF;
+  INSERT INTO public.player_rating_source_cache(game_version) VALUES (p_game_version)
+    ON CONFLICT DO NOTHING;
+  SELECT * INTO head FROM public.player_rating_source_cache
+    WHERE game_version = p_game_version FOR UPDATE;
+  v_now := clock_timestamp();
+  IF head.next_refresh_at <= v_now
+     AND (head.lease_expires_at IS NULL OR head.lease_expires_at <= v_now) THEN
+    token := gen_random_uuid();
+    UPDATE public.player_rating_source_cache SET lease_id = token,
+      lease_expires_at = v_now + interval '60 seconds'
+      WHERE game_version = p_game_version;
+  END IF;
+  IF head.version_id IS NOT NULL THEN
+    SELECT jsonb_build_object('version_id', v.id, 'revalidated_at', head.revalidated_at,
+      'snapshot', v.payload) INTO snapshot
+      FROM public.player_rating_source_versions v WHERE v.id = head.version_id;
+  END IF;
+  RETURN jsonb_build_object('lease_id', token, 'current', snapshot,
+    'refresh_in_progress', COALESCE(head.lease_expires_at > v_now AND token IS NULL, false),
+    'fresh', COALESCE(head.revalidated_at > v_now - interval '24 hours', false));
+END;
+$$;
+
+CREATE FUNCTION public.publish_player_rating_snapshot(
+  p_game_version TEXT, p_lease_id UUID, p_snapshot JSONB
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  head public.player_rating_source_cache%ROWTYPE;
+  version_uuid UUID;
+  hash TEXT := p_snapshot->>'contentHash';
+  v_now TIMESTAMPTZ;
+  snapshot JSONB;
+BEGIN
+  IF p_snapshot IS NULL OR jsonb_typeof(p_snapshot) <> 'object'
+     OR p_snapshot->>'source' IS DISTINCT FROM 'nba2kapi'
+     OR p_snapshot->>'sourceUrl' IS DISTINCT FROM 'https://api.nba2kapi.com/api/players/bulk?teamType=curr'
+     OR p_snapshot->>'gameVersion' IS DISTINCT FROM p_game_version
+     OR hash IS NULL OR hash !~ '^[a-f0-9]{64}$'
+     OR jsonb_typeof(p_snapshot->'players') IS DISTINCT FROM 'array'
+     OR jsonb_typeof(p_snapshot->'excludedPlayers') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Invalid player rating snapshot';
+  END IF;
+  IF jsonb_array_length(p_snapshot->'players') = 0
+     OR jsonb_array_length(p_snapshot->'players') + jsonb_array_length(p_snapshot->'excludedPlayers') > 10000 THEN
+    RAISE EXCEPTION 'Invalid player rating snapshot size';
+  END IF;
+  SELECT * INTO head FROM public.player_rating_source_cache
+    WHERE game_version = p_game_version FOR UPDATE;
+  v_now := clock_timestamp();
+  IF NOT FOUND OR p_lease_id IS NULL OR head.lease_id IS DISTINCT FROM p_lease_id
+     OR head.lease_expires_at <= v_now THEN
+    RAISE EXCEPTION 'Player rating refresh lease lost';
+  END IF;
+  INSERT INTO public.player_rating_source_versions(game_version, content_hash, payload)
+    VALUES (p_game_version, hash, p_snapshot)
+    ON CONFLICT (game_version, content_hash) DO NOTHING RETURNING id INTO version_uuid;
+  IF version_uuid IS NULL THEN
+    SELECT id INTO version_uuid FROM public.player_rating_source_versions
+      WHERE game_version = p_game_version AND content_hash = hash;
+  END IF;
+  UPDATE public.player_rating_source_cache SET version_id = version_uuid,
+    revalidated_at = v_now, next_refresh_at = v_now + interval '24 hours',
+    lease_id = NULL, lease_expires_at = NULL WHERE game_version = p_game_version;
+  SELECT payload INTO snapshot FROM public.player_rating_source_versions WHERE id = version_uuid;
+  RETURN jsonb_build_object('version_id', version_uuid, 'revalidated_at', v_now,
+    'snapshot', snapshot);
+END;
+$$;
+
+CREATE FUNCTION public.fail_player_rating_refresh(p_game_version TEXT, p_lease_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  UPDATE public.player_rating_source_cache SET lease_id = NULL, lease_expires_at = NULL,
+    next_refresh_at = clock_timestamp() + interval '5 minutes'
+    WHERE game_version = p_game_version AND lease_id = p_lease_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.acquire_player_rating_refresh(TEXT),
+  public.publish_player_rating_snapshot(TEXT, UUID, JSONB),
+  public.fail_player_rating_refresh(TEXT, UUID) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.acquire_player_rating_refresh(TEXT),
+  public.publish_player_rating_snapshot(TEXT, UUID, JSONB),
+  public.fail_player_rating_refresh(TEXT, UUID) TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 037.
+
+-- Canonical schema mirror for migration 038. Keep byte-identical below.
+BEGIN;
+
+CREATE FUNCTION public.is_valid_player_attributes(p_attributes JSONB)
+RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  attribute TEXT;
+BEGIN
+  IF jsonb_typeof(p_attributes) <> 'object' THEN RETURN false; END IF;
+  IF (SELECT count(*) FROM jsonb_object_keys(p_attributes)) <> 14 THEN RETURN false; END IF;
+  FOREACH attribute IN ARRAY ARRAY[
+    'closeShot', 'midRangeShot', 'threePointShot', 'freeThrow', 'drawFoul', 'ballHandle',
+    'passAccuracy', 'interiorDefense', 'perimeterDefense', 'steal', 'block',
+    'offensiveRebound', 'defensiveRebound', 'stamina'
+  ] LOOP
+    IF NOT (p_attributes ? attribute)
+       OR jsonb_typeof(p_attributes->attribute) <> 'number'
+       OR p_attributes->>attribute !~ '^[0-9]+$' THEN RETURN false; END IF;
+    IF (p_attributes->>attribute)::NUMERIC NOT BETWEEN 0 AND 99 THEN RETURN false; END IF;
+  END LOOP;
+  RETURN true;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.is_valid_player_attributes(JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TABLE public.game_attribute_materializations (
+  game_id UUID NOT NULL REFERENCES public.games(id) ON DELETE CASCADE,
+  season_year INTEGER NOT NULL CHECK (season_year BETWEEN 1900 AND 3000),
+  source_version_id UUID NOT NULL REFERENCES public.player_rating_source_versions(id),
+  player_count INTEGER NOT NULL CHECK (player_count BETWEEN 1 AND 10000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (game_id, season_year)
+);
+
+CREATE TABLE public.game_player_attributes (
+  game_id UUID NOT NULL,
+  season_year INTEGER NOT NULL,
+  player_id UUID NOT NULL,
+  origin TEXT NOT NULL CHECK (origin IN ('nba2kapi', 'estimated')),
+  match_method TEXT NOT NULL,
+  attributes JSONB NOT NULL CHECK (public.is_valid_player_attributes(attributes)),
+  source_slug TEXT,
+  source_overall SMALLINT CHECK (source_overall BETWEEN 0 AND 99),
+  generator_version TEXT,
+  identity_evidence JSONB NOT NULL CHECK (jsonb_typeof(identity_evidence) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (game_id, season_year, player_id),
+  UNIQUE (game_id, season_year, source_slug),
+  FOREIGN KEY (game_id, season_year)
+    REFERENCES public.game_attribute_materializations(game_id, season_year) ON DELETE CASCADE,
+  FOREIGN KEY (game_id, player_id)
+    REFERENCES public.game_player_states(game_id, player_id) ON DELETE NO ACTION
+    DEFERRABLE INITIALLY DEFERRED,
+  CHECK (
+    (origin = 'nba2kapi' AND NULLIF(trim(source_slug), '') IS NOT NULL
+      AND source_overall IS NOT NULL AND generator_version IS NULL
+      AND match_method IN ('name-and-team', 'name-and-height', 'reviewed-espn-alias'))
+    OR
+    (origin = 'estimated' AND source_slug IS NULL AND source_overall IS NULL
+      AND generator_version IS NOT DISTINCT FROM 'replacement-v1'
+      AND match_method IN ('missing-source', 'incomplete-attributes', 'ambiguous-identity', 'uncorroborated-identity'))
+  )
+);
+
+ALTER TABLE public.game_attribute_materializations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_player_attributes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.game_attribute_materializations, public.game_player_attributes
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.game_attribute_materializations, public.game_player_attributes
+  TO authenticated, service_role;
+CREATE POLICY game_attribute_materializations_owner_read ON public.game_attribute_materializations
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+CREATE POLICY game_player_attributes_owner_read ON public.game_player_attributes
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+
+COMMIT;
+-- End canonical schema mirror for migration 038.
+
+-- Canonical schema mirror for migration 039. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.materialize_game_player_attributes(
+  p_game_id UUID,
+  p_owner_id UUID,
+  p_season_year INTEGER,
+  p_source_version_id UUID,
+  p_rows JSONB
+) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_source public.player_rating_source_versions%ROWTYPE;
+  v_header public.game_attribute_materializations%ROWTYPE;
+  v_row JSONB;
+  v_source_player JSONB;
+  v_player_id UUID;
+  v_origin TEXT;
+  v_match_method TEXT;
+  v_source_slug TEXT;
+  v_source_overall SMALLINT;
+  v_generator_version TEXT;
+  v_expected_count INTEGER;
+  v_count INTEGER;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Service role required';
+  END IF;
+  IF p_game_id IS NULL OR p_owner_id IS NULL OR p_source_version_id IS NULL
+     OR p_season_year IS NULL OR p_rows IS NULL OR jsonb_typeof(p_rows) IS DISTINCT FROM 'array'
+     OR jsonb_array_length(p_rows) NOT BETWEEN 1 AND 10000 THEN
+    RAISE EXCEPTION 'Invalid player attribute materialization input';
+  END IF;
+
+  SELECT * INTO v_game FROM public.games
+    WHERE id = p_game_id AND user_id = p_owner_id AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND OR v_game.status <> 'initializing' OR v_game.season_era_id <> 'modern'
+     OR v_game.season_year <> p_season_year THEN
+    RAISE EXCEPTION 'Owned initializing modern game required';
+  END IF;
+  SELECT * INTO v_source FROM public.player_rating_source_versions
+    WHERE id = p_source_version_id;
+  IF NOT FOUND OR v_source.game_version <> '2K27'
+     OR jsonb_typeof(v_source.payload->'players') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Validated current player rating source required';
+  END IF;
+  SELECT count(*)::INTEGER INTO v_expected_count FROM public.game_player_states
+    WHERE game_id = p_game_id;
+  IF v_expected_count <> jsonb_array_length(p_rows) THEN
+    RAISE EXCEPTION 'Player attribute coverage does not match game roster';
+  END IF;
+
+  SELECT * INTO v_header FROM public.game_attribute_materializations
+    WHERE game_id = p_game_id AND season_year = p_season_year FOR UPDATE;
+  IF FOUND THEN
+    IF v_header.source_version_id <> p_source_version_id
+       OR v_header.player_count <> v_expected_count
+       OR (SELECT count(DISTINCT input."playerId")
+         FROM jsonb_to_recordset(p_rows) AS input("playerId" UUID)) <> v_expected_count THEN
+      RAISE EXCEPTION 'Attribute materialization retry changed its source or coverage';
+    END IF;
+    IF EXISTS (
+      SELECT 1
+      FROM jsonb_to_recordset(p_rows) AS input(
+        "playerId" UUID, origin TEXT, "matchMethod" TEXT, attributes JSONB,
+        "sourceSlug" TEXT, "sourceOverall" SMALLINT, "generatorVersion" TEXT,
+        "identityEvidence" JSONB
+      )
+      LEFT JOIN public.game_player_attributes existing
+        ON existing.game_id = p_game_id AND existing.season_year = p_season_year
+       AND existing.player_id = input."playerId"
+      WHERE existing.player_id IS NULL
+         OR existing.origin IS DISTINCT FROM input.origin
+         OR existing.match_method IS DISTINCT FROM input."matchMethod"
+         OR existing.attributes IS DISTINCT FROM input.attributes
+         OR existing.source_slug IS DISTINCT FROM input."sourceSlug"
+         OR existing.source_overall IS DISTINCT FROM input."sourceOverall"
+         OR existing.generator_version IS DISTINCT FROM input."generatorVersion"
+         OR existing.identity_evidence IS DISTINCT FROM input."identityEvidence"
+    ) OR (
+      SELECT count(*) FROM public.game_player_attributes
+      WHERE game_id = p_game_id AND season_year = p_season_year
+    ) <> v_expected_count THEN
+      RAISE EXCEPTION 'Attribute materialization retry changed its payload';
+    END IF;
+    RETURN jsonb_build_object('status', 'already-materialized', 'playerCount', v_expected_count,
+      'sourceVersionId', p_source_version_id);
+  END IF;
+
+  FOR v_row IN SELECT value FROM jsonb_array_elements(p_rows) LOOP
+    v_player_id := NULLIF(v_row->>'playerId', '')::UUID;
+    v_origin := v_row->>'origin';
+    v_match_method := v_row->>'matchMethod';
+    v_source_slug := NULLIF(v_row->>'sourceSlug', '');
+    v_source_overall := NULLIF(v_row->>'sourceOverall', '')::SMALLINT;
+    v_generator_version := NULLIF(v_row->>'generatorVersion', '');
+    IF v_player_id IS NULL OR v_origin IS NULL OR v_match_method IS NULL
+       OR jsonb_typeof(v_row->'attributes') IS DISTINCT FROM 'object'
+       OR jsonb_typeof(v_row->'identityEvidence') IS DISTINCT FROM 'object'
+       OR NOT public.is_valid_player_attributes(v_row->'attributes') THEN
+      RAISE EXCEPTION 'Invalid player attribute row';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.game_player_states
+      WHERE game_id = p_game_id AND player_id = v_player_id) THEN
+      RAISE EXCEPTION 'Player does not belong to game roster';
+    END IF;
+    IF v_origin = 'nba2kapi' THEN
+      IF v_source_slug IS NULL OR v_source_overall IS NULL OR v_generator_version IS NOT NULL
+         OR v_match_method NOT IN ('name-and-team', 'name-and-height', 'reviewed-espn-alias') THEN
+        RAISE EXCEPTION 'Invalid imported player attribute provenance';
+      END IF;
+      SELECT value INTO v_source_player FROM jsonb_array_elements(v_source.payload->'players')
+        WHERE value->>'slug' = v_source_slug;
+      IF v_source_player IS NULL
+         OR (v_source_player->'attributes') IS DISTINCT FROM v_row->'attributes'
+         OR (v_source_player->>'overall')::SMALLINT IS DISTINCT FROM v_source_overall THEN
+        RAISE EXCEPTION 'Imported player attributes do not match source version';
+      END IF;
+    ELSIF v_origin = 'estimated' THEN
+      IF v_source_slug IS NOT NULL OR v_source_overall IS NOT NULL
+         OR v_generator_version IS DISTINCT FROM 'replacement-v1'
+         OR v_match_method NOT IN ('missing-source', 'incomplete-attributes',
+           'ambiguous-identity', 'uncorroborated-identity') THEN
+        RAISE EXCEPTION 'Invalid estimated player attribute provenance';
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'Unknown player attribute origin';
+    END IF;
+  END LOOP;
+
+  INSERT INTO public.game_attribute_materializations(
+    game_id, season_year, source_version_id, player_count
+  ) VALUES (p_game_id, p_season_year, p_source_version_id, v_expected_count);
+  INSERT INTO public.game_player_attributes(
+    game_id, season_year, player_id, origin, match_method, attributes,
+    source_slug, source_overall, generator_version, identity_evidence
+  )
+  SELECT p_game_id, p_season_year, input."playerId", input.origin, input."matchMethod",
+    input.attributes, NULLIF(input."sourceSlug", ''), input."sourceOverall",
+    NULLIF(input."generatorVersion", ''), input."identityEvidence"
+  FROM jsonb_to_recordset(p_rows) AS input(
+    "playerId" UUID, origin TEXT, "matchMethod" TEXT, attributes JSONB,
+    "sourceSlug" TEXT, "sourceOverall" SMALLINT, "generatorVersion" TEXT,
+    "identityEvidence" JSONB
+  );
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count <> v_expected_count THEN
+    RAISE EXCEPTION 'Player attribute materialization inserted incomplete coverage';
+  END IF;
+  RETURN jsonb_build_object('status', 'materialized', 'playerCount', v_count,
+    'sourceVersionId', p_source_version_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.materialize_game_player_attributes(UUID, UUID, INTEGER, UUID, JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.materialize_game_player_attributes(UUID, UUID, INTEGER, UUID, JSONB)
+  TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 039.
+
+-- Canonical schema mirror for migration 040. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION enroll_simulated_free_agents(p_game_id UUID, p_player_ids UUID[])
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_game games%ROWTYPE;
+  v_player_id UUID;
+  v_count INTEGER := 0;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  IF p_player_ids IS NULL OR cardinality(p_player_ids) = 0
+     OR cardinality(ARRAY(SELECT DISTINCT unnest(p_player_ids))) <> cardinality(p_player_ids) THEN
+    RAISE EXCEPTION 'Explicit unique player ids are required';
+  END IF;
+  SELECT * INTO v_game FROM games WHERE id = p_game_id FOR UPDATE;
+  IF NOT FOUND OR v_game.status NOT IN ('active', 'initializing') OR v_game.season_era_id <> 'modern'
+     OR v_game.deleted_at IS NOT NULL
+     OR NOT EXISTS (SELECT 1 FROM game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Initializing or active game with materialized contract coverage required';
+  END IF;
+  FOREACH v_player_id IN ARRAY p_player_ids LOOP
+    IF NOT EXISTS (SELECT 1 FROM players p WHERE p.id = v_player_id AND p.is_active)
+       OR EXISTS (SELECT 1 FROM contracts c WHERE c.game_id = p_game_id AND c.player_id = v_player_id)
+       OR EXISTS (SELECT 1 FROM game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = v_player_id) THEN
+      RAISE EXCEPTION 'Player is inactive or has a current game agreement';
+    END IF;
+    INSERT INTO game_player_states(game_id, player_id, team_id, is_active)
+    VALUES (p_game_id, v_player_id, NULL, true)
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM game_player_states s WHERE s.game_id = p_game_id
+      AND s.player_id = v_player_id AND s.team_id IS NULL AND s.is_active) THEN
+      RAISE EXCEPTION 'Player is not active and teamless in this game';
+    END IF;
+    INSERT INTO free_agency_availability_enrollments(game_id, player_id, evidence_kind)
+    VALUES (p_game_id, v_player_id, 'simulation-bootstrap-enrollment')
+    ON CONFLICT (game_id, player_id) DO NOTHING;
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.import_initial_free_agents(
+  p_game_id UUID, p_owner_id UUID, p_snapshot JSONB
+)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE;
+  prior public.free_agency_imports%ROWTYPE;
+  candidate JSONB;
+  player public.players%ROWTYPE;
+  enrolled INTEGER := 0;
+  skipped INTEGER := 0;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Service role required'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('current-roster', 0));
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = p_owner_id
+    AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND OR g.status NOT IN ('active', 'initializing') OR g.season_era_id <> 'modern'
+    OR g.season_year <> 2026
+    OR NOT EXISTS (SELECT 1 FROM public.game_contract_materializations WHERE game_id = p_game_id) THEN
+    RAISE EXCEPTION 'Owned initializing or active materialized modern 2026 game required';
+  END IF;
+  SELECT * INTO prior FROM public.free_agency_imports WHERE game_id = p_game_id;
+  IF FOUND THEN
+    RETURN jsonb_build_object('enrolled_count', prior.enrolled_count, 'skipped_count', prior.skipped_count);
+  END IF;
+  IF p_snapshot IS NULL
+    OR p_snapshot->>'sourceUrl' IS DISTINCT FROM 'https://www.nba.com/players/free-agent-tracker/2026'
+    OR p_snapshot->>'seasonYear' IS DISTINCT FROM '2026'
+    OR jsonb_typeof(p_snapshot->'players') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Validated NBA tracker snapshot required';
+  END IF;
+  IF jsonb_array_length(p_snapshot->'players') NOT BETWEEN 1 AND 1000 THEN
+    RAISE EXCEPTION 'Invalid NBA tracker size';
+  END IF;
+  FOR candidate IN SELECT value FROM jsonb_array_elements(p_snapshot->'players') LOOP
+    IF candidate->>'season' IS DISTINCT FROM '2026'
+      OR candidate->>'type' IS DISTINCT FROM 'ufa' OR candidate->>'newTeamId' IS DISTINCT FROM '0'
+      OR candidate->>'isPlayerOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isTeamOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isEarlyTerminationOption' IS DISTINCT FROM 'false'
+      OR candidate->>'isTwoWayFreeAgent' IS DISTINCT FROM 'false' THEN
+      CONTINUE;
+    END IF;
+    IF (candidate->>'playerId')::INTEGER <= 0 OR (candidate->>'exp')::INTEGER NOT BETWEEN 0 AND 99
+      OR NULLIF(trim(candidate->>'playerFirstName'), '') IS NULL
+      OR NULLIF(trim(candidate->>'playerLastName'), '') IS NULL
+      OR NULLIF(trim(candidate->>'playerDisplayName'), '') IS NULL
+      OR candidate->>'position' !~ '^[GFC](-[GFC])?$' THEN
+      RAISE EXCEPTION 'Invalid NBA tracker player';
+    END IF;
+    SELECT * INTO player FROM public.players WHERE nba_id = (candidate->>'playerId')::INTEGER;
+    IF NOT FOUND THEN
+      IF EXISTS (SELECT 1 FROM public.players p
+        WHERE lower(p.full_name) = lower(candidate->>'playerDisplayName')) THEN
+        skipped := skipped + 1;
+        CONTINUE;
+      END IF;
+      INSERT INTO public.players(nba_id, first_name, last_name, full_name, position, years_of_experience, is_active)
+      VALUES ((candidate->>'playerId')::INTEGER, candidate->>'playerFirstName', candidate->>'playerLastName',
+        candidate->>'playerDisplayName', candidate->>'position', (candidate->>'exp')::SMALLINT, true)
+      RETURNING * INTO player;
+    END IF;
+    IF player.team_id IS NOT NULL
+      OR EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id
+        AND s.player_id = player.id AND (s.team_id IS NOT NULL OR NOT s.is_active))
+      OR EXISTS (SELECT 1 FROM public.contracts c WHERE c.game_id = p_game_id AND c.player_id = player.id)
+      OR EXISTS (SELECT 1 FROM public.game_contract_agreements a WHERE a.game_id = p_game_id AND a.player_id = player.id)
+      OR EXISTS (SELECT 1 FROM public.game_runtime_contracts r WHERE r.game_id = p_game_id AND r.player_id = player.id) THEN
+      skipped := skipped + 1;
+      CONTINUE;
+    END IF;
+    UPDATE public.players SET is_active = true,
+      years_of_experience = COALESCE(years_of_experience, (candidate->>'exp')::SMALLINT)
+    WHERE id = player.id;
+    PERFORM public.enroll_simulated_free_agents(p_game_id, ARRAY[player.id]);
+    enrolled := enrolled + 1;
+  END LOOP;
+  INSERT INTO public.free_agency_imports(game_id, snapshot, enrolled_count, skipped_count)
+  VALUES (p_game_id, p_snapshot, enrolled, skipped);
+  RETURN jsonb_build_object('enrolled_count', enrolled, 'skipped_count', skipped);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION enroll_simulated_free_agents(UUID, UUID[])
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION enroll_simulated_free_agents(UUID, UUID[]) TO service_role;
+REVOKE ALL ON FUNCTION public.import_initial_free_agents(UUID, UUID, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.import_initial_free_agents(UUID, UUID, JSONB) TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 040.
+
+-- Canonical schema mirror for migration 041. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION rollback_seed_game_data(p_game_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_game games%ROWTYPE;
+BEGIN
+  SELECT * INTO v_game
+  FROM games
+  WHERE id = p_game_id
+    AND user_id = auth.uid()
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'rollback_seed_game_data aborted: game % is not owned by the caller', p_game_id;
+  END IF;
+  IF v_game.status <> 'initializing' OR v_game.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'rollback_seed_game_data aborted: game % is not initializing', p_game_id;
+  END IF;
+
+  DELETE FROM game_player_attributes WHERE game_id = p_game_id;
+  DELETE FROM game_attribute_materializations WHERE game_id = p_game_id;
+  DELETE FROM free_agency_imports WHERE game_id = p_game_id;
+  DELETE FROM free_agency_availability_enrollments WHERE game_id = p_game_id;
+  DELETE FROM game_contract_provenance WHERE game_id = p_game_id;
+  DELETE FROM game_contract_seasons WHERE game_id = p_game_id;
+  DELETE FROM game_contract_identities WHERE game_id = p_game_id;
+  DELETE FROM game_contract_agreements WHERE game_id = p_game_id;
+  DELETE FROM game_contract_materializations WHERE game_id = p_game_id;
+  DELETE FROM contracts WHERE game_id = p_game_id;
+  DELETE FROM game_player_states WHERE game_id = p_game_id;
+  DELETE FROM game_pick_inventory WHERE game_id = p_game_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION rollback_seed_game_data(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION rollback_seed_game_data(UUID) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 041.
+
+-- Canonical schema mirror for migration 042. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_simulation_team_rating(p_game_id UUID, p_team_id UUID)
+RETURNS SMALLINT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  g public.games%ROWTYPE;
+  base SMALLINT;
+  available INTEGER;
+  rated_available INTEGER;
+  average_quality NUMERIC;
+  quality_adjustment INTEGER := 0;
+BEGIN
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  SELECT t.base_rating INTO base FROM public.teams t WHERE t.id = p_team_id;
+  IF base IS NULL THEN RAISE EXCEPTION 'Simulation team not found'; END IF;
+  IF g.season_era_id <> 'modern'
+     OR NOT EXISTS (SELECT 1 FROM public.game_contract_materializations m WHERE m.game_id = p_game_id)
+     OR NOT EXISTS (SELECT 1 FROM public.game_player_states s WHERE s.game_id = p_game_id) THEN
+    RETURN base;
+  END IF;
+  SELECT count(*)::INTEGER INTO available FROM public.game_player_states s
+  WHERE s.game_id = p_game_id AND s.team_id = p_team_id AND s.is_active AND NOT s.is_injured;
+  SELECT count(*)::INTEGER,
+    avg((a.attributes->>'closeShot')::NUMERIC + (a.attributes->>'midRangeShot')::NUMERIC
+      + (a.attributes->>'threePointShot')::NUMERIC + (a.attributes->>'freeThrow')::NUMERIC
+      + (a.attributes->>'drawFoul')::NUMERIC + (a.attributes->>'ballHandle')::NUMERIC
+      + (a.attributes->>'passAccuracy')::NUMERIC + (a.attributes->>'interiorDefense')::NUMERIC
+      + (a.attributes->>'perimeterDefense')::NUMERIC + (a.attributes->>'steal')::NUMERIC
+      + (a.attributes->>'block')::NUMERIC + (a.attributes->>'offensiveRebound')::NUMERIC
+      + (a.attributes->>'defensiveRebound')::NUMERIC + (a.attributes->>'stamina')::NUMERIC) / 14.0
+  INTO rated_available, average_quality
+  FROM public.game_player_states s
+  JOIN public.game_player_attributes a
+    ON a.game_id = s.game_id AND a.season_year = g.season_year AND a.player_id = s.player_id
+  WHERE s.game_id = p_game_id AND s.team_id = p_team_id AND s.is_active AND NOT s.is_injured;
+  IF rated_available = available AND rated_available > 0 THEN
+    quality_adjustment := round((average_quality - 60) * 0.2)::INTEGER;
+  END IF;
+  RETURN LEAST(100, GREATEST(0,
+    base + 2 * (LEAST(available, 15) - 12) + quality_adjustment))::SMALLINT;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_simulation_team_rating(UUID, UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 042.

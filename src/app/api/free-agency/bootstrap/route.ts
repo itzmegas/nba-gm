@@ -26,11 +26,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (game.error) return NextResponse.json({ error: "Cannot load game" }, { status: 500 });
   if (!game.data) return NextResponse.json({ error: "Game not found" }, { status: 404 });
   if (
-    game.data.status !== "active" ||
+    !["active", "initializing"].includes(game.data.status) ||
     game.data.season_year !== 2026 ||
     game.data.season_era_id !== "modern"
   ) {
-    return NextResponse.json({ error: "An active modern 2026 game is required" }, { status: 409 });
+    return NextResponse.json(
+      { error: "An active or initializing modern 2026 game is required" },
+      { status: 409 }
+    );
   }
   try {
     // Check before fetching: retries and market visits must not consult the live NBA again.
