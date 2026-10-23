@@ -49,6 +49,12 @@ Solo la fuente inicial se comparte entre usuarios. La progresión por edad queda
 
 La conexión al motor se hará en el flujo SQL transaccional, no solamente en `SeasonSimulator.ts`. No se reconstruirán estadísticas de partidos ya jugados.
 
+### Estimaciones aprobadas
+
+`estimatePlayerAttributes` implementa `replacement-v1`: perfiles conservadores por posición principal (base, exterior o interior), con una variación entera de -4 a +4 por atributo derivada del UUID canónico. No usa azar ni reloj, no modifica las plantillas base y produce el mismo punto de partida para el mismo jugador. Quince pruebas cubren determinismo, posiciones, límites y aislamiento de objetos.
+
+Son capacidades **estimadas**, no observaciones de NBA 2K ni estadísticas reales. Esta primera calibración es de nivel de reemplazo; deberá contrastarse con rendimientos simulados. El generador no implementa potencial, progresión ni envejecimiento y todavía no está conectado a la inicialización de partidas.
+
 ### Persistencia compartida de la fuente
 
 La migración `037_player_rating_source_cache.sql` crea versiones inmutables por edición/hash y una cabecera de caché privada, con RLS y acceso exclusivamente mediante operaciones de servidor. No se aplicó a la base remota.
