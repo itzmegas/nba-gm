@@ -60,7 +60,9 @@ La migración `037_player_rating_source_cache.sql` crea versiones inmutables por
 
 La orquestación `getSharedPlayerRatings` reutiliza versiones frescas sin descargar, sirve versiones anteriores mientras otra instancia actualiza y espera hasta 25 segundos a un primer refresco en curso. Con caché vacía en cooldown falla de inmediato. La cancelación libera el lease; los errores de persistencia no se ocultan como fallos del proveedor. Trece pruebas focalizadas verifican esas rutas, incluidos 50 consumidores sin solicitudes externas.
 
-El adaptador de BD y la materialización por partida siguen pendientes; estas piezas todavía no cambian la creación de partidas.
+`SupabasePlayerRatingSourceCache` conecta esas operaciones a la BD y valida también los snapshots leídos: edición, cantidades, atributos, identidades únicas y hash recalculado. No acepta snapshots públicos para persistencia ni expone detalles de errores SQL. Una prueba integrada con PostgreSQL 17 verificó el round trip JSONB/hash, 20 consumidores de una misma versión con una sola descarga y fallback con cooldown ante un fallo simulado del proveedor.
+
+La adquisición compartida tiene 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. Falta conectar la materialización de atributos por partida: todavía no cambia la creación de partidas.
 
 ## Ejecutar el reporte sin importar datos
 

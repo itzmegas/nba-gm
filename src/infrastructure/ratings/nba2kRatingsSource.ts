@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { PlayerAttributes } from "@/domain/entities/PlayerAttributes";
+import type { PlayerRatingSourceSnapshot } from "@/domain/ratings/PlayerRatingSourceCache";
 
 const ratingSchema = z.number().int().min(0).max(99);
 const attributesSchema = z.object({
@@ -70,6 +71,47 @@ export const NBA2K_RATINGS_URL =
   "https://api.nba2kapi.com/api/public/players?teamType=curr&limit=100";
 export const NBA2K_BULK_RATINGS_URL = "https://api.nba2kapi.com/api/players/bulk?teamType=curr";
 
+function contentHash(snapshot: Pick<PlayerRatingSourceSnapshot, "players" | "excludedPlayers">) {
+  const bySlug = (a: { slug: string }, b: { slug: string }) => a.slug.localeCompare(b.slug);
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        players: snapshot.players.toSorted(bySlug),
+        excludedPlayers: snapshot.excludedPlayers.toSorted(bySlug),
+      })
+    )
+    .digest("hex");
+}
+
+export const playerRatingSourceSnapshotSchema = z
+  .object({
+    source: z.literal("nba2kapi"),
+    sourceUrl: z.literal(NBA2K_BULK_RATINGS_URL),
+    gameVersion: z.literal("2K27"),
+    observedAt: z.iso.datetime(),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    requestCount: z.literal(1),
+    players: z.array(playerRatingSchema).min(1).max(10_000),
+    excludedPlayers: z
+      .array(
+        z.object({
+          slug: z.string().min(1),
+          name: z.string().trim().min(1),
+          invalidAttributes: z.array(z.string().max(80)).min(1).max(14),
+        })
+      )
+      .max(9_999),
+  })
+  .superRefine((snapshot, context) => {
+    const slugs = [...snapshot.players, ...snapshot.excludedPlayers].map(({ slug }) => slug);
+    if (slugs.length > 10_000 || new Set(slugs).size !== slugs.length) {
+      context.addIssue({ code: "custom", message: "Invalid snapshot identities" });
+    }
+    if (contentHash(snapshot) !== snapshot.contentHash) {
+      context.addIssue({ code: "custom", message: "Snapshot content hash mismatch" });
+    }
+  });
+
 async function requestRatings(
   url: string,
   signal?: AbortSignal,
@@ -118,20 +160,12 @@ function buildSnapshot(
         invalidAttributes: attributes.error.issues.map(({ path }) => path.join(".")),
       });
   }
-  const bySlug = (a: { slug: string }, b: { slug: string }) => a.slug.localeCompare(b.slug);
   return {
     source: "nba2kapi" as const,
     sourceUrl,
     gameVersion: "2K27" as const,
     observedAt: new Date().toISOString(),
-    contentHash: createHash("sha256")
-      .update(
-        JSON.stringify({
-          players: players.toSorted(bySlug),
-          excludedPlayers: excludedPlayers.toSorted(bySlug),
-        })
-      )
-      .digest("hex"),
+    contentHash: contentHash({ players, excludedPlayers }),
     requestCount,
     players,
     excludedPlayers,
