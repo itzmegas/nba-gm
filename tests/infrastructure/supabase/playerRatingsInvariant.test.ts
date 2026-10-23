@@ -10,6 +10,7 @@ describe("player attribute schema mirrors", () => {
     "039_materialize_game_player_attributes",
     "040_initialize_attributes_before_activation",
     "041_rollback_game_attributes",
+    "042_player_attribute_simulation_strength",
   ])("keeps %s byte-identical exactly once", (name) => {
     const number = name.slice(0, 3);
     const migration = readFileSync(

@@ -1,6 +1,6 @@
 # Atributos: validar la fuente antes de importar
 
-**Estado:** descarga autenticada y auditoría de lectura disponibles. Caché compartida, identidades, persistencia por partida e integración SQL en implementación; todavía no cambia jugadores, partidas ni resultados.
+**Estado:** descarga autenticada, caché compartida, reconciliación, estimaciones, persistencia por carrera e integración SQL implementadas en la rama local. Las migraciones 037–042 aún no se aplicaron a Supabase remoto; la partida usada en la auditoría permanece sin modificaciones.
 
 ## Modelo inicial
 
@@ -13,7 +13,7 @@ Los atributos son capacidades de 0 a 99, **no porcentajes de acierto**. El domin
 | Defensa | `interiorDefense`, `perimeterDefense`, `steal`, `block` |
 | Rebotes y carga | `offensiveRebound`, `defensiveRebound`, `stamina` |
 
-El `overall` del proveedor se conserva como referencia; no reemplaza estas capacidades ni define todavía una fórmula de fuerza.
+El `overall` del proveedor se conserva como referencia; no reemplaza estas capacidades. La simulación usa el promedio de las 14 capacidades para ajustar la fuerza del equipo.
 
 ## Fuente comprobada el 22 de octubre de 2026
 
@@ -53,15 +53,29 @@ La conexión al motor se hará en el flujo SQL transaccional, no solamente en `S
 
 `estimatePlayerAttributes` implementa `replacement-v1`: perfiles conservadores por posición principal (base, exterior o interior), con una variación entera de -4 a +4 por atributo derivada del UUID canónico. No usa azar ni reloj, no modifica las plantillas base y produce el mismo punto de partida para el mismo jugador. Quince pruebas cubren determinismo, posiciones, límites y aislamiento de objetos.
 
-Son capacidades **estimadas**, no observaciones de NBA 2K ni estadísticas reales. Esta primera calibración es de nivel de reemplazo; deberá contrastarse con rendimientos simulados. El generador no implementa potencial, progresión ni envejecimiento y todavía no está conectado a la inicialización de partidas.
+Son capacidades **estimadas**, no observaciones de NBA 2K ni estadísticas reales. Esta primera calibración es de nivel de reemplazo; deberá contrastarse con rendimientos simulados. El generador no implementa potencial, progresión ni envejecimiento. La materialización por partida registra explícitamente su origen y versión.
 
 `reconcilePlayerAttributes` exige identidad única y corroboración por equipo, altura válida o alias revisado con ID ESPN y ambos nombres. Reconoce alturas NBA (`6-11`) y ESPN (`6' 11"`); una altura inválida no sirve como evidencia. Las colisiones entre nombres, IDs o reclamaciones de un mismo slug generan estimaciones para todos los involucrados, no un ganador por orden.
 
-La salida distingue origen, método/motivo, versión del generador, referencia `overall` y evidencia. En lectura real sobre los 546 jugadores auditados produjo **530 importables y 16 estimados**: 496 por nombre/equipo, 24 por nombre/altura y 10 por alias revisado; 9 sin candidato exacto, 1 incompleto y 6 sin corroboración suficiente. Estos últimos incluyen discrepancias de altura o altura canónica ausente: no se presentan como ausencias del proveedor. Veintiuna pruebas verifican las decisiones. Aún no se guardaron esos valores en la partida.
+La salida distingue origen, método/motivo, versión del generador, referencia `overall` y evidencia. En la lectura real de los 546 jugadores auditados produjo **530 importables y 16 estimados**: 496 por nombre/equipo, 24 por nombre/altura y 10 por alias revisado; 9 sin candidato exacto, 1 incompleto y 6 sin corroboración suficiente. Estos últimos incluyen discrepancias de altura o altura canónica ausente: no se presentan como ausencias del proveedor. Veintiuna pruebas verifican las decisiones. Esa partida auditada no fue modificada; el mismo flujo ya materializa partidas nuevas.
 
-La creación moderna se está conectando con este orden: roster/contratos → schedule → agentes libres iniciales (si corresponde) → atributos completos → activación. La ruta server-only `/api/player-attributes/bootstrap` solo acepta partidas modernas en `initializing`; no hace backfill de partidas activas.
+La creación moderna ejecuta: roster/contratos → schedule → agentes libres iniciales (si corresponde) → atributos completos → activación. La ruta server-only `/api/player-attributes/bootstrap` solo acepta partidas modernas en `initializing`; no hace backfill de partidas activas.
 
 La migración `041_rollback_game_attributes.sql` extiende el rollback de inicialización para borrar primero las copias/header de atributos y el estado de agentes libres antes de eliminar `game_player_states`. `useCreateGame` invoca ese rollback de forma best-effort antes del soft-delete si falla cualquier etapa; no elimina jugadores canónicos ni la caché global.
+
+### Integración con el partido diario
+
+La migración `042_player_attribute_simulation_strength.sql` conserva la fórmula de roster disponible y, si todos los jugadores activos y sanos tienen atributos, agrega un ajuste basado en su promedio de los 14 atributos de la temporada actual: `round((promedio - 60) * 0.2)`, limitado junto al rating final entre 0 y 100. Si una partida antigua o una plantilla parcial no tiene cobertura completa, mantiene el comportamiento anterior basado en tamaño de roster. La simulación solo calcula rating para juegos todavía `scheduled`; atributos posteriores no recalculan marcadores completados.
+
+Verificación repetible de migraciones, RLS, cobertura, idempotencia, rollback, flujo de agentes libres, concurrencia de refresco y simulación diaria en PostgreSQL aislado:
+
+```bash
+bun scripts/test-player-attributes-postgres.ts <id-del-contenedor-aislado-autorizado>
+```
+
+La prueba verifica contenedor sin red/puertos y usa una base aleatoria dentro del tmpfs. No aplica migraciones ni escribe en Supabase remoto.
+
+Para habilitar la función en un entorno propio hay que aplicar las migraciones 037–042 en orden y definir `NBA_2K_API_KEY` como variable privada del servidor. Este repositorio no aplicó esas migraciones a la base remota.
 
 ### Persistencia compartida de la fuente
 
@@ -76,13 +90,13 @@ La orquestación `getSharedPlayerRatings` reutiliza versiones frescas sin descar
 
 `SupabasePlayerRatingSourceCache` conecta esas operaciones a la BD y valida también los snapshots leídos: edición, cantidades, atributos, identidades únicas y hash recalculado. No acepta snapshots públicos para persistencia ni expone detalles de errores SQL. Una prueba integrada con PostgreSQL 17 verificó el round trip JSONB/hash, 20 consumidores de una misma versión con una sola descarga y fallback con cooldown ante un fallo simulado del proveedor.
 
-La verificación inicial de adquisición compartida aprobó 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. Falta conectar la materialización de atributos por partida: todavía no cambia la creación de partidas.
+La verificación inicial de adquisición compartida aprobó 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. La materialización ahora está conectada al flujo de creación.
 
 ### Copias por partida y temporada
 
 La migración `038_game_player_attributes.sql` crea la cabecera de materialización y las copias por `(game_id, season_year, player_id)`, vinculadas a la identidad del jugador en esa partida, nunca a su equipo mutable. Se guardan los 14 atributos enteros de 0 a 99, origen, método de identidad, evidencia, referencia del proveedor y versión del generador; las restricciones impiden mezclar importaciones y estimaciones sin etiquetar.
 
-RLS permite lectura solo al dueño y oculta partidas eliminadas. No hay escritura directa para clientes ni para `service_role`: la materialización transaccional se añadirá mediante RPC. Las pruebas reales de PostgreSQL verifican atributos inválidos, colisiones de fuente, IDs de otra partida, permisos, aislamiento entre dueños y conservación al cambiar de equipo. El esquema canónico contiene mirrors byte-idénticos de las migraciones 037 y 038, comprobados por Vitest.
+RLS permite lectura solo al dueño y oculta partidas eliminadas. No hay escritura directa para clientes ni para `service_role`: la escritura se realiza mediante un RPC transaccional restringido. Las pruebas reales de PostgreSQL verifican atributos inválidos, colisiones de fuente, IDs de otra partida, permisos, aislamiento entre dueños, reintentos y conservación al cambiar de equipo. El esquema canónico contiene mirrors byte-idénticos de las migraciones 037–042, comprobados por Vitest.
 
 ## Ejecutar el reporte sin importar datos
 
@@ -95,7 +109,7 @@ Con `NBA_2K_API_KEY` configurada en el entorno de servidor, utiliza `GET /api/pl
 
 La descarga autenticada valida cantidad total, edición, identidades y atributos con las mismas reglas de cuarentena. El hash normaliza el orden por slug, por lo que no cambia por orden de respuesta ni por transporte público/bulk; no debe compararse directamente con hashes históricos anteriores a esta normalización.
 
-**Verificación del transporte autenticado (23 de octubre de 2026):** 41 pruebas focalizadas, typecheck y Biome correctos. La CLI real validó 652 jugadores y excluyó 1 en una solicitud, sin escrituras. Hash normalizado: `18768de1aa2e0f0752b469d780db1b09656b8e07e82d1e38fcb98f3b87e993fa`. La caché persistente todavía no está conectada.
+**Verificación del transporte autenticado (23 de octubre de 2026):** 41 pruebas focalizadas, typecheck y Biome correctos. La CLI real validó 652 jugadores y excluyó 1 en una solicitud, sin escrituras. Hash normalizado: `18768de1aa2e0f0752b469d780db1b09656b8e07e82d1e38fcb98f3b87e993fa`. La caché persistente se conectó posteriormente; su verificación actual está en la sección anterior.
 
 Sin archivo, muestra únicamente calidad y cantidad del proveedor; `coverage: null` significa que **no se midió cobertura del roster**. El archivo opcional debe ser una exportación de la plantilla canónica moderna de 2026-27, no la lista global de jugadores históricos:
 
@@ -109,7 +123,7 @@ Sin archivo, muestra únicamente calidad y cantidad del proveedor; `coverage: nu
 }
 ```
 
-El reporte separa candidatos por nombre, ausencias, ambigüedades y atributos incompletos. Reutiliza la normalización existente de acentos, mayúsculas y sufijos; no hace fuzzy matching ni resuelve homónimos automáticamente. **Un candidato no es una identidad validada:** falta corroborar el identificador antes de importar.
+El reporte de auditoría separa candidatos por nombre, ausencias, ambigüedades y atributos incompletos. Reutiliza la normalización existente de acentos, mayúsculas y sufijos; no hace fuzzy matching ni resuelve homónimos automáticamente. **Un candidato no es una identidad validada.** El inicializador usa el reconciliador con evidencia adicional y aliases revisados por ID ESPN.
 
 Sale con código 1 si falla la descarga/entrada o si el roster contiene casos sin resolver. Una auditoría del proveedor puede finalizar con código 0 aunque haya exclusiones: revisá `excludedPlayers`. `readyForImport` siempre es falso; incluso un roster sin faltantes requiere revisar identidades y permisos.
 
@@ -149,15 +163,15 @@ En una segunda descarga con el mismo hash se localizaron estas **11 posibles var
 
 **Revisión del 23 de octubre:** se corroboraron los diez alias con identificador ESPN mediante los rosters actuales de Utah, Washington, Detroit, Golden State, San Antonio, Lakers, Miami y Chicago, comparados con nombre, equipo y ficha del proveedor. Los registros de ambos proveedores coinciden en equipo; los nombres alternativos quedan vinculados a los IDs ESPN, no a un acortamiento genérico de nombres. Bobby Portis difiere una pulgada de altura entre fuentes y David Jones Garcia tiene distinta clasificación de posición; esas diferencias no se ocultaron ni se trataron como coincidencias físicas exactas.
 
-Xavier Tillman sigue pendiente: el registro canónico auditado no tiene ID ESPN. La revisión no cambia retroactivamente los conteos del cruce estricto ni habilita importaciones por sí sola; el reconciliador de inicialización todavía debe incorporar las comprobaciones y registrar la evidencia.
+Xavier Tillman sigue sin alias revisado porque el registro canónico auditado no tiene ID ESPN. Si no se corrobora por nombre y equipo, recibe una estimación identificada; no se inventa un vínculo de proveedor.
 
 Los diez enlaces revisados se registran en `reviewedNba2kRatingAliases.ts`, con ID ESPN y ambos nombres exactos; no se aplica una regla global de apodos o eliminación de sufijos. La fuente ahora conserva altura y posiciones opcionales para corroboración adicional. Los snapshots anteriores sin esos campos siguen siendo legibles; un refresco con metadatos nuevos genera su propia versión/hash.
 
-No se localizó candidato para **8 jugadores**: Latrell Wrightsell Jr., Tacko Fall, Armoni Brooks, Nate Bittle, Leaky Black, Caleb Homesley, Reece Beekman y Duop Reath. No se les asignaron atributos estimados.
+No se localizó candidato por nombre para **8 jugadores**: Latrell Wrightsell Jr., Tacko Fall, Armoni Brooks, Nate Bittle, Leaky Black, Caleb Homesley, Reece Beekman y Duop Reath. En la reconciliación reciben estimaciones etiquetadas con motivo `missing-source`.
 
 **Tyler Nickel** sí aparece por nombre, pero sigue excluido porque faltan 10 de los 14 atributos. No se completaron ni reemplazaron sus valores.
 
-No se modificó la normalización compartida ni se aceptaron coincidencias por apellido: por ejemplo, la fuente contiene tanto Alexandre Sarr como Olivier Sarr. Las variantes requieren corroboración individual antes de vincular UUID canónico y slug del proveedor.
+No se modificó la normalización compartida ni se aceptan coincidencias por apellido: por ejemplo, la fuente contiene tanto Alexandre Sarr como Olivier Sarr. Los aliases revisados vinculan ID ESPN, nombre canónico y slug exactos.
 
 ### Evidencia y límites
 
@@ -169,4 +183,6 @@ No se modificó la normalización compartida ni se aceptaron coincidencias por a
 - Verificación de esta revisión: `bun run test src/infrastructure/ratings` (26/26), `bun biome check` (310 archivos) y `git diff --check` correctos. No se repitieron la suite completa, el typecheck ni el build: solo se modificó documentación.
 - `identityVerified = false` y `readyForImport = false`. Este resultado corresponde a esta partida y este momento, no garantiza cobertura de otras partidas o eras.
 
-**Siguiente paso:** implementar caché compartida con coordinación de refresco, corroborar identidades y materializar copias por partida con la política de estimaciones ya aprobada. Mantener documentadas las condiciones y límites del proveedor antes de habilitar redistribución.
+**Verificación local:** `bun run test` aprobó 616/616 pruebas en 91 archivos; `bun run typecheck`, `bun biome check` (328 archivos), `bun run build` y el runner PostgreSQL aislado de migraciones 037–042 también pasaron. No se hizo push ni se aplicaron migraciones a Supabase remoto.
+
+**Siguiente paso operativo:** aplicar las migraciones 037–042 al entorno Supabase que se utilizará y probar manualmente la creación de una partida nueva. No se implementaron progresión por edad, posesiones ni box score; tampoco se modificó ni migró la partida usada en la auditoría anterior.
