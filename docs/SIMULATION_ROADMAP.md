@@ -1,6 +1,6 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** bloque 1 en implementación: fuente autenticada, caché compartida, identidades revisadas, estimaciones deterministas, copias por partida y ajuste de calidad en SQL implementados localmente. Falta verificación final e instalar migraciones en el entorno que se use.
+**Estado:** módulo de atributos implementado y verificado localmente: fuente autenticada, caché compartida, identidades revisadas, estimaciones deterministas, copias por partida y ajuste de calidad en SQL. Queda instalar migraciones y probar una partida nueva en el entorno que se use.
 **Fecha:** 2026-10-23.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
@@ -96,9 +96,9 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Documentar límites conocidos de la fuente y dejar claro que la API key no prueba una licencia de redistribución.
 - [x] Integrar la calidad individual en la fuerza SQL diaria, con fallback para juegos antiguos.
 
-  **Implementado localmente:** migraciones `038_game_player_attributes.sql` a `042_player_attribute_simulation_strength.sql`, snapshot transaccional/idempotente antes de activar, agentes libres iniciales incluidos, rollback de fallos y ajuste individual de fuerza. Migraciones aún no aplicadas al Supabase remoto; faltan la suite final y revisar condiciones del proveedor.
+  **Implementado localmente:** migraciones `038_game_player_attributes.sql` a `042_player_attribute_simulation_strength.sql`, snapshot transaccional/idempotente antes de activar, agentes libres iniciales incluidos, rollback de fallos y ajuste individual de fuerza. Migraciones aún no aplicadas al Supabase remoto; la autorización de redistribución del proveedor sigue sin acreditarse.
 
-  **Verificación local actual:** `bun run test` 616/616 en 91 archivos; `bun run typecheck`; `bun biome check` (328 archivos); `bun run build`; runner PostgreSQL aislado con migraciones 037–042, RLS, rollback, agentes libres en `initializing`, refresco concurrente y simulación diaria. No se hizo push ni se escribieron datos en Supabase remoto.
+  **Verificación local actual:** `bun run test` 617/617 en 91 archivos; `bun run typecheck`; `bun biome check` (328 archivos); `bun run build`; runner PostgreSQL aislado con migraciones 037–042, RLS, rollback, agentes libres en `initializing`, refresco concurrente y simulación diaria. No se hizo push ni se escribieron datos en Supabase remoto.
 
 ### Plan de entrega del módulo de atributos
 

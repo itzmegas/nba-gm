@@ -183,6 +183,6 @@ No se modificó la normalización compartida ni se aceptan coincidencias por ape
 - Verificación de esta revisión: `bun run test src/infrastructure/ratings` (26/26), `bun biome check` (310 archivos) y `git diff --check` correctos. No se repitieron la suite completa, el typecheck ni el build: solo se modificó documentación.
 - `identityVerified = false` y `readyForImport = false`. Este resultado corresponde a esta partida y este momento, no garantiza cobertura de otras partidas o eras.
 
-**Verificación local:** `bun run test` aprobó 616/616 pruebas en 91 archivos; `bun run typecheck`, `bun biome check` (328 archivos), `bun run build` y el runner PostgreSQL aislado de migraciones 037–042 también pasaron. No se hizo push ni se aplicaron migraciones a Supabase remoto.
+**Verificación local:** `bun run test` aprobó 617/617 pruebas en 91 archivos; `bun run typecheck`, `bun biome check` (328 archivos), `bun run build` y el runner PostgreSQL aislado de migraciones 037–042 también pasaron. No se hizo push ni se aplicaron migraciones a Supabase remoto.
 
 **Siguiente paso operativo:** aplicar las migraciones 037–042 al entorno Supabase que se utilizará y probar manualmente la creación de una partida nueva. No se implementaron progresión por edad, posesiones ni box score; tampoco se modificó ni migró la partida usada en la auditoría anterior.
