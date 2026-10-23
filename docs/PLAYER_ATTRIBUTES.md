@@ -133,6 +133,10 @@ En una segunda descarga con el mismo hash se localizaron estas **11 posibles var
 | Bobby Portis | Bobby Portis Jr. |
 | Nic Claxton | Nicolas Claxton |
 
+**Revisión del 23 de octubre:** se corroboraron los diez alias con identificador ESPN mediante los rosters actuales de Utah, Washington, Detroit, Golden State, San Antonio, Lakers, Miami y Chicago, comparados con nombre, equipo y ficha del proveedor. Los registros de ambos proveedores coinciden en equipo; los nombres alternativos quedan vinculados a los IDs ESPN, no a un acortamiento genérico de nombres. Bobby Portis difiere una pulgada de altura entre fuentes y David Jones Garcia tiene distinta clasificación de posición; esas diferencias no se ocultaron ni se trataron como coincidencias físicas exactas.
+
+Xavier Tillman sigue pendiente: el registro canónico auditado no tiene ID ESPN. La revisión no cambia retroactivamente los conteos del cruce estricto ni habilita importaciones por sí sola; el reconciliador de inicialización todavía debe incorporar las comprobaciones y registrar la evidencia.
+
 No se localizó candidato para **8 jugadores**: Latrell Wrightsell Jr., Tacko Fall, Armoni Brooks, Nate Bittle, Leaky Black, Caleb Homesley, Reece Beekman y Duop Reath. No se les asignaron atributos estimados.
 
 **Tyler Nickel** sí aparece por nombre, pero sigue excluido porque faltan 10 de los 14 atributos. No se completaron ni reemplazaron sus valores.

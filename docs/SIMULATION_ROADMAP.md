@@ -91,7 +91,8 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [ ] Corroborar identidades, incluidas las 11 posibles variantes de nombre localizadas; no son vínculos aprobados para importar.
 - [x] Acordar atributos estimados, identificados y separados de los importados, para jugadores sin datos completos.
 - [x] Acordar caché persistente compartida: actualizar la fuente de forma controlada y copiarla al iniciar cada partida, sin consultar al proveedor por usuario.
-- [ ] Implementar la caché con coordinación entre instancias y reutilización de la última versión válida ante errores.
+- [x] Implementar la adquisición compartida con caché persistente, coordinación entre instancias, validación al leer y reutilización de la última versión válida ante errores. La conexión a crear partidas sigue pendiente.
+- [x] Implementar estimaciones deterministas versionadas (`replacement-v1`), todavía sin materialización por partida.
 - [ ] Documentar condiciones de uso y límites de redistribución; una API key no prueba licencia sobre los datos.
 - [ ] Persistir atributos versionados por partida/temporada e integrarlos al motor SQL.
 
