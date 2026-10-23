@@ -112,9 +112,13 @@ export function useCreateGame() {
       } catch (error) {
         // Any failure leaves the game non-active and cleans up the partial record.
         try {
-          await supabase.rpc("rollback_seed_game_data", { p_game_id: game.id });
+          const { error: rollbackError } = await supabase.rpc("rollback_seed_game_data", {
+            p_game_id: game.id,
+          });
+          if (rollbackError) console.error("[create-game] Initialization rollback failed.");
         } catch {
           // The game soft-delete remains the final cleanup boundary.
+          console.error("[create-game] Initialization rollback failed.");
         }
         await repository.softDelete(game.id);
         throw error;

@@ -1,6 +1,6 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** bloque 1 en implementación: fuente autenticada, caché compartida y copias independientes por partida. Estimaciones aprobadas; persistencia e integración SQL pendientes.
+**Estado:** bloque 1 en implementación: fuente autenticada, caché compartida, identidades revisadas, estimaciones deterministas, copias por partida y ajuste de calidad en SQL implementados localmente. Falta verificación final e instalar migraciones en el entorno que se use.
 **Fecha:** 2026-10-23.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
@@ -76,10 +76,10 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 
 ## Antes de implementar
 
-- [ ] Confirmar el primer hito y los atributos mínimos necesarios.
-- [ ] Validar la fuente de atributos y qué hacer con jugadores sin datos.
-- [ ] Definir compatibilidad con partidas existentes, sin inventar estadísticas para partidos ya completados.
-- [ ] Resolver la integración con la simulación diaria transaccional en SQL: modificar únicamente `SeasonSimulator.ts` no cambia el flujo que hoy usa el juego.
+- [x] Definir el alcance del módulo de atributos. Esta entrega no incluye todavía posesiones, box score ni progresión por edad.
+- [x] Validar acceso/cobertura y política de datos ausentes: 14 ratings, estimaciones identificadas; los términos conocidos no demuestran licencia de redistribución.
+- [x] Definir compatibilidad con partidas existentes: sin backfill y sin inventar resultados de partidos completados.
+- [x] Integrar en la función SQL diaria real; cambiar únicamente `SeasonSimulator.ts` no alcanzaba el flujo que usa el juego.
 
 **Siguiente paso recomendado:** delimitar el primer partido con atributos y box score, no construir todo el roadmap en una sola entrega.
 
@@ -91,10 +91,14 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Implementar reconciliación con evidencia y estimación explícita de casos sin corroborar: diez alias revisados por ID ESPN, Xavier sin vínculo aprobado y sin coincidencias ambiguas silenciosas. Verificación de lectura: 530 importables y 16 estimados sobre 546.
 - [x] Acordar atributos estimados, identificados y separados de los importados, para jugadores sin datos completos.
 - [x] Acordar caché persistente compartida: actualizar la fuente de forma controlada y copiarla al iniciar cada partida, sin consultar al proveedor por usuario.
-- [x] Implementar la adquisición compartida con caché persistente, coordinación entre instancias, validación al leer y reutilización de la última versión válida ante errores. La conexión a crear partidas sigue pendiente.
-- [x] Implementar estimaciones deterministas versionadas (`replacement-v1`), todavía sin materialización por partida.
-- [ ] Documentar condiciones de uso y límites de redistribución; una API key no prueba licencia sobre los datos.
-- [ ] Persistir atributos versionados por partida/temporada e integrarlos al motor SQL.
+- [x] Implementar la adquisición compartida con caché persistente, coordinación entre instancias, validación al leer y reutilización de la última versión válida ante errores.
+- [x] Implementar estimaciones deterministas versionadas (`replacement-v1`) y materialización transaccional por jugador/partida/temporada.
+- [x] Documentar límites conocidos de la fuente y dejar claro que la API key no prueba una licencia de redistribución.
+- [x] Integrar la calidad individual en la fuerza SQL diaria, con fallback para juegos antiguos.
+
+  **Implementado localmente:** migraciones `038_game_player_attributes.sql` a `042_player_attribute_simulation_strength.sql`, snapshot transaccional/idempotente antes de activar, agentes libres iniciales incluidos, rollback de fallos y ajuste individual de fuerza. Migraciones aún no aplicadas al Supabase remoto; faltan la suite final y revisar condiciones del proveedor.
+
+  **Verificación local actual:** `bun run test` 616/616 en 91 archivos; `bun run typecheck`; `bun biome check` (328 archivos); `bun run build`; runner PostgreSQL aislado con migraciones 037–042, RLS, rollback, agentes libres en `initializing`, refresco concurrente y simulación diaria. No se hizo push ni se escribieron datos en Supabase remoto.
 
 ### Plan de entrega del módulo de atributos
 

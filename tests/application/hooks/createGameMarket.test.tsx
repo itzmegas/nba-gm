@@ -96,6 +96,72 @@ describe("new-save initial market", () => {
     expect(rpc).toHaveBeenCalledWith("rollback_seed_game_data", { p_game_id: gameId });
   });
 
+  it("rolls back an initializing career when attribute materialization fails", async () => {
+    const events: string[] = [];
+    rpc.mockImplementation(async (name: string) => {
+      events.push(name);
+      return { error: null };
+    });
+    update.mockImplementation(async () => {
+      events.push("activate");
+      return { ...input, id: gameId, status: "active" };
+    });
+    const fetcher = vi.fn().mockImplementation(async (url: string) => {
+      events.push(url);
+      return url.includes("player-attributes")
+        ? new Response(JSON.stringify({ error: "Player attributes initialization failed" }), {
+            status: 502,
+          })
+        : new Response(JSON.stringify({ enrolled_count: 4, skipped_count: 0 }));
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const { result } = renderHook(() => useCreateGame(), { wrapper });
+    await act(async () => {
+      await expect(result.current.mutateAsync(input)).rejects.toThrow(
+        "Player attributes initialization failed"
+      );
+    });
+    expect(events).toEqual([
+      "/api/roster-refresh",
+      "seed_game_data",
+      "initialize_game_schedule",
+      "/api/free-agency/bootstrap",
+      "/api/player-attributes/bootstrap",
+      "rollback_seed_game_data",
+    ]);
+    expect(update).not.toHaveBeenCalled();
+    expect(softDelete).toHaveBeenCalledWith(gameId);
+  });
+
+  it("preserves the initialization error and soft-deletes when compensation fails", async () => {
+    rpc.mockImplementation(async (name: string) =>
+      name === "rollback_seed_game_data"
+        ? { error: { message: "private rollback failure" } }
+        : { error: null }
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response("{}"))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: "attribute failure" }), { status: 502 })
+        )
+    );
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { result } = renderHook(() => useCreateGame(), { wrapper });
+      await act(async () => {
+        await expect(result.current.mutateAsync(input)).rejects.toThrow("attribute failure");
+      });
+      expect(rpc).toHaveBeenCalledWith("rollback_seed_game_data", { p_game_id: gameId });
+      expect(softDelete).toHaveBeenCalledWith(gameId);
+      expect(log).toHaveBeenCalledWith("[create-game] Initialization rollback failed.");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("does not import modern NBA players into a historical save", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
