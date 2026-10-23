@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import type { Player } from "@/domain/entities/Player";
 import type { PlayerRepository } from "@/domain/repositories/PlayerRepository";
+
+const playerDemographicsSchema = z.object({
+  age: z.number().int().min(0).max(120).nullish(),
+  birth_date: z.iso.date().nullish(),
+});
 
 export class SupabasePlayerRepository implements PlayerRepository {
   constructor(private readonly client: SupabaseClient) {}
@@ -68,6 +74,7 @@ export class SupabasePlayerRepository implements PlayerRepository {
   }
 
   private mapToEntity(row: Record<string, unknown>): Player {
+    const demographics = playerDemographicsSchema.parse(row);
     const nbaId = row.nba_id as number | null;
     const espnId = row.espn_id as number | null;
     return {
@@ -78,6 +85,8 @@ export class SupabasePlayerRepository implements PlayerRepository {
       firstName: row.first_name as string,
       lastName: row.last_name as string,
       fullName: row.full_name as string,
+      age: demographics.age ?? undefined,
+      birthDate: demographics.birth_date ?? undefined,
       position: row.position as Player["position"],
       height: row.height as string | undefined,
       weight: row.weight as string | undefined,

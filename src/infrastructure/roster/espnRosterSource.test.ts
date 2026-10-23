@@ -22,6 +22,7 @@ describe("fetchCurrentRosterForTeam", () => {
             lastName: "Doncic",
             fullName: "Luka Doncic",
             age: 27,
+            displayDOB: "1999-02-28T07:00Z",
             jersey: "77",
             position: { abbreviation: "PG" },
             experience: { years: 8 },
@@ -58,6 +59,7 @@ describe("fetchCurrentRosterForTeam", () => {
             fullName: "Luka Doncic",
             displayHeight: "6' 6\"",
             age: 27,
+            dateOfBirth: "1999-02-28T07:00Z",
             displayWeight: "230 lbs",
             jersey: "77",
             position: { abbreviation: "PG" },
@@ -79,6 +81,7 @@ describe("fetchCurrentRosterForTeam", () => {
           last_name: "Doncic",
           full_name: "Luka Doncic",
           age: 27,
+          birth_date: "1999-02-28",
           position: "PG",
           height: "6' 6\"",
           weight: "230 lbs",
@@ -103,6 +106,7 @@ describe("fetchCurrentRosterForTeam", () => {
           full_name: "Luka Doncic",
           years_of_experience: 8,
           age: 27,
+          birth_date: "1999-02-28",
         }),
       }),
       expect.objectContaining({
@@ -112,9 +116,32 @@ describe("fetchCurrentRosterForTeam", () => {
           full_name: "Jaxson Hayes",
           years_of_experience: 6,
           age: null,
+          birth_date: null,
         }),
       }),
     ]);
+  });
+
+  it("rejects invalid birth dates instead of staging them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          athletes: [
+            {
+              id: "1",
+              firstName: "Test",
+              lastName: "Player",
+              fullName: "Test Player",
+              displayDOB: "1999-02-30T07:00Z",
+            },
+          ],
+        })
+      )
+    );
+    await expect(fetchCurrentRosterForTeam({ nbaId: 1, abbreviation: "LAL" })).rejects.toThrow(
+      "invalid data"
+    );
   });
 
   it("uses ESPN's non-standard team slug and rejects malformed data", async () => {
