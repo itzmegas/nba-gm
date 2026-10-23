@@ -55,7 +55,9 @@ BEGIN
     WHERE game_id = p_game_id AND season_year = p_season_year FOR UPDATE;
   IF FOUND THEN
     IF v_header.source_version_id <> p_source_version_id
-       OR v_header.player_count <> v_expected_count THEN
+       OR v_header.player_count <> v_expected_count
+       OR (SELECT count(DISTINCT input."playerId")
+         FROM jsonb_to_recordset(p_rows) AS input("playerId" UUID)) <> v_expected_count THEN
       RAISE EXCEPTION 'Attribute materialization retry changed its source or coverage';
     END IF;
     IF EXISTS (

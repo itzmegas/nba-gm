@@ -93,6 +93,17 @@ BEGIN
   BEGIN
     PERFORM public.materialize_game_player_attributes(
       '40000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001', 2026, version_uuid,
+      (rows - 4) || jsonb_build_array(rows->0)
+    );
+    RAISE EXCEPTION 'Duplicate identity retry unexpectedly accepted';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'Attribute materialization retry changed its source or coverage';
+  END;
+
+  BEGIN
+    PERFORM public.materialize_game_player_attributes(
+      '40000000-0000-4000-8000-000000000001',
       '10000000-0000-4000-8000-000000000002', 2026, version_uuid, rows
     );
     RAISE EXCEPTION 'Wrong owner unexpectedly accepted';
