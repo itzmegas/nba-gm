@@ -88,7 +88,7 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Modelo inicial de 14 atributos y descarga validada de NBA 2K27, sin importar datos.
 - [x] Reporte de calidad y candidatos de identidad con entrada opcional del roster canónico.
 - [x] Ejecutar el cruce contra el roster canónico de una partida moderna real: 526 candidatos de 546 jugadores, 19 sin coincidencia de nombre y 1 incompleto.
-- [ ] Corroborar identidades, incluidas las 11 posibles variantes de nombre localizadas; no son vínculos aprobados para importar.
+- [x] Implementar reconciliación con evidencia y estimación explícita de casos sin corroborar: diez alias revisados por ID ESPN, Xavier sin vínculo aprobado y sin coincidencias ambiguas silenciosas. Verificación de lectura: 530 importables y 16 estimados sobre 546.
 - [x] Acordar atributos estimados, identificados y separados de los importados, para jugadores sin datos completos.
 - [x] Acordar caché persistente compartida: actualizar la fuente de forma controlada y copiarla al iniciar cada partida, sin consultar al proveedor por usuario.
 - [x] Implementar la adquisición compartida con caché persistente, coordinación entre instancias, validación al leer y reutilización de la última versión válida ante errores. La conexión a crear partidas sigue pendiente.

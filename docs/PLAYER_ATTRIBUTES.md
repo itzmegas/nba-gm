@@ -55,6 +55,10 @@ La conexión al motor se hará en el flujo SQL transaccional, no solamente en `S
 
 Son capacidades **estimadas**, no observaciones de NBA 2K ni estadísticas reales. Esta primera calibración es de nivel de reemplazo; deberá contrastarse con rendimientos simulados. El generador no implementa potencial, progresión ni envejecimiento y todavía no está conectado a la inicialización de partidas.
 
+`reconcilePlayerAttributes` exige identidad única y corroboración por equipo, altura válida o alias revisado con ID ESPN y ambos nombres. Reconoce alturas NBA (`6-11`) y ESPN (`6' 11"`); una altura inválida no sirve como evidencia. Las colisiones entre nombres, IDs o reclamaciones de un mismo slug generan estimaciones para todos los involucrados, no un ganador por orden.
+
+La salida distingue origen, método/motivo, versión del generador, referencia `overall` y evidencia. En lectura real sobre los 546 jugadores auditados produjo **530 importables y 16 estimados**: 496 por nombre/equipo, 24 por nombre/altura y 10 por alias revisado; 9 sin candidato exacto, 1 incompleto y 6 sin corroboración suficiente. Estos últimos incluyen discrepancias de altura o altura canónica ausente: no se presentan como ausencias del proveedor. Veintiuna pruebas verifican las decisiones. Aún no se guardaron esos valores en la partida.
+
 ### Persistencia compartida de la fuente
 
 La migración `037_player_rating_source_cache.sql` crea versiones inmutables por edición/hash y una cabecera de caché privada, con RLS y acceso exclusivamente mediante operaciones de servidor. No se aplicó a la base remota.
