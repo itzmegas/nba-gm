@@ -93,6 +93,7 @@ describe("new-save initial market", () => {
       await expect(result.current.mutateAsync(input)).rejects.toThrow("NBA import unavailable");
     });
     expect(softDelete).toHaveBeenCalledWith(gameId);
+    expect(rpc).toHaveBeenCalledWith("rollback_seed_game_data", { p_game_id: gameId });
   });
 
   it("does not import modern NBA players into a historical save", async () => {

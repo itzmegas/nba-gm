@@ -61,6 +61,8 @@ La salida distingue origen, método/motivo, versión del generador, referencia `
 
 La creación moderna se está conectando con este orden: roster/contratos → schedule → agentes libres iniciales (si corresponde) → atributos completos → activación. La ruta server-only `/api/player-attributes/bootstrap` solo acepta partidas modernas en `initializing`; no hace backfill de partidas activas.
 
+La migración `041_rollback_game_attributes.sql` extiende el rollback de inicialización para borrar primero las copias/header de atributos y el estado de agentes libres antes de eliminar `game_player_states`. `useCreateGame` invoca ese rollback de forma best-effort antes del soft-delete si falla cualquier etapa; no elimina jugadores canónicos ni la caché global.
+
 ### Persistencia compartida de la fuente
 
 La migración `037_player_rating_source_cache.sql` crea versiones inmutables por edición/hash y una cabecera de caché privada, con RLS y acceso exclusivamente mediante operaciones de servidor. No se aplicó a la base remota.

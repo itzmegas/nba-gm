@@ -111,6 +111,11 @@ export function useCreateGame() {
         return activatedGame;
       } catch (error) {
         // Any failure leaves the game non-active and cleans up the partial record.
+        try {
+          await supabase.rpc("rollback_seed_game_data", { p_game_id: game.id });
+        } catch {
+          // The game soft-delete remains the final cleanup boundary.
+        }
         await repository.softDelete(game.id);
         throw error;
       }
