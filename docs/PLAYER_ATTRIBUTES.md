@@ -185,4 +185,17 @@ No se modificó la normalización compartida ni se aceptan coincidencias por ape
 
 **Verificación local:** `bun run test` aprobó 617/617 pruebas en 91 archivos; `bun run typecheck`, `bun biome check` (328 archivos), `bun run build` y el runner PostgreSQL aislado de migraciones 037–042 también pasaron. No se hizo push ni se aplicaron migraciones a Supabase remoto.
 
+### Auditoría de requisitos de entrega local
+
+| Requisito | Implementación y evidencia |
+| --- | --- |
+| Adquisición bulk autenticada sin clave en el navegador | `materializeGamePlayerAttributes.ts` lee `NBA_2K_API_KEY` desde la ruta de servidor; `nba2kRatingsSource.test.ts` cubre transporte, validación y errores. El hook cliente solo envía `gameId`. |
+| Fuente compartida, coordinada e inmutable | Migración 037, `getSharedPlayerRatings.test.ts` y `playerRatingCache.postgres.sql`: frescura, lease, cooldown, fallback y permisos; runner con dos conexiones confirma un único propietario del refresco. |
+| Identidades conservadoras y estimaciones identificadas | `reconcilePlayerAttributes.test.ts` y `estimatePlayerAttributes.test.ts`: evidencia, aliases revisados, ambigüedad y `replacement-v1`; sin fuzzy matching. |
+| Copias independientes, procedencia, versión, RLS y escritura atómica/idempotente | Migraciones 038–039; `gamePlayerAttributes.postgres.sql` y `gamePlayerAttributesMaterialize.postgres.sql`: restricciones, aislamiento, cobertura, reintentos alterados/duplicados y rechazo de escrituras directas. |
+| Agentes libres antes de atributos y activación; compensación de fallos | `useCreateGame.ts`, migraciones 040–041, `createGameMarket.test.tsx`, `initializingFreeAgentBootstrap.postgres.sql` y `gameAttributeRollback.postgres.sql`. El rollback conserva jugadores canónicos y versiones globales. |
+| SQL diario efectivo y compatibilidad | Migración 042 y `playerAttributeSimulation.postgres.sql`: ratings y scores diarios, fallback legacy/parcial, independencia de refrescos externos y conservación de resultados completados. |
+| Esquema instalable y mirrors consistentes | Runner sobre `scripts/schema.sql` completo y `playerRatingsInvariant.test.ts` para los mirrors 037–042; seis escenarios PostgreSQL y concurrencia real aprobados. |
+| Límites de entrega y proveedor | Condiciones conocidas documentadas arriba; la clave no acredita redistribución. Sin backfill remoto, progresión por edad, posesiones, box score, estadísticas de temporada ni postemporada. |
+
 **Siguiente paso operativo:** aplicar las migraciones 037–042 al entorno Supabase que se utilizará y probar manualmente la creación de una partida nueva. No se implementaron progresión por edad, posesiones ni box score; tampoco se modificó ni migró la partida usada en la auditoría anterior.
