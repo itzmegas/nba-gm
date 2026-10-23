@@ -74,6 +74,12 @@ La orquestación `getSharedPlayerRatings` reutiliza versiones frescas sin descar
 
 La verificación inicial de adquisición compartida aprobó 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. Falta conectar la materialización de atributos por partida: todavía no cambia la creación de partidas.
 
+### Copias por partida y temporada
+
+La migración `038_game_player_attributes.sql` crea la cabecera de materialización y las copias por `(game_id, season_year, player_id)`, vinculadas a la identidad del jugador en esa partida, nunca a su equipo mutable. Se guardan los 14 atributos enteros de 0 a 99, origen, método de identidad, evidencia, referencia del proveedor y versión del generador; las restricciones impiden mezclar importaciones y estimaciones sin etiquetar.
+
+RLS permite lectura solo al dueño y oculta partidas eliminadas. No hay escritura directa para clientes ni para `service_role`: la materialización transaccional se añadirá mediante RPC. Las pruebas reales de PostgreSQL verifican atributos inválidos, colisiones de fuente, IDs de otra partida, permisos, aislamiento entre dueños y conservación al cambiar de equipo. El esquema canónico contiene mirrors byte-idénticos de las migraciones 037 y 038, comprobados por Vitest.
+
 ## Ejecutar el reporte sin importar datos
 
 ```bash

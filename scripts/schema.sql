@@ -4,9 +4,8 @@
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Migrations 013-017 are included in this canonical schema.
--- Apply migrations 018+ after this baseline. Migration 037 adds service-only,
--- immutable player_rating_source_versions and a coordinated 24h source cache.
+-- Canonical migration mirrors below are part of this schema.
+-- Migration 037 adds service-only player rating versions and a coordinated 24h source cache.
 
 -- 1. Teams Table
 CREATE TABLE IF NOT EXISTS teams (
@@ -4263,3 +4262,223 @@ GRANT EXECUTE ON FUNCTION public.release_roster_player(UUID, UUID, UUID, UUID) T
 
 COMMIT;
 -- End canonical schema mirror for migration 036.
+
+-- Canonical schema mirror for migration 037. Keep byte-identical below.
+BEGIN;
+
+CREATE TABLE public.player_rating_source_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_version TEXT NOT NULL CHECK (game_version ~ '^2K[0-9]{2}$'),
+  content_hash TEXT NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  stored_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (game_version, content_hash),
+  UNIQUE (id, game_version)
+);
+
+CREATE TABLE public.player_rating_source_cache (
+  game_version TEXT PRIMARY KEY CHECK (game_version ~ '^2K[0-9]{2}$'),
+  version_id UUID,
+  revalidated_at TIMESTAMPTZ,
+  lease_id UUID,
+  lease_expires_at TIMESTAMPTZ,
+  next_refresh_at TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
+  FOREIGN KEY (version_id, game_version)
+    REFERENCES public.player_rating_source_versions(id, game_version),
+  CHECK ((version_id IS NULL) = (revalidated_at IS NULL)),
+  CHECK ((lease_id IS NULL) = (lease_expires_at IS NULL))
+);
+
+ALTER TABLE public.player_rating_source_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_rating_source_cache ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.player_rating_source_versions, public.player_rating_source_cache
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.player_rating_source_versions, public.player_rating_source_cache TO service_role;
+
+CREATE FUNCTION public.acquire_player_rating_refresh(p_game_version TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  head public.player_rating_source_cache%ROWTYPE;
+  token UUID;
+  v_now TIMESTAMPTZ;
+  snapshot JSONB;
+BEGIN
+  IF p_game_version IS NULL OR p_game_version !~ '^2K[0-9]{2}$' THEN
+    RAISE EXCEPTION 'Invalid player rating edition';
+  END IF;
+  INSERT INTO public.player_rating_source_cache(game_version) VALUES (p_game_version)
+    ON CONFLICT DO NOTHING;
+  SELECT * INTO head FROM public.player_rating_source_cache
+    WHERE game_version = p_game_version FOR UPDATE;
+  v_now := clock_timestamp();
+  IF head.next_refresh_at <= v_now
+     AND (head.lease_expires_at IS NULL OR head.lease_expires_at <= v_now) THEN
+    token := gen_random_uuid();
+    UPDATE public.player_rating_source_cache SET lease_id = token,
+      lease_expires_at = v_now + interval '60 seconds'
+      WHERE game_version = p_game_version;
+  END IF;
+  IF head.version_id IS NOT NULL THEN
+    SELECT jsonb_build_object('version_id', v.id, 'revalidated_at', head.revalidated_at,
+      'snapshot', v.payload) INTO snapshot
+      FROM public.player_rating_source_versions v WHERE v.id = head.version_id;
+  END IF;
+  RETURN jsonb_build_object('lease_id', token, 'current', snapshot,
+    'refresh_in_progress', COALESCE(head.lease_expires_at > v_now AND token IS NULL, false),
+    'fresh', COALESCE(head.revalidated_at > v_now - interval '24 hours', false));
+END;
+$$;
+
+CREATE FUNCTION public.publish_player_rating_snapshot(
+  p_game_version TEXT, p_lease_id UUID, p_snapshot JSONB
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  head public.player_rating_source_cache%ROWTYPE;
+  version_uuid UUID;
+  hash TEXT := p_snapshot->>'contentHash';
+  v_now TIMESTAMPTZ;
+  snapshot JSONB;
+BEGIN
+  IF p_snapshot IS NULL OR jsonb_typeof(p_snapshot) <> 'object'
+     OR p_snapshot->>'source' IS DISTINCT FROM 'nba2kapi'
+     OR p_snapshot->>'sourceUrl' IS DISTINCT FROM 'https://api.nba2kapi.com/api/players/bulk?teamType=curr'
+     OR p_snapshot->>'gameVersion' IS DISTINCT FROM p_game_version
+     OR hash IS NULL OR hash !~ '^[a-f0-9]{64}$'
+     OR jsonb_typeof(p_snapshot->'players') IS DISTINCT FROM 'array'
+     OR jsonb_typeof(p_snapshot->'excludedPlayers') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Invalid player rating snapshot';
+  END IF;
+  IF jsonb_array_length(p_snapshot->'players') = 0
+     OR jsonb_array_length(p_snapshot->'players') + jsonb_array_length(p_snapshot->'excludedPlayers') > 10000 THEN
+    RAISE EXCEPTION 'Invalid player rating snapshot size';
+  END IF;
+  SELECT * INTO head FROM public.player_rating_source_cache
+    WHERE game_version = p_game_version FOR UPDATE;
+  v_now := clock_timestamp();
+  IF NOT FOUND OR p_lease_id IS NULL OR head.lease_id IS DISTINCT FROM p_lease_id
+     OR head.lease_expires_at <= v_now THEN
+    RAISE EXCEPTION 'Player rating refresh lease lost';
+  END IF;
+  INSERT INTO public.player_rating_source_versions(game_version, content_hash, payload)
+    VALUES (p_game_version, hash, p_snapshot)
+    ON CONFLICT (game_version, content_hash) DO NOTHING RETURNING id INTO version_uuid;
+  IF version_uuid IS NULL THEN
+    SELECT id INTO version_uuid FROM public.player_rating_source_versions
+      WHERE game_version = p_game_version AND content_hash = hash;
+  END IF;
+  UPDATE public.player_rating_source_cache SET version_id = version_uuid,
+    revalidated_at = v_now, next_refresh_at = v_now + interval '24 hours',
+    lease_id = NULL, lease_expires_at = NULL WHERE game_version = p_game_version;
+  SELECT payload INTO snapshot FROM public.player_rating_source_versions WHERE id = version_uuid;
+  RETURN jsonb_build_object('version_id', version_uuid, 'revalidated_at', v_now,
+    'snapshot', snapshot);
+END;
+$$;
+
+CREATE FUNCTION public.fail_player_rating_refresh(p_game_version TEXT, p_lease_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  UPDATE public.player_rating_source_cache SET lease_id = NULL, lease_expires_at = NULL,
+    next_refresh_at = clock_timestamp() + interval '5 minutes'
+    WHERE game_version = p_game_version AND lease_id = p_lease_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.acquire_player_rating_refresh(TEXT),
+  public.publish_player_rating_snapshot(TEXT, UUID, JSONB),
+  public.fail_player_rating_refresh(TEXT, UUID) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.acquire_player_rating_refresh(TEXT),
+  public.publish_player_rating_snapshot(TEXT, UUID, JSONB),
+  public.fail_player_rating_refresh(TEXT, UUID) TO service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 037.
+
+-- Canonical schema mirror for migration 038. Keep byte-identical below.
+BEGIN;
+
+CREATE FUNCTION public.is_valid_player_attributes(p_attributes JSONB)
+RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  attribute TEXT;
+BEGIN
+  IF jsonb_typeof(p_attributes) <> 'object' THEN RETURN false; END IF;
+  IF (SELECT count(*) FROM jsonb_object_keys(p_attributes)) <> 14 THEN RETURN false; END IF;
+  FOREACH attribute IN ARRAY ARRAY[
+    'closeShot', 'midRangeShot', 'threePointShot', 'freeThrow', 'drawFoul', 'ballHandle',
+    'passAccuracy', 'interiorDefense', 'perimeterDefense', 'steal', 'block',
+    'offensiveRebound', 'defensiveRebound', 'stamina'
+  ] LOOP
+    IF NOT (p_attributes ? attribute)
+       OR jsonb_typeof(p_attributes->attribute) <> 'number'
+       OR p_attributes->>attribute !~ '^[0-9]+$' THEN RETURN false; END IF;
+    IF (p_attributes->>attribute)::NUMERIC NOT BETWEEN 0 AND 99 THEN RETURN false; END IF;
+  END LOOP;
+  RETURN true;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.is_valid_player_attributes(JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TABLE public.game_attribute_materializations (
+  game_id UUID NOT NULL REFERENCES public.games(id) ON DELETE CASCADE,
+  season_year INTEGER NOT NULL CHECK (season_year BETWEEN 1900 AND 3000),
+  source_version_id UUID NOT NULL REFERENCES public.player_rating_source_versions(id),
+  player_count INTEGER NOT NULL CHECK (player_count BETWEEN 1 AND 10000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (game_id, season_year)
+);
+
+CREATE TABLE public.game_player_attributes (
+  game_id UUID NOT NULL,
+  season_year INTEGER NOT NULL,
+  player_id UUID NOT NULL,
+  origin TEXT NOT NULL CHECK (origin IN ('nba2kapi', 'estimated')),
+  match_method TEXT NOT NULL,
+  attributes JSONB NOT NULL CHECK (public.is_valid_player_attributes(attributes)),
+  source_slug TEXT,
+  source_overall SMALLINT CHECK (source_overall BETWEEN 0 AND 99),
+  generator_version TEXT,
+  identity_evidence JSONB NOT NULL CHECK (jsonb_typeof(identity_evidence) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (game_id, season_year, player_id),
+  UNIQUE (game_id, season_year, source_slug),
+  FOREIGN KEY (game_id, season_year)
+    REFERENCES public.game_attribute_materializations(game_id, season_year) ON DELETE CASCADE,
+  FOREIGN KEY (game_id, player_id)
+    REFERENCES public.game_player_states(game_id, player_id) ON DELETE NO ACTION
+    DEFERRABLE INITIALLY DEFERRED,
+  CHECK (
+    (origin = 'nba2kapi' AND NULLIF(trim(source_slug), '') IS NOT NULL
+      AND source_overall IS NOT NULL AND generator_version IS NULL
+      AND match_method IN ('name-and-team', 'name-and-height', 'reviewed-espn-alias'))
+    OR
+    (origin = 'estimated' AND source_slug IS NULL AND source_overall IS NULL
+      AND generator_version IS NOT DISTINCT FROM 'replacement-v1'
+      AND match_method IN ('missing-source', 'incomplete-attributes', 'ambiguous-identity', 'uncorroborated-identity'))
+  )
+);
+
+ALTER TABLE public.game_attribute_materializations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_player_attributes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.game_attribute_materializations, public.game_player_attributes
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.game_attribute_materializations, public.game_player_attributes
+  TO authenticated, service_role;
+CREATE POLICY game_attribute_materializations_owner_read ON public.game_attribute_materializations
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+CREATE POLICY game_player_attributes_owner_read ON public.game_player_attributes
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+
+COMMIT;
+-- End canonical schema mirror for migration 038.
