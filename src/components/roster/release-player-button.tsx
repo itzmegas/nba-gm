@@ -16,19 +16,27 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 export function ReleasePlayerButton({
   gameId,
   rosterPlayer,
+  asMenuItem = false,
 }: {
   gameId: string;
   rosterPlayer: RosterPlayer;
+  asMenuItem?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [requestId, setRequestId] = useState("");
   const release = useReleasePlayer();
   const isSimulating = useBatchSimulationStore((state) => state.isActive);
   const t = useT();
+  function prepareRelease() {
+    release.reset();
+    setRequestId(crypto.randomUUID());
+    setOpen(true);
+  }
 
   return (
     <AlertDialog
@@ -37,21 +45,33 @@ export function ReleasePlayerButton({
         if (!release.isPending) setOpen(value);
       }}
     >
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
+      {asMenuItem ? (
+        <DropdownMenuItem
           disabled={isSimulating || release.isPending}
           aria-label={`${t("dashboard", "releasePlayer")} ${rosterPlayer.player.fullName}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            release.reset();
-            setRequestId(crypto.randomUUID());
+          onSelect={(event) => {
+            event.preventDefault();
+            prepareRelease();
           }}
         >
           {t("dashboard", "releasePlayer")}
-        </Button>
-      </AlertDialogTrigger>
+        </DropdownMenuItem>
+      ) : (
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isSimulating || release.isPending}
+            aria-label={`${t("dashboard", "releasePlayer")} ${rosterPlayer.player.fullName}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              prepareRelease();
+            }}
+          >
+            {t("dashboard", "releasePlayer")}
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent onClick={(event) => event.stopPropagation()}>
         <AlertDialogHeader>
           <AlertDialogTitle>

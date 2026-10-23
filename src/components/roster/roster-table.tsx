@@ -9,6 +9,8 @@ import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { ReleasePlayerButton } from "@/components/roster/release-player-button";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { TableActions } from "@/components/ui/table-actions";
 import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
 import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
 import {
@@ -85,7 +87,11 @@ function getContractYearsLeft(baseSeasonYear: number, endYear: number): number {
   return getYearsRemaining(baseSeasonYear, endYear);
 }
 
-function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number, locale: Locale) {
+export function getContractStatus(
+  rosterPlayer: RosterPlayer,
+  baseSeasonYear: number,
+  locale: Locale
+) {
   const t = createT(locale);
   const { contract } = rosterPlayer;
   if (!contract)
@@ -170,6 +176,8 @@ interface RosterTableProps {
   seasonYear: number;
   leagueTeamId?: string;
   canRelease?: boolean;
+  onSelectPlayer?: (playerId: string) => void;
+  selectedPlayerId?: string;
 }
 
 export function RosterTable({
@@ -178,6 +186,8 @@ export function RosterTable({
   seasonYear,
   leagueTeamId,
   canRelease = false,
+  onSelectPlayer,
+  selectedPlayerId,
 }: RosterTableProps) {
   const router = useRouter();
   const t = useT();
@@ -218,11 +228,9 @@ export function RosterTable({
             <th className="py-3 px-4 text-center font-medium text-muted-foreground w-36">
               {t("dashboard", "rosterStatus")}
             </th>
-            {canRelease && (
-              <th className="py-3 px-4 text-right font-medium text-muted-foreground">
-                {t("dashboard", "rosterActions")}
-              </th>
-            )}
+            <th className="py-3 px-4 text-right font-medium text-muted-foreground">
+              {t("dashboard", "rosterActions")}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -236,12 +244,20 @@ export function RosterTable({
             return (
               <tr
                 key={player.id}
-                onClick={() =>
-                  router.push(
-                    `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                onClick={(event) => {
+                  if (
+                    event.target instanceof Element &&
+                    event.target.closest("button, [role=menu]")
                   )
-                }
-                className={`border-b border-border/30 transition-colors hover:bg-muted/40 cursor-pointer ${isEven ? "" : "bg-muted/10"}`}
+                    return;
+                  if (onSelectPlayer) onSelectPlayer(player.id);
+                  else
+                    router.push(
+                      `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                    );
+                }}
+                data-state={selectedPlayerId === player.id ? "selected" : undefined}
+                className={`border-b border-border/30 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/10 ${onSelectPlayer ? "cursor-pointer" : ""} ${isEven ? "" : "bg-muted/10"}`}
               >
                 {/* Número camiseta */}
                 <td className="py-3 px-4 text-muted-foreground font-mono text-xs">
@@ -259,7 +275,21 @@ export function RosterTable({
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold whitespace-nowrap">{player.fullName}</span>
+                      <button
+                        type="button"
+                        className="font-semibold whitespace-nowrap hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                        aria-pressed={onSelectPlayer ? selectedPlayerId === player.id : undefined}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (onSelectPlayer) onSelectPlayer(player.id);
+                          else
+                            router.push(
+                              `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                            );
+                        }}
+                      >
+                        {player.fullName}
+                      </button>
                       <Badge variant="outline" title={classification.title}>
                         {classification.label}
                       </Badge>
@@ -310,11 +340,22 @@ export function RosterTable({
                     {status.label}
                   </Badge>
                 </td>
-                {canRelease && (
-                  <td className="py-3 px-4 text-right">
-                    <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} />
-                  </td>
-                )}
+                <td className="py-3 px-4 text-right">
+                  <TableActions label={`${t("dashboard", "rosterActions")} — ${player.fullName}`}>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        router.push(
+                          `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                        )
+                      }
+                    >
+                      {t("dashboard", "viewPlayer")}
+                    </DropdownMenuItem>
+                    {canRelease && (
+                      <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} asMenuItem />
+                    )}
+                  </TableActions>
+                </td>
               </tr>
             );
           })}

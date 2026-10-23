@@ -208,6 +208,7 @@ export const es: Messages = {
     contractGuaranteed: "Garantizado",
     contractGuaranteeUnknown: "Garantía desconocida",
     rosterActions: "Acciones",
+    viewPlayer: "Ver jugador completo",
     releasePlayer: "Cortar",
     confirmReleasePlayer: "Confirmar corte",
     releasingPlayer: "Cortando…",

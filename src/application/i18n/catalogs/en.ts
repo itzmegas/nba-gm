@@ -201,6 +201,7 @@ export const en = {
     contractGuaranteed: "Guaranteed",
     contractGuaranteeUnknown: "Guarantee unknown",
     rosterActions: "Actions",
+    viewPlayer: "View player",
     releasePlayer: "Release",
     confirmReleasePlayer: "Confirm release",
     releasingPlayer: "Releasing…",
