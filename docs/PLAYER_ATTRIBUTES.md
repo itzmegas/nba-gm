@@ -1,6 +1,6 @@
 # Atributos: validar la fuente antes de importar
 
-**Estado:** fuente validada y primer cruce con una partida real ejecutado, solo lectura. Identidades e importación pendientes. No cambia jugadores, partidas ni resultados.
+**Estado:** descarga autenticada y auditoría de lectura disponibles. Caché compartida, identidades, persistencia por partida e integración SQL en implementación; todavía no cambia jugadores, partidas ni resultados.
 
 ## Modelo inicial
 
@@ -35,9 +35,17 @@ Las pruebas usan datos sintéticos, sin copiar el dataset al repositorio:
 bun run test src/infrastructure/ratings
 ```
 
-## Siguiente paso
+## Plan aprobado para completar el módulo
 
-Medir correspondencias con el roster canónico y resolver permisos antes de importar. Después, persistir una versión de atributos por partida/temporada para que una actualización externa no modifique partidas existentes. Los jugadores sin datos deben quedar identificados; cualquier fallback simulado requiere una política explícita.
+La API inicializa; después la carrera conserva y gobierna sus propios atributos:
+
+1. Descargar una base de origen con la API key de servidor y almacenarla en una **caché persistente compartida**, no descargarla al crear cada partida.
+2. Actualizar esa base cada 24 horas como política inicial, con un único refresco entre instancias. Si falla el proveedor, conservar la última versión válida e informar su antigüedad; sin una versión válida, no presentar datos externos inventados.
+3. Corroborar identidades. Los casos ambiguos no se vinculan automáticamente; para datos ausentes o incompletos se aprobaron **atributos estimados claramente identificados**, separados de los importados.
+4. Crear copias independientes por jugador, partida y temporada con procedencia. Una actualización externa nunca sobrescribe una carrera existente.
+5. Integrar atributos individuales en la simulación diaria SQL, preservando partidas sin snapshots y resultados completados.
+
+Solo la fuente inicial se comparte entre usuarios. La progresión por edad queda para después; no se implementan ahora posesiones ni box score. No se redistribuye el dataset en el repositorio. Las limitaciones de licencia indicadas arriba siguen siendo independientes del acceso autenticado.
 
 La conexión al motor se hará en el flujo SQL transaccional, no solamente en `SeasonSimulator.ts`. No se reconstruirán estadísticas de partidos ya jugados.
 
@@ -48,7 +56,13 @@ bun scripts/dry-run-player-attributes.ts
 bun scripts/dry-run-player-attributes.ts /ruta/roster.json
 ```
 
-Sin archivo, muestra únicamente calidad y cantidad del proveedor; `coverage: null` significa que **no se midió cobertura del roster**. No usa credenciales ni consulta Supabase. El archivo opcional debe ser una exportación de la plantilla canónica moderna de 2026-27, no la lista global de jugadores históricos:
+Con `NBA_2K_API_KEY` configurada en el entorno de servidor, utiliza `GET /api/players/bulk?teamType=curr` y el header `X-API-Key`: una solicitud para el conjunto completo. La clave no aparece en la URL, salida ni errores; no se permiten redirecciones. Una clave vacía o rechazada falla sin reintentar por el endpoint público. Sin esa variable, el reporte mantiene la descarga pública paginada para auditorías sin credenciales. No consulta ni escribe Supabase.
+
+La descarga autenticada valida cantidad total, edición, identidades y atributos con las mismas reglas de cuarentena. El hash normaliza el orden por slug, por lo que no cambia por orden de respuesta ni por transporte público/bulk; no debe compararse directamente con hashes históricos anteriores a esta normalización.
+
+**Verificación del transporte autenticado (23 de octubre de 2026):** 41 pruebas focalizadas, typecheck y Biome correctos. La CLI real validó 652 jugadores y excluyó 1 en una solicitud, sin escrituras. Hash normalizado: `18768de1aa2e0f0752b469d780db1b09656b8e07e82d1e38fcb98f3b87e993fa`. La caché persistente todavía no está conectada.
+
+Sin archivo, muestra únicamente calidad y cantidad del proveedor; `coverage: null` significa que **no se midió cobertura del roster**. El archivo opcional debe ser una exportación de la plantilla canónica moderna de 2026-27, no la lista global de jugadores históricos:
 
 ```json
 {
@@ -114,4 +128,4 @@ No se modificó la normalización compartida ni se aceptaron coincidencias por a
 - Verificación de esta revisión: `bun run test src/infrastructure/ratings` (26/26), `bun biome check` (310 archivos) y `git diff --check` correctos. No se repitieron la suite completa, el typecheck ni el build: solo se modificó documentación.
 - `identityVerified = false` y `readyForImport = false`. Este resultado corresponde a esta partida y este momento, no garantiza cobertura de otras partidas o eras.
 
-**Siguiente paso:** corroborar las variantes y las identidades candidatas; acordar una política explícita para datos ausentes/incompletos y confirmar permisos de reutilización antes de persistir atributos.
+**Siguiente paso:** implementar caché compartida con coordinación de refresco, corroborar identidades y materializar copias por partida con la política de estimaciones ya aprobada. Mantener documentadas las condiciones y límites del proveedor antes de habilitar redistribución.

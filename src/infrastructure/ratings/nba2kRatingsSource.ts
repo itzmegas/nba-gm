@@ -49,6 +49,15 @@ const pageSchema = z.object({
   }),
 });
 
+const bulkSchema = z.object({
+  success: z.literal(true),
+  data: z.array(sourcePlayerSchema).min(1).max(10_000),
+  meta: z.object({
+    count: z.number().int().positive(),
+    total: z.number().int().positive().max(10_000),
+  }),
+});
+
 export type Nba2kPlayerRating = z.infer<typeof playerRatingSchema>;
 
 interface ExcludedPlayerRating {
@@ -59,10 +68,91 @@ interface ExcludedPlayerRating {
 
 export const NBA2K_RATINGS_URL =
   "https://api.nba2kapi.com/api/public/players?teamType=curr&limit=100";
+export const NBA2K_BULK_RATINGS_URL = "https://api.nba2kapi.com/api/players/bulk?teamType=curr";
 
-export async function fetchNba2kRatings(signal?: AbortSignal) {
+async function requestRatings(
+  url: string,
+  signal?: AbortSignal,
+  apiKey?: string
+): Promise<unknown> {
+  const timeout = AbortSignal.timeout(20_000);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: requestSignal,
+      headers: apiKey ? { "X-API-Key": apiKey } : undefined,
+      redirect: "error",
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(
+      requestSignal.aborted ? "NBA 2K ratings request aborted" : "NBA 2K ratings request failed"
+    );
+  }
+  if (!response.ok) throw new Error(`NBA 2K ratings request failed: HTTP ${response.status}`);
+  try {
+    return await response.json();
+  } catch {
+    throw new Error("Invalid NBA 2K ratings response");
+  }
+}
+
+function buildSnapshot(
+  rows: z.infer<typeof sourcePlayerSchema>[],
+  sourceUrl: string,
+  requestCount: number
+) {
   const players: Nba2kPlayerRating[] = [];
   const excludedPlayers: ExcludedPlayerRating[] = [];
+  const slugs = new Set<string>();
+  for (const player of rows) {
+    if (slugs.has(player.slug)) throw new Error("Duplicate NBA 2K current-player slugs");
+    slugs.add(player.slug);
+    const attributes = attributesSchema.safeParse(player.attributes);
+    if (attributes.success) players.push({ ...player, attributes: attributes.data });
+    else
+      excludedPlayers.push({
+        slug: player.slug,
+        name: player.name,
+        invalidAttributes: attributes.error.issues.map(({ path }) => path.join(".")),
+      });
+  }
+  const bySlug = (a: { slug: string }, b: { slug: string }) => a.slug.localeCompare(b.slug);
+  return {
+    source: "nba2kapi" as const,
+    sourceUrl,
+    gameVersion: "2K27" as const,
+    observedAt: new Date().toISOString(),
+    contentHash: createHash("sha256")
+      .update(
+        JSON.stringify({
+          players: players.toSorted(bySlug),
+          excludedPlayers: excludedPlayers.toSorted(bySlug),
+        })
+      )
+      .digest("hex"),
+    requestCount,
+    players,
+    excludedPlayers,
+  };
+}
+
+export async function fetchNba2kRatings(signal?: AbortSignal, apiKey?: string) {
+  if (apiKey !== undefined) {
+    if (!apiKey.trim()) throw new Error("NBA_2K_API_KEY must not be empty");
+    const parsed = bulkSchema.safeParse(
+      await requestRatings(NBA2K_BULK_RATINGS_URL, signal, apiKey)
+    );
+    if (!parsed.success) throw new Error("Invalid NBA 2K ratings response");
+    const { data, meta } = parsed.data;
+    if (meta.count !== data.length || meta.total !== data.length) {
+      throw new Error("Incomplete NBA 2K ratings download");
+    }
+    return buildSnapshot(data, NBA2K_BULK_RATINGS_URL, 1);
+  }
+
+  const rows: z.infer<typeof sourcePlayerSchema>[] = [];
   const slugs = new Set<string>();
   const cursors = new Set(["0"]);
   let cursor: string | null = "0";
@@ -70,12 +160,9 @@ export async function fetchNba2kRatings(signal?: AbortSignal) {
   let requestCount = 0;
 
   do {
-    const timeout = AbortSignal.timeout(20_000);
-    const response = await fetch(`${NBA2K_RATINGS_URL}&cursor=${cursor}`, {
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    });
-    if (!response.ok) throw new Error(`NBA 2K ratings request failed: HTTP ${response.status}`);
-    const parsed = pageSchema.safeParse(await response.json());
+    const parsed = pageSchema.safeParse(
+      await requestRatings(`${NBA2K_RATINGS_URL}&cursor=${cursor}`, signal)
+    );
     if (!parsed.success) throw new Error("Invalid NBA 2K ratings response");
     const { data, meta } = parsed.data;
     const page = meta.pagination;
@@ -83,14 +170,7 @@ export async function fetchNba2kRatings(signal?: AbortSignal) {
     for (const player of data) {
       if (slugs.has(player.slug)) throw new Error("Duplicate NBA 2K current-player slugs");
       slugs.add(player.slug);
-      const attributes = attributesSchema.safeParse(player.attributes);
-      if (attributes.success) players.push({ ...player, attributes: attributes.data });
-      else
-        excludedPlayers.push({
-          slug: player.slug,
-          name: player.name,
-          invalidAttributes: attributes.error.issues.map(({ path }) => path.join(".")),
-        });
+      rows.push(player);
     }
     requestCount += 1;
     if (page.total !== total || page.count !== data.length || slugs.size > total) {
@@ -107,16 +187,5 @@ export async function fetchNba2kRatings(signal?: AbortSignal) {
     if (cursor !== null) cursors.add(cursor);
   } while (cursor !== null);
 
-  return {
-    source: "nba2kapi",
-    sourceUrl: NBA2K_RATINGS_URL,
-    gameVersion: "2K27",
-    observedAt: new Date().toISOString(),
-    contentHash: createHash("sha256")
-      .update(JSON.stringify({ players, excludedPlayers }))
-      .digest("hex"),
-    requestCount,
-    players,
-    excludedPlayers,
-  };
+  return buildSnapshot(rows, NBA2K_RATINGS_URL, requestCount);
 }

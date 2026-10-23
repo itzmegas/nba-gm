@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchNba2kRatings } from "@/infrastructure/ratings/nba2kRatingsSource";
+import {
+  fetchNba2kRatings,
+  NBA2K_BULK_RATINGS_URL,
+} from "@/infrastructure/ratings/nba2kRatingsSource";
 
 const player = {
   slug: "test-player",
@@ -141,5 +144,99 @@ describe("fetchNba2kRatings", () => {
       })
     );
     await expect(fetchNba2kRatings(signal)).rejects.toThrow();
+  });
+});
+
+describe("authenticated NBA 2K bulk download", () => {
+  const apiKey = "synthetic-test-key";
+  const bulk = (data: unknown[], total = data.length, count = data.length) =>
+    Response.json({ success: true, data, meta: { total, count } });
+
+  it("downloads all current players in one server-side request without exposing the key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(bulk([player]));
+    vi.stubGlobal("fetch", fetchMock);
+    const snapshot = await fetchNba2kRatings(undefined, apiKey);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(NBA2K_BULK_RATINGS_URL, {
+      headers: { "X-API-Key": apiKey },
+      redirect: "error",
+      cache: "no-store",
+      signal: expect.any(AbortSignal),
+    });
+    expect(snapshot).toMatchObject({
+      sourceUrl: NBA2K_BULK_RATINGS_URL,
+      requestCount: 1,
+      gameVersion: "2K27",
+      players: [player],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain(apiKey);
+  });
+
+  it.each([
+    401, 429, 500,
+  ])("does not retry or fall back to public access on HTTP %i", async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(apiKey, { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchNba2kRatings(undefined, apiKey)).rejects.toThrow(`HTTP ${status}`);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("redacts transport errors that might contain credentials", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error(`Header X-API-Key: ${apiKey}`)));
+    await expect(fetchNba2kRatings(undefined, apiKey)).rejects.toThrow(
+      /^NBA 2K ratings request failed$/
+    );
+  });
+
+  it("redacts malformed response bodies", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(apiKey)));
+    await expect(fetchNba2kRatings(undefined, apiKey)).rejects.toThrow(
+      /^Invalid NBA 2K ratings response$/
+    );
+  });
+
+  it("rejects an empty configured key before making a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchNba2kRatings(undefined, " ")).rejects.toThrow("must not be empty");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    () => bulk([player], 2),
+    () => bulk([player], 1, 2),
+    () => bulk([]),
+    () => bulk([{ ...player, gameVersion: "2K26" }]),
+    () => bulk([{ ...player, teamType: "class" }]),
+    () => bulk([player, player]),
+  ])("rejects incomplete, incompatible or duplicate bulk data", async (response) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response()));
+    await expect(fetchNba2kRatings(undefined, apiKey)).rejects.toThrow();
+  });
+
+  it("quarantines incomplete attributes without replacing them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(bulk([player, { ...player, slug: "incomplete", attributes: {} }]))
+    );
+    const snapshot = await fetchNba2kRatings(undefined, apiKey);
+    expect(snapshot.players).toEqual([player]);
+    expect(snapshot.excludedPlayers).toEqual([
+      { slug: "incomplete", name: player.name, invalidAttributes: expect.any(Array) },
+    ]);
+  });
+
+  it("keeps the content hash stable across source ordering and public/bulk transport", async () => {
+    const second = { ...player, slug: "second-player" };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(page([player, second]))
+        .mockResolvedValueOnce(bulk([second, player]))
+    );
+    const publicSnapshot = await fetchNba2kRatings();
+    const authenticatedSnapshot = await fetchNba2kRatings(undefined, apiKey);
+    expect(authenticatedSnapshot.contentHash).toBe(publicSnapshot.contentHash);
   });
 });

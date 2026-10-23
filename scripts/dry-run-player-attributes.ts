@@ -8,7 +8,10 @@ try {
   }
   const rosterPath = process.argv[2];
   const roster: unknown = rosterPath ? JSON.parse(await readFile(rosterPath, "utf8")) : null;
-  const { players, ...metadata } = await fetchNba2kRatings(AbortSignal.timeout(120_000));
+  const { players, ...metadata } = await fetchNba2kRatings(
+    AbortSignal.timeout(120_000),
+    process.env.NBA_2K_API_KEY
+  );
   const coverage = rosterPath ? getNba2kRatingCoverage({ ...metadata, players }, roster) : null;
   console.log(
     JSON.stringify(

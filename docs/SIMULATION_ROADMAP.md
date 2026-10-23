@@ -1,7 +1,7 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** bloque 1 con fuente validada y primer cruce contra una partida real; identidades, política de datos ausentes y permisos pendientes, sin integración al juego todavía.
-**Fecha:** 2026-10-22.
+**Estado:** bloque 1 en implementación: fuente autenticada, caché compartida y copias independientes por partida. Estimaciones aprobadas; persistencia e integración SQL pendientes.
+**Fecha:** 2026-10-23.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
 
@@ -89,7 +89,21 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Reporte de calidad y candidatos de identidad con entrada opcional del roster canónico.
 - [x] Ejecutar el cruce contra el roster canónico de una partida moderna real: 526 candidatos de 546 jugadores, 19 sin coincidencia de nombre y 1 incompleto.
 - [ ] Corroborar identidades, incluidas las 11 posibles variantes de nombre localizadas; no son vínculos aprobados para importar.
-- [ ] Confirmar permisos de reutilización y política de jugadores sin datos.
+- [x] Acordar atributos estimados, identificados y separados de los importados, para jugadores sin datos completos.
+- [x] Acordar caché persistente compartida: actualizar la fuente de forma controlada y copiarla al iniciar cada partida, sin consultar al proveedor por usuario.
+- [ ] Implementar la caché con coordinación entre instancias y reutilización de la última versión válida ante errores.
+- [ ] Documentar condiciones de uso y límites de redistribución; una API key no prueba licencia sobre los datos.
 - [ ] Persistir atributos versionados por partida/temporada e integrarlos al motor SQL.
+
+### Plan de entrega del módulo de atributos
+
+1. Descarga autenticada `bulk` con `NBA_2K_API_KEY`, validación y errores sin secretos; mantener el reporte de lectura.
+2. Caché de fuente compartida en BD, versionada por edición y contenido, con actualización controlada cada 24 horas, un único refresco entre instancias y última versión válida ante fallos.
+3. Corroboración de identidades y generación verificable de atributos estimados para datos ausentes o incompletos.
+4. Copias por jugador, partida y temporada, con procedencia, aislamiento, RLS e inicialización transaccional e idempotente.
+5. Uso de la calidad individual en la simulación diaria SQL, manteniendo partidas antiguas sin atributos y resultados ya jugados.
+6. Pruebas, documentación y commits locales revisables, sin push ni modificaciones en la partida remota auditada.
+
+La caché comparte **datos de origen**, no estado mutable entre carreras. Las actualizaciones externas no sobrescriben partidas existentes. La evolución por edad queda para una entrega futura, junto con los bloques posteriores del roadmap.
 
 Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).
