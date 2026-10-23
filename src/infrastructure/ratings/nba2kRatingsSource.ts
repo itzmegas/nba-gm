@@ -30,6 +30,8 @@ const sourcePlayerSchema = z.object({
   lastUpdated: z.iso.datetime(),
   overall: ratingSchema,
   attributes: z.unknown(),
+  height: z.string().max(32).nullish(),
+  positions: z.array(z.string().min(1).max(8)).max(5).nullish(),
 });
 const playerRatingSchema = sourcePlayerSchema.extend({ attributes: attributesSchema });
 

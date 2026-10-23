@@ -68,7 +68,7 @@ La orquestación `getSharedPlayerRatings` reutiliza versiones frescas sin descar
 
 `SupabasePlayerRatingSourceCache` conecta esas operaciones a la BD y valida también los snapshots leídos: edición, cantidades, atributos, identidades únicas y hash recalculado. No acepta snapshots públicos para persistencia ni expone detalles de errores SQL. Una prueba integrada con PostgreSQL 17 verificó el round trip JSONB/hash, 20 consumidores de una misma versión con una sola descarga y fallback con cooldown ante un fallo simulado del proveedor.
 
-La adquisición compartida tiene 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. Falta conectar la materialización de atributos por partida: todavía no cambia la creación de partidas.
+La verificación inicial de adquisición compartida aprobó 70 pruebas focalizadas de fuente, cobertura, caché y orquestación. Falta conectar la materialización de atributos por partida: todavía no cambia la creación de partidas.
 
 ## Ejecutar el reporte sin importar datos
 
@@ -136,6 +136,8 @@ En una segunda descarga con el mismo hash se localizaron estas **11 posibles var
 **Revisión del 23 de octubre:** se corroboraron los diez alias con identificador ESPN mediante los rosters actuales de Utah, Washington, Detroit, Golden State, San Antonio, Lakers, Miami y Chicago, comparados con nombre, equipo y ficha del proveedor. Los registros de ambos proveedores coinciden en equipo; los nombres alternativos quedan vinculados a los IDs ESPN, no a un acortamiento genérico de nombres. Bobby Portis difiere una pulgada de altura entre fuentes y David Jones Garcia tiene distinta clasificación de posición; esas diferencias no se ocultaron ni se trataron como coincidencias físicas exactas.
 
 Xavier Tillman sigue pendiente: el registro canónico auditado no tiene ID ESPN. La revisión no cambia retroactivamente los conteos del cruce estricto ni habilita importaciones por sí sola; el reconciliador de inicialización todavía debe incorporar las comprobaciones y registrar la evidencia.
+
+Los diez enlaces revisados se registran en `reviewedNba2kRatingAliases.ts`, con ID ESPN y ambos nombres exactos; no se aplica una regla global de apodos o eliminación de sufijos. La fuente ahora conserva altura y posiciones opcionales para corroboración adicional. Los snapshots anteriores sin esos campos siguen siendo legibles; un refresco con metadatos nuevos genera su propia versión/hash.
 
 No se localizó candidato para **8 jugadores**: Latrell Wrightsell Jr., Tacko Fall, Armoni Brooks, Nate Bittle, Leaky Black, Caleb Homesley, Reece Beekman y Duop Reath. No se les asignaron atributos estimados.
 

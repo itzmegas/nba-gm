@@ -152,6 +152,12 @@ describe("authenticated NBA 2K bulk download", () => {
   const bulk = (data: unknown[], total = data.length, count = data.length) =>
     Response.json({ success: true, data, meta: { total, count } });
 
+  it("keeps physical identity evidence without requiring it for older cached snapshots", async () => {
+    const detailed = { ...player, height: "6'7\"", positions: ["SG", "SF"] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(bulk([detailed])));
+    expect((await fetchNba2kRatings(undefined, apiKey)).players[0]).toEqual(detailed);
+  });
+
   it("downloads all current players in one server-side request without exposing the key", async () => {
     const fetchMock = vi.fn().mockResolvedValue(bulk([player]));
     vi.stubGlobal("fetch", fetchMock);

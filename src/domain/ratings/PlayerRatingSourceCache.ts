@@ -9,6 +9,8 @@ export interface SourcePlayerRating {
   lastUpdated: string;
   overall: number;
   attributes: PlayerAttributes;
+  height?: string | null;
+  positions?: readonly string[] | null;
 }
 
 export interface ExcludedSourcePlayerRating {
