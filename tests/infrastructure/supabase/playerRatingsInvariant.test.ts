@@ -7,6 +7,7 @@ describe("player attribute schema mirrors", () => {
   it.each([
     "037_player_rating_source_cache",
     "038_game_player_attributes",
+    "039_materialize_game_player_attributes",
   ])("keeps %s byte-identical exactly once", (name) => {
     const number = name.slice(0, 3);
     const migration = readFileSync(
