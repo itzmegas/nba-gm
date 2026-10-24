@@ -126,15 +126,15 @@ describe("dashboard simulation controls", () => {
     expect(screen.getByText(/Final 114-102/)).toBeDefined();
   });
 
-  it("disables all advance actions after the season endpoint", () => {
-    renderSidebar("2027-04-15");
+  it("keeps advance actions available for the play-in after April 15", () => {
+    renderSidebar("2027-04-16");
     expect(
       (screen.getByRole("button", { name: "Simulate day" }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    ).toBe(false);
     expect(
       (screen.getByRole("button", { name: "More simulation options" }) as HTMLButtonElement)
         .disabled
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("shows errors without fabricating completed progress", () => {

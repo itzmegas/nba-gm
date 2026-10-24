@@ -136,3 +136,24 @@ Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).
 - [ ] Comprobar el selector de vistas en la partida existente.
 
 Detalle: [Estadísticas de temporada](SEASON_STATISTICS.md).
+
+## Avance del bloque 4: postemporada
+
+**Alcance aprobado:** clasificación y desempates simplificados → play-in → cuadro fijo al mejor de siete → campeón. Sin cambio de temporada, draft, agencia libre ni regeneración de calendarios existentes.
+
+- [x] Reglas puras de clasificación por conferencia: seis plazas directas, cuatro de play-in y desempates verificables. Detalle: [reglas de desempate](NBA_BUSINESS_RULES.md#86-simulator-qualification-tiebreakers-simplified).
+- [x] Integrar cierre de fase regular y guardar clasificación definitiva y sorteo por partida/temporada, sin modificar resultados anteriores. El usuario confirmó la instalación de `049`; el agente no accedió al remoto.
+- [x] Play-in persistente con localía del mejor clasificado. El usuario confirmó la instalación de `050` y `051`, y comprobó resultados y box scores de los dos partidos del 19 de abril en la partida de referencia, después de los cuatro del 17. Recorrido completo probado en PostgreSQL aislado, con motor v2, box scores, fallback antiguo, descanso, concurrencia y rollback.
+- [ ] Series, avance de rondas, Finales y campeón con reintentos transaccionales sin duplicados.
+- [ ] Adaptar avance diario/por lotes, vista de postemporada y estadísticas separadas por fase.
+- [ ] Verificar el recorrido completo en PostgreSQL aislado y la interfaz; comprobar que el historial y la clasificación regular no cambien durante la postemporada.
+
+El cierre SQL guarda los 30 seeds y un sorteo determinista una sola vez cuando el calendario regular realmente termina. Las inconsistencias entre resultados y clasificación bloquean el cierre sin corregir datos silenciosamente. `050` continúa automáticamente hacia el play-in, separado de la clasificación regular, y guarda las 16 plazas de playoffs en otra tabla. Avanza más allá del 15 de abril; la interfaz delega el punto de parada al backend. Hasta implementar las series, se detiene al completar esas plazas: todavía no hay campeón ni cambio de temporada.
+
+Las migraciones no avanzan partidas al instalarse. La partida de referencia se conserva sin cambios remotos del agente. El calendario y las jornadas existentes permiten consultar los nuevos encuentros y sus box scores; quedan pendientes el cuadro específico de postemporada y el selector de estadísticas por fase.
+
+**Corrección de compatibilidad `051`:** completa únicamente conferencias ausentes de equipos NBA reconocidos. La interfaz ya mostraba esas conferencias mediante un fallback local que no se persistía. El runner reproduce el bloqueo al cerrar el 15 de abril con 30 conferencias NULL y comprueba que la reparación permite continuar, sin recalcular encuentros completados ni modificar el historial. No reiniciar la partida: aplicar la migración y reintentar el avance pendiente.
+
+**Entrega comprobada:** la partida `8d2d44b9-9634-4a74-94fc-0732825122e8` llegó al 19 de abril de 2027 con el play-in resuelto aunque el equipo del usuario quedó 13.º. La parada es intencional hasta implementar playoffs; falta mostrar este estado explícitamente en la interfaz. Verificación local: 725 tests, TypeScript, Biome y runner PostgreSQL correctos; build correcto en la entrega de `050` (no repetido para la corrección SQL `051`).
+
+Verificación reproducible: `bun scripts/test-postseason-qualification-postgres.ts`. El runner crea y elimina únicamente su contenedor PostgreSQL aislado, sin credenciales ni red externa; incluye 50 escenarios de paridad entre dominio y SQL.

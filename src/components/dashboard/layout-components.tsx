@@ -127,14 +127,13 @@ export function DashboardSidebar({
   const matchup = currentGame.data
     ? `${currentGame.data.homeTeamId === selectedTeamId ? "vs" : "@"} ${opponent?.abbreviation ?? "---"}`
     : t("dashboard", "freeDay");
-  const monthEnd = getMonthEnd(simulationDate, seasonYear);
-  const seasonComplete = simulationDate.toISOString().slice(0, 10) >= `${seasonYear + 1}-04-15`;
+  const monthEnd = getMonthEnd(simulationDate);
   const monthDays = Math.max(
     0,
     Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
   );
   const startBatch = (mode: BatchSimulationMode) => {
-    if (advanceDay.isPending || batchActive || seasonComplete) return;
+    if (advanceDay.isPending || batchActive) return;
     const total = mode === BATCH_SIMULATION_MODE.MONTH ? monthDays : null;
     if (useBatchSimulationStore.getState().startBatch(mode, total)) {
       advanceRange.mutate({ gameId, simulationDate, mode, seasonYear });
@@ -256,9 +255,7 @@ export function DashboardSidebar({
                   aria-label={labelDay}
                   className="min-w-0 flex-1 justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:p-0"
                   onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-                  disabled={
-                    advanceDay.isPending || batchActive || advanceRange.isPending || seasonComplete
-                  }
+                  disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
                 >
                   <CalendarDays className="size-5" />
                   <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
@@ -275,9 +272,7 @@ export function DashboardSidebar({
                   aria-label={t("dashboard", "advanceSimulation")}
                   title={t("dashboard", "advanceSimulation")}
                   className="shrink-0 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8"
-                  disabled={
-                    advanceDay.isPending || batchActive || advanceRange.isPending || seasonComplete
-                  }
+                  disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
                 >
                   <ChevronDown className="size-4" />
                 </Button>

@@ -5685,3 +5685,373 @@ GRANT EXECUTE ON FUNCTION public.get_player_season_statistics(UUID, INTEGER, TEX
 GRANT SELECT ON public.scheduled_games TO authenticated;
 COMMIT;
 -- End canonical schema mirror for migration 048.
+
+-- Canonical schema mirror for migration 049.
+BEGIN;
+
+CREATE TABLE public.postseason_qualifications (
+  game_id UUID NOT NULL REFERENCES public.games(id) ON DELETE CASCADE,
+  season_year INTEGER NOT NULL,
+  team_id UUID NOT NULL REFERENCES public.teams(id),
+  conference TEXT NOT NULL CHECK (conference IN ('East', 'West')),
+  seed INTEGER NOT NULL CHECK (seed BETWEEN 1 AND 15),
+  wins INTEGER NOT NULL CHECK (wins >= 0),
+  losses INTEGER NOT NULL CHECK (losses >= 0),
+  draw_order INTEGER NOT NULL CHECK (draw_order BETWEEN 1 AND 30),
+  PRIMARY KEY (game_id, season_year, team_id),
+  UNIQUE (game_id, season_year, conference, seed),
+  UNIQUE (game_id, season_year, draw_order)
+);
+ALTER TABLE public.postseason_qualifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY postseason_qualifications_owner ON public.postseason_qualifications
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+REVOKE ALL ON public.postseason_qualifications FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.postseason_qualifications TO authenticated;
+
+-- SQL counterpart of qualifyPostseason; parity is tested against the domain service.
+CREATE FUNCTION public.rank_postseason_group(p_group JSONB, p_results JSONB, p_criterion INTEGER DEFAULT 0)
+RETURNS JSONB LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE partitions JSONB; part JSONB; ranked JSONB := '[]';
+BEGIN
+  IF jsonb_array_length(p_group) < 2 THEN RETURN p_group; END IF;
+  IF p_criterion > 4 THEN RAISE EXCEPTION 'Qualification lottery must be unique'; END IF;
+  WITH metrics AS (
+    SELECT t, CASE p_criterion
+      WHEN 0 THEN (t->>'wins')::BIGINT
+      WHEN 1 THEN (SELECT count(*) FROM jsonb_array_elements(p_results) r
+        WHERE r->>'teamId' = t->>'teamId' AND (r->>'won')::BOOLEAN
+          AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_group) o WHERE o->>'teamId' = r->>'opponentId'))
+      WHEN 2 THEN (t->>'conferenceWins')::BIGINT
+      WHEN 3 THEN (t->>'differential')::BIGINT
+      ELSE -(t->>'drawOrder')::BIGINT END AS n,
+      greatest(1, CASE p_criterion
+        WHEN 0 THEN (t->>'wins')::BIGINT + (t->>'losses')::BIGINT
+        WHEN 1 THEN (SELECT count(*) FROM jsonb_array_elements(p_results) r
+          WHERE r->>'teamId' = t->>'teamId'
+            AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_group) o WHERE o->>'teamId' = r->>'opponentId'))
+        WHEN 2 THEN (t->>'conferenceGames')::BIGINT ELSE 1 END) AS d
+    FROM jsonb_array_elements(p_group) t
+  ), ordered AS (
+    SELECT a.t, (SELECT count(*) FROM metrics b WHERE b.n * a.d > a.n * b.d) AS position
+    FROM metrics a
+  ), groups AS (
+    SELECT position, jsonb_agg(t ORDER BY t->>'teamId') AS members FROM ordered GROUP BY position
+  ) SELECT jsonb_agg(members ORDER BY position) INTO partitions FROM groups;
+  IF jsonb_array_length(partitions) = 1 THEN
+    RETURN public.rank_postseason_group(p_group, p_results, p_criterion + 1);
+  END IF;
+  FOR part IN SELECT value FROM jsonb_array_elements(partitions) LOOP
+    ranked := ranked || public.rank_postseason_group(part, p_results, 1);
+  END LOOP;
+  RETURN ranked;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.rank_postseason_group(JSONB, JSONB, INTEGER)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.freeze_postseason_qualification(p_game_id UUID) RETURNS BOOLEAN
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; participants JSONB; results JSONB; conf TEXT; ranked JSONB;
+BEGIN
+  SELECT * INTO STRICT g FROM public.games WHERE id = p_game_id FOR UPDATE;
+  IF EXISTS (SELECT 1 FROM public.postseason_qualifications q
+    WHERE q.game_id = g.id AND q.season_year = g.season_year) THEN RETURN true; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.scheduled_games f WHERE f.game_id = g.id
+      AND f.season_year = g.season_year AND f.competition_phase = 'regular_season')
+    OR EXISTS (SELECT 1 FROM public.scheduled_games f WHERE f.game_id = g.id
+      AND f.season_year = g.season_year AND f.competition_phase = 'regular_season'
+      AND f.status <> 'completed') THEN RETURN false; END IF;
+  IF EXISTS (SELECT 1 FROM public.scheduled_games f WHERE f.game_id = g.id
+    AND f.season_year = g.season_year AND f.competition_phase = 'regular_season'
+    AND (f.game_date > g.simulation_date OR f.home_score IS NULL OR f.away_score IS NULL
+      OR f.home_score = f.away_score OR f.winner_team_id IS DISTINCT FROM
+        CASE WHEN f.home_score > f.away_score THEN f.home_team_id ELSE f.away_team_id END))
+  THEN RAISE EXCEPTION 'Regular-season results are incomplete or inconsistent'; END IF;
+  IF (SELECT count(*) FROM public.league_standings s JOIN public.teams t ON t.id = s.team_id
+    WHERE s.game_id = g.id) <> 30
+    OR EXISTS (SELECT 1 FROM public.league_standings s JOIN public.teams t ON t.id = s.team_id
+      WHERE s.game_id = g.id AND (t.conference IS NULL OR t.conference NOT IN ('East', 'West')))
+    OR (SELECT count(*) FROM public.league_standings s JOIN public.teams t ON t.id = s.team_id
+      WHERE s.game_id = g.id AND t.conference = 'East') <> 15
+  THEN RAISE EXCEPTION 'Qualification requires 15 teams in each conference'; END IF;
+
+  WITH appearances AS (
+    SELECT f.home_team_id AS team_id, f.away_team_id AS opponent_id,
+      f.home_score > f.away_score AS won, f.home_score - f.away_score AS differential
+    FROM public.scheduled_games f WHERE f.game_id = g.id AND f.season_year = g.season_year
+      AND f.competition_phase = 'regular_season'
+    UNION ALL
+    SELECT f.away_team_id, f.home_team_id, f.away_score > f.home_score, f.away_score - f.home_score
+    FROM public.scheduled_games f WHERE f.game_id = g.id AND f.season_year = g.season_year
+      AND f.competition_phase = 'regular_season'
+  ), records AS (
+    SELECT s.team_id, t.conference, s.wins, s.losses,
+      row_number() OVER (ORDER BY md5(g.id::TEXT || ':' || g.season_year || ':' || s.team_id), s.team_id) AS draw_order,
+      count(a.team_id) AS games, count(*) FILTER (WHERE a.won) AS actual_wins,
+      count(*) FILTER (WHERE a.won AND opponent.conference = t.conference) AS conference_wins,
+      count(*) FILTER (WHERE opponent.conference = t.conference) AS conference_games,
+      coalesce(sum(a.differential), 0) AS differential
+    FROM public.league_standings s JOIN public.teams t ON t.id = s.team_id
+    LEFT JOIN appearances a ON a.team_id = s.team_id
+    LEFT JOIN public.teams opponent ON opponent.id = a.opponent_id
+    WHERE s.game_id = g.id GROUP BY s.team_id, t.conference, s.wins, s.losses
+  ) SELECT (SELECT coalesce(jsonb_agg(jsonb_build_object('teamId', team_id,
+      'opponentId', opponent_id, 'won', won)), '[]') FROM appearances),
+    jsonb_agg(jsonb_build_object('teamId', team_id, 'conference', conference,
+      'wins', wins, 'losses', losses, 'drawOrder', draw_order,
+      'conferenceWins', conference_wins, 'conferenceGames', conference_games,
+      'differential', differential, 'games', games, 'actualWins', actual_wins))
+    INTO results, participants FROM records;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(participants) t
+    WHERE (t->>'wins')::INTEGER <> (t->>'actualWins')::INTEGER
+      OR (t->>'wins')::INTEGER + (t->>'losses')::INTEGER <> (t->>'games')::INTEGER)
+  THEN RAISE EXCEPTION 'Standings do not match stored regular-season results'; END IF;
+
+  FOREACH conf IN ARRAY ARRAY['East', 'West'] LOOP
+    SELECT public.rank_postseason_group(jsonb_agg(t), results) INTO ranked
+      FROM jsonb_array_elements(participants) t WHERE t->>'conference' = conf;
+    INSERT INTO public.postseason_qualifications(game_id, season_year, team_id, conference, seed, wins, losses, draw_order)
+    SELECT g.id, g.season_year, (t->>'teamId')::UUID, conf, position,
+      (t->>'wins')::INTEGER, (t->>'losses')::INTEGER, (t->>'drawOrder')::INTEGER
+    FROM jsonb_array_elements(ranked) WITH ORDINALITY AS ranked_teams(t, position);
+  END LOOP;
+  RETURN true;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.freeze_postseason_qualification(UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- Keep the existing sports/market transaction; freeze only after its complete result.
+ALTER FUNCTION public.advance_simulation_day(UUID, DATE) RENAME TO advance_regular_season_day;
+REVOKE ALL ON FUNCTION public.advance_regular_season_day(UUID, DATE)
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE FUNCTION public.advance_simulation_day(p_game_id UUID, p_expected_date DATE)
+RETURNS TABLE (
+  new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID,
+  away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID,
+  standing_team_id UUID, wins INTEGER, losses INTEGER
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; r RECORD; closed BOOLEAN; checked BOOLEAN := false;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  IF g.simulation_date IS DISTINCT FROM p_expected_date THEN
+    new_date := g.simulation_date;
+    season_complete := EXISTS (SELECT 1 FROM public.postseason_qualifications q
+      WHERE q.game_id = g.id AND q.season_year = g.season_year);
+    RETURN NEXT; RETURN;
+  END IF;
+  IF public.freeze_postseason_qualification(g.id) THEN
+    new_date := g.simulation_date; season_complete := true; RETURN NEXT; RETURN;
+  END IF;
+  IF g.simulation_date >= make_date(g.season_year + 1, 4, 15) THEN
+    RAISE EXCEPTION 'Regular-season schedule is incomplete at the simulation boundary';
+  END IF;
+  FOR r IN SELECT * FROM public.advance_regular_season_day(p_game_id, p_expected_date) LOOP
+    IF NOT checked THEN
+      closed := public.freeze_postseason_qualification(g.id);
+      checked := true;
+    END IF;
+    RETURN QUERY SELECT r.new_date, closed, r.result_id, r.home_team_id, r.away_team_id,
+      r.home_score, r.away_score, r.winner_team_id, r.standing_team_id, r.wins, r.losses;
+  END LOOP;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.advance_simulation_day(UUID, DATE) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.advance_simulation_day(UUID, DATE) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 049.
+
+-- Canonical schema mirror for migration 050.
+BEGIN;
+
+CREATE TABLE public.postseason_play_in_games (
+  game_id UUID NOT NULL,
+  season_year INTEGER NOT NULL,
+  conference TEXT NOT NULL CHECK (conference IN ('East', 'West')),
+  stage TEXT NOT NULL CHECK (stage IN ('seven_eight', 'nine_ten', 'eighth_seed')),
+  scheduled_game_id UUID NOT NULL UNIQUE,
+  PRIMARY KEY (game_id, season_year, conference, stage),
+  FOREIGN KEY (game_id, scheduled_game_id) REFERENCES public.scheduled_games(game_id, id) ON DELETE CASCADE
+);
+CREATE TABLE public.postseason_playoff_seeds (
+  game_id UUID NOT NULL,
+  season_year INTEGER NOT NULL,
+  team_id UUID NOT NULL,
+  conference TEXT NOT NULL CHECK (conference IN ('East', 'West')),
+  seed INTEGER NOT NULL CHECK (seed BETWEEN 1 AND 8),
+  PRIMARY KEY (game_id, season_year, conference, seed),
+  UNIQUE (game_id, season_year, team_id),
+  FOREIGN KEY (game_id, season_year, team_id)
+    REFERENCES public.postseason_qualifications(game_id, season_year, team_id) ON DELETE CASCADE
+);
+ALTER TABLE public.postseason_play_in_games ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.postseason_playoff_seeds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY play_in_owner ON public.postseason_play_in_games FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid() AND g.deleted_at IS NULL));
+CREATE POLICY playoff_seeds_owner ON public.postseason_playoff_seeds FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid() AND g.deleted_at IS NULL));
+REVOKE ALL ON public.postseason_play_in_games, public.postseason_playoff_seeds FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.postseason_play_in_games, public.postseason_playoff_seeds TO authenticated;
+
+CREATE FUNCTION public.prepare_play_in(p_game_id UUID) RETURNS VOID
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; conf TEXT; pairing INTEGER; home_id UUID; away_id UUID;
+  fixture_id UUID; first_game public.scheduled_games%ROWTYPE; second_game public.scheduled_games%ROWTYPE;
+  last_game public.scheduled_games%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT g FROM public.games WHERE id = p_game_id FOR UPDATE;
+  IF (SELECT count(*) FROM public.postseason_qualifications q
+    WHERE q.game_id = g.id AND q.season_year = g.season_year) <> 30
+  THEN RAISE EXCEPTION 'Frozen regular-season qualification required'; END IF;
+  INSERT INTO public.postseason_playoff_seeds(game_id, season_year, team_id, conference, seed)
+    SELECT q.game_id, q.season_year, q.team_id, q.conference, q.seed
+    FROM public.postseason_qualifications q WHERE q.game_id = g.id AND q.season_year = g.season_year AND q.seed <= 6
+    ON CONFLICT DO NOTHING;
+  FOREACH conf IN ARRAY ARRAY['East', 'West'] LOOP
+    FOREACH pairing IN ARRAY ARRAY[7, 9] LOOP
+      IF NOT EXISTS (SELECT 1 FROM public.postseason_play_in_games p WHERE p.game_id = g.id
+        AND p.season_year = g.season_year AND p.conference = conf
+        AND p.stage = CASE WHEN pairing = 7 THEN 'seven_eight' ELSE 'nine_ten' END) THEN
+        SELECT q.team_id INTO STRICT home_id FROM public.postseason_qualifications q
+          WHERE q.game_id = g.id AND q.season_year = g.season_year AND q.conference = conf AND q.seed = pairing;
+        SELECT q.team_id INTO STRICT away_id FROM public.postseason_qualifications q
+          WHERE q.game_id = g.id AND q.season_year = g.season_year AND q.conference = conf AND q.seed = pairing + 1;
+        INSERT INTO public.scheduled_games(game_id, season_year, competition_phase, game_date, home_team_id, away_team_id)
+          VALUES (g.id, g.season_year, 'play_in', g.simulation_date + 2, home_id, away_id) RETURNING id INTO fixture_id;
+        INSERT INTO public.postseason_play_in_games VALUES (g.id, g.season_year, conf,
+          CASE WHEN pairing = 7 THEN 'seven_eight' ELSE 'nine_ten' END, fixture_id);
+      END IF;
+    END LOOP;
+    SELECT f.* INTO STRICT first_game FROM public.scheduled_games f JOIN public.postseason_play_in_games p
+      ON p.scheduled_game_id = f.id WHERE p.game_id = g.id AND p.season_year = g.season_year
+        AND p.conference = conf AND p.stage = 'seven_eight';
+    SELECT f.* INTO STRICT second_game FROM public.scheduled_games f JOIN public.postseason_play_in_games p
+      ON p.scheduled_game_id = f.id WHERE p.game_id = g.id AND p.season_year = g.season_year
+        AND p.conference = conf AND p.stage = 'nine_ten';
+    IF first_game.status <> 'completed' OR second_game.status <> 'completed' THEN CONTINUE; END IF;
+    INSERT INTO public.postseason_playoff_seeds VALUES (g.id, g.season_year, first_game.winner_team_id, conf, 7)
+      ON CONFLICT DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM public.postseason_play_in_games p WHERE p.game_id = g.id
+      AND p.season_year = g.season_year AND p.conference = conf AND p.stage = 'eighth_seed') THEN
+      home_id := CASE WHEN first_game.winner_team_id = first_game.home_team_id
+        THEN first_game.away_team_id ELSE first_game.home_team_id END;
+      INSERT INTO public.scheduled_games(game_id, season_year, competition_phase, game_date, home_team_id, away_team_id)
+        VALUES (g.id, g.season_year, 'play_in', greatest(first_game.game_date, second_game.game_date) + 2,
+          home_id, second_game.winner_team_id) RETURNING id INTO fixture_id;
+      INSERT INTO public.postseason_play_in_games VALUES (g.id, g.season_year, conf, 'eighth_seed', fixture_id);
+    END IF;
+    SELECT f.* INTO STRICT last_game FROM public.scheduled_games f JOIN public.postseason_play_in_games p
+      ON p.scheduled_game_id = f.id WHERE p.game_id = g.id AND p.season_year = g.season_year
+        AND p.conference = conf AND p.stage = 'eighth_seed';
+    IF last_game.status = 'completed' THEN
+      INSERT INTO public.postseason_playoff_seeds VALUES (g.id, g.season_year, last_game.winner_team_id, conf, 8)
+        ON CONFLICT DO NOTHING;
+    END IF;
+  END LOOP;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.prepare_play_in(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+ALTER FUNCTION public.advance_simulation_day(UUID, DATE) RENAME TO advance_qualification_day;
+REVOKE ALL ON FUNCTION public.advance_qualification_day(UUID, DATE) FROM PUBLIC, anon, authenticated, service_role;
+CREATE FUNCTION public.advance_simulation_day(p_game_id UUID, p_expected_date DATE)
+RETURNS TABLE (
+  new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID,
+  away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID,
+  standing_team_id UUID, wins INTEGER, losses INTEGER
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE g public.games%ROWTYPE; r RECORD; f public.scheduled_games%ROWTYPE;
+  matches public.scheduled_games[] := ARRAY[]::public.scheduled_games[];
+  box_score JSONB; seed BIGINT; home_rating SMALLINT; away_rating SMALLINT; checked BOOLEAN := false;
+BEGIN
+  IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  SELECT * INTO g FROM public.games WHERE id = p_game_id AND user_id = auth.uid()
+    AND status = 'active' AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  -- shortcut: stop at sixteen playoff seeds; replace when playoff-series progression is installed.
+  season_complete := (SELECT count(*) = 16 FROM public.postseason_playoff_seeds s
+    WHERE s.game_id = g.id AND s.season_year = g.season_year);
+  IF g.simulation_date IS DISTINCT FROM p_expected_date OR season_complete THEN
+    new_date := g.simulation_date; RETURN NEXT; RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.postseason_qualifications q
+    WHERE q.game_id = g.id AND q.season_year = g.season_year) THEN
+    FOR r IN SELECT * FROM public.advance_qualification_day(p_game_id, p_expected_date) LOOP
+      IF NOT checked AND EXISTS (SELECT 1 FROM public.postseason_qualifications q
+        WHERE q.game_id = g.id AND q.season_year = g.season_year) THEN
+        PERFORM public.prepare_play_in(g.id); checked := true;
+      END IF;
+      RETURN QUERY SELECT r.new_date, false, r.result_id, r.home_team_id, r.away_team_id,
+        r.home_score, r.away_score, r.winner_team_id, r.standing_team_id, r.wins, r.losses;
+    END LOOP;
+    RETURN;
+  END IF;
+  PERFORM public.prepare_play_in(g.id);
+  new_date := g.simulation_date + 1;
+  IF EXISTS (SELECT 1 FROM public.scheduled_games fixture JOIN public.postseason_play_in_games p
+    ON p.scheduled_game_id = fixture.id WHERE p.game_id = g.id AND p.season_year = g.season_year
+    AND fixture.status = 'scheduled' AND fixture.game_date < new_date)
+  THEN RAISE EXCEPTION 'Play-in schedule is behind the simulation clock'; END IF;
+  FOR f IN SELECT fixture.* FROM public.scheduled_games fixture JOIN public.postseason_play_in_games p
+    ON p.scheduled_game_id = fixture.id WHERE p.game_id = g.id AND p.season_year = g.season_year
+    AND fixture.game_date = new_date AND fixture.status = 'scheduled' ORDER BY fixture.id FOR UPDATE OF fixture
+  LOOP
+    box_score := public.simulate_fixture_box_score(f.id);
+    IF box_score IS NOT NULL THEN
+      f.home_score := (box_score->>'homeScore')::SMALLINT;
+      f.away_score := (box_score->>'awayScore')::SMALLINT;
+    ELSE
+      home_rating := public.get_simulation_team_rating(g.id, f.home_team_id);
+      away_rating := public.get_simulation_team_rating(g.id, f.away_team_id);
+      seed := ('x' || substr(md5(g.id::TEXT || ':' || new_date::TEXT || ':' || f.home_team_id::TEXT || ':' || f.away_team_id::TEXT), 1, 8))::bit(32)::BIGINT;
+      f.home_score := greatest(70, round(105 + (home_rating + 3 - 75) * 0.55 + (mod(abs(seed), 2400) / 100.0 - 12)));
+      f.away_score := greatest(70, round(105 + (away_rating - 75) * 0.55 + (mod(abs(seed / 2400), 2400) / 100.0 - 12)));
+      IF f.home_score = f.away_score THEN f.away_score := f.away_score - 1; END IF;
+    END IF;
+    f.winner_team_id := CASE WHEN f.home_score > f.away_score THEN f.home_team_id ELSE f.away_team_id END;
+    UPDATE public.scheduled_games SET status = 'completed', home_score = f.home_score,
+      away_score = f.away_score, winner_team_id = f.winner_team_id WHERE id = f.id;
+    matches := array_append(matches, f);
+  END LOOP;
+  UPDATE public.games SET simulation_date = new_date, updated_at = now() WHERE id = g.id;
+  PERFORM public.prepare_play_in(g.id);
+  season_complete := (SELECT count(*) = 16 FROM public.postseason_playoff_seeds s
+    WHERE s.game_id = g.id AND s.season_year = g.season_year);
+  FOREACH f IN ARRAY matches LOOP
+    result_id := f.id; home_team_id := f.home_team_id; away_team_id := f.away_team_id;
+    home_score := f.home_score; away_score := f.away_score; winner_team_id := f.winner_team_id;
+    RETURN NEXT;
+  END LOOP;
+  IF cardinality(matches) = 0 THEN RETURN NEXT; END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.advance_simulation_day(UUID, DATE) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.advance_simulation_day(UUID, DATE) TO authenticated;
+
+COMMIT;
+-- End canonical schema mirror for migration 050.
+
+-- Canonical schema mirror for migration 051.
+BEGIN;
+
+-- Legacy imports left these NULL; the UI fallback never persisted its conference map.
+UPDATE public.teams AS team
+SET conference = canonical.conference
+FROM (VALUES
+  ('East', ARRAY['ATL','BOS','BKN','CHA','CHI','CLE','DET','IND','MIA','MIL','NYK','ORL','PHI','TOR','WAS']),
+  ('West', ARRAY['DAL','DEN','GSW','HOU','LAC','LAL','MEM','MIN','NOP','OKC','PHX','POR','SAC','SAS','UTA'])
+) AS canonical(conference, abbreviations)
+WHERE team.abbreviation = ANY(canonical.abbreviations)
+  AND nullif(btrim(team.conference), '') IS NULL;
+
+COMMIT;
+-- End canonical schema mirror for migration 051.

@@ -146,7 +146,6 @@ describe("batch simulation", () => {
     "not-a-date",
     "2026-10-30",
     "2026-10-29",
-    "2027-04-16",
   ])("rejects an invalid next-game boundary %s without advancing", async (targetDate) => {
     useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 1);
     await expect(
@@ -172,6 +171,33 @@ describe("batch simulation", () => {
     expect(useBatchSimulationStore.getState().isActive).toBe(false);
   });
 
+  it("accepts a play-in target after April 15", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ new_date: "2027-04-17", season_complete: false }],
+      error: null,
+    });
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.NEXT_GAME, 1);
+    await useAdvanceRange().mutateAsync({
+      ...input,
+      simulationDate: new Date("2027-04-16T00:00:00Z"),
+      mode: BATCH_SIMULATION_MODE.NEXT_GAME,
+      targetDate: "2027-04-17",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(1);
+  });
+
+  it("refreshes newly generated fixtures even when a phase transition does not move the date", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ new_date: "2026-10-30", season_complete: false }],
+      error: null,
+    });
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.SEASON, null);
+    await useAdvanceRange().mutateAsync({ ...input, mode: BATCH_SIMULATION_MODE.SEASON });
+    expect(useBatchSimulationStore.getState().completedDays).toBe(0);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["schedule", input.gameId] });
+  });
+
   it("rejects malformed RPC dates without counting progress or advancing again", async () => {
     rpc.mockResolvedValueOnce({
       data: [{ new_date: "2026-99-99", season_complete: false }],
@@ -190,7 +216,7 @@ describe("batch simulation", () => {
   });
 
   it("caps month simulation at the calendar month end", async () => {
-    expect(getMonthEnd(input.simulationDate, input.seasonYear)).toBe("2026-10-31");
+    expect(getMonthEnd(input.simulationDate)).toBe("2026-10-31");
     rpc.mockResolvedValueOnce({
       data: [{ new_date: "2026-10-31", season_complete: false }],
       error: null,
@@ -218,18 +244,23 @@ describe("batch simulation", () => {
     expect(useBatchSimulationStore.getState().completedDays).toBe(0);
   });
 
-  it("caps month simulation at the season end", async () => {
+  it("continues beyond April 15 and stops when the server marks completion", async () => {
     const seasonCapInput = { ...input, simulationDate: new Date("2027-04-14T00:00:00.000Z") };
     rpc.mockResolvedValueOnce({
       data: [{ new_date: "2027-04-15", season_complete: false }],
+      error: null,
+    });
+    rpc.mockResolvedValueOnce({
+      data: [{ new_date: "2027-04-16", season_complete: true }],
       error: null,
     });
     useBatchSimulationStore.getState().startBatch(input.mode, 1);
 
     await useAdvanceRange().mutateAsync(seasonCapInput);
 
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(useBatchSimulationStore.getState().completedDays).toBe(1);
+    expect(getMonthEnd(seasonCapInput.simulationDate)).toBe("2027-04-30");
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(useBatchSimulationStore.getState().completedDays).toBe(2);
     expect(useBatchSimulationStore.getState().isActive).toBe(false);
   });
 
@@ -339,7 +370,7 @@ describe("batch simulation", () => {
   it("settles a zero-day month without calling the RPC", async () => {
     const zeroDayInput = {
       ...input,
-      simulationDate: new Date("2027-04-16T00:00:00.000Z"),
+      simulationDate: new Date("2027-04-30T00:00:00.000Z"),
     };
     useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.MONTH, 0);
 

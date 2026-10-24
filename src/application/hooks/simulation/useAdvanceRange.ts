@@ -19,10 +19,9 @@ export interface AdvanceSimDayResult {
   season_complete: boolean;
 }
 
-export function getMonthEnd(date: Date, seasonYear: number): string {
-  const seasonEnd = new Date(Date.UTC(seasonYear + 1, 3, 15));
+export function getMonthEnd(date: Date): string {
   const monthEnd = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
-  return (monthEnd <= seasonEnd ? monthEnd : seasonEnd).toISOString().slice(0, 10);
+  return monthEnd.toISOString().slice(0, 10);
 }
 
 function getAdvanceResult(data: unknown): AdvanceSimDayResult {
@@ -40,20 +39,18 @@ export function useAdvanceRange() {
   const queryClient = useQueryClient();
 
   return useMutation<number, Error, AdvanceRangeInput>({
-    mutationFn: async ({ gameId, simulationDate, mode, seasonYear, targetDate }) => {
+    mutationFn: async ({ gameId, simulationDate, mode, targetDate }) => {
       const store = useBatchSimulationStore.getState();
       if (!store.isActive) {
         throw new Error("No active batch simulation.");
       }
 
-      let endDate =
-        mode === BATCH_SIMULATION_MODE.MONTH ? getMonthEnd(simulationDate, seasonYear) : null;
+      let endDate = mode === BATCH_SIMULATION_MODE.MONTH ? getMonthEnd(simulationDate) : null;
       let currentDate = simulationDate.toISOString().slice(0, 10);
       if (mode === BATCH_SIMULATION_MODE.NEXT_GAME) {
         endDate = z.iso.date().parse(targetDate);
-        const seasonEnd = `${seasonYear + 1}-04-15`;
-        if (endDate <= currentDate || endDate > seasonEnd) {
-          throw new Error("Next game must be after the current day and within the season.");
+        if (endDate <= currentDate) {
+          throw new Error("Next game must be after the current day.");
         }
       }
       let completedDays = 0;
@@ -69,10 +66,6 @@ export function useAdvanceRange() {
         if (error) throw new Error(error.message);
 
         const result = getAdvanceResult(data);
-        if (result.new_date <= previousDate) break;
-        completedDays += 1;
-        store.updateProgress(completedDays);
-        currentDate = result.new_date;
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["games", gameId] }),
           queryClient.invalidateQueries({ queryKey: ["schedule", "next", gameId] }),
@@ -81,6 +74,10 @@ export function useAdvanceRange() {
           queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
           queryClient.invalidateQueries({ queryKey: ["season-statistics", gameId] }),
         ]);
+        if (result.new_date <= previousDate) break;
+        completedDays += 1;
+        store.updateProgress(completedDays);
+        currentDate = result.new_date;
         if (result.season_complete) break;
       }
 
