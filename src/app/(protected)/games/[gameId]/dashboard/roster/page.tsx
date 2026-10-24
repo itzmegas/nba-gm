@@ -9,11 +9,8 @@ import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeam } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
-import {
-  formatRosterSalary,
-  getContractStatus,
-  RosterTable,
-} from "@/components/roster/roster-table";
+import { formatRosterSalary, getContractStatus } from "@/components/roster/roster-table";
+import { RosterTableViews } from "@/components/roster/roster-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
@@ -260,7 +257,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
               {t("dashboard", "rosterLoadFailed")}
             </p>
           ) : rosterPlayers && rosterPlayers.length > 0 ? (
-            <RosterTable
+            <RosterTableViews
               gameId={gameId}
               players={rosterPlayers}
               seasonYear={game.seasonYear}
