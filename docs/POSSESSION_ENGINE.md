@@ -1,15 +1,23 @@
 # Motor por posesiones y box score individual
 
-**Primera versión probada por el usuario; calibración v2 implementada localmente.** Los próximos encuentros de una partida moderna con atributos producen actuaciones individuales; el marcador es la suma de sus puntos. Los resultados anteriores permanecen intactos y no reciben estadísticas inventadas.
+**Primera versión y rotaciones v2 probadas por el usuario, con 044–047 instaladas según su confirmación.** Los próximos encuentros de una partida moderna con atributos producen actuaciones individuales; el marcador es la suma de sus puntos. Los resultados anteriores permanecen intactos y no reciben estadísticas inventadas.
 
-## Activación de la calibración pendiente
+## Activación para instalaciones pendientes
 
 1. Tener instaladas las migraciones hasta `046_daily_possession_simulation.sql`. El usuario confirmó 044–046 y la persistencia de ambos box scores tras reiniciar.
 2. Actualizar primero la aplicación para aceptar resultados `possessions-v1` y `possessions-v2`.
 3. Aplicar **solo** `047_possession_rotation_calibration.sql` con el procedimiento autorizado para el entorno. No volver a ejecutar las migraciones instaladas ni todo `schema.sql` sobre una base existente.
-4. Conservar los encuentros ya jugados. Avanzar hasta un partido nuevo y abrir **Calendario → fecha → Estadísticas del partido**: la primera unidad debe recibir más tiempo que la banca, manteniendo 240 minutos por equipo y puntos individuales iguales al marcador.
+4. Conservar los encuentros ya jugados. En un partido nuevo, abrir **Calendario → nuestro partido**: la primera unidad debe recibir más tiempo que la banca, manteniendo 240 minutos por equipo y puntos individuales iguales al marcador.
 
-El agente no aplicó migraciones ni simuló la partida remota. La migración 047 sigue pendiente de instalación; no cambia los payloads v1 existentes.
+El agente no aplicó migraciones ni simuló la partida remota. No volver a aplicar 047 en la partida de referencia: el usuario confirmó su instalación y las nuevas rotaciones. La migración no cambia los payloads v1 existentes.
+
+## Consulta desde el calendario
+
+- **Clic en nuestro partido:** abre solo ese encuentro en un diálogo, con marcador y box score de ambos equipos directamente, sin desplegar otro control. Si todavía no se jugó, muestra sus datos programados sin solicitar estadísticas.
+- **«+ juegos» / «Ver partidos»:** navega a `/games/[gameId]/dashboard/schedule/day/[date]`, con fecha ISO en la URL. Incluye todos los encuentros de esa jornada y destaca el nuestro primero.
+- La página de jornada ofrece selector de fecha y flechas a la jornada anterior/siguiente con partidos, omitiendo días sin encuentros. Se desactivan en los extremos del calendario. Una fecha válida sin encuentros muestra un estado vacío; una fecha inválida devuelve 404.
+- Cada partido completado permite abrir su box score bajo demanda. Los próximos encuentros no tienen estadísticas; los históricos sin box score conservan el marcador y explican que no hay actuaciones registradas.
+- Las tablas usan el estilo compartido `AppTable`. Se reutilizan las consultas autenticadas existentes, sin nuevas escrituras ni migraciones. No se implementan comparativas entre distintos partidos en esta entrega.
 
 ## Qué hace esta versión
 
@@ -54,7 +62,7 @@ No hay reloj por evento, ritmo variable, táctica ni configuración manual de ro
 
 Solo se modelan faltas de tiro; no hay bonus colectivo, faltas técnicas, lesiones durante el encuentro, fatiga persistente, tiempos muertos ni jugada a jugada guardada. No se añaden estadísticas de temporada, playoffs ni progresión de atributos.
 
-El payload versionado permite la primera consulta por partido; una futura entrega de estadísticas de temporada deberá decidir su proyección de totales sin volver a simular encuentros.
+El payload versionado permite la consulta por partido y alimenta la [proyección de estadísticas de temporada](SEASON_STATISTICS.md), implementada como un módulo separado sin volver a simular encuentros.
 
 ## Verificación local
 
@@ -70,4 +78,4 @@ El runner necesita Docker y la imagen local `postgres:17-alpine`: no la descarga
 
 Cobertura: muestra inicial de 100 partidos, comparación v1/v2 de 300 semillas por versión, prórrogas, determinismo, efecto de atributos, identidades duplicadas, minutos/puntos/tiros inválidos, persistencia, cobertura incompleta, plantillas grandes, lesionados/inactivos, rollback, permisos/RLS y avances concurrentes. La actualización se aplica sobre resultados v1 guardados: se comparan sus payloads sin cambios y se verifica que el encuentro siguiente use v2. También se comprueban minutos de primera unidad/banca, una figura al final del orden de entrada y perfiles de no tirador/especialista. Las pruebas de interfaz cubren carga diferida, tablas, resultados históricos sin estadísticas, errores y reintento.
 
-Pendiente: instalación remota de 047 y comprobación visual de las rotaciones v2 en la misma partida, sin recalcular encuentros anteriores.
+Pendiente: comprobar visualmente la navegación de calendario/jornadas y el detalle directo en la misma partida, sin recalcular encuentros anteriores.
