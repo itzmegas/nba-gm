@@ -1,6 +1,31 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  boxScore: {
+    title: "Estadísticas del partido",
+    loading: "Cargando estadísticas…",
+    loadFailed:
+      "No se pudieron cargar las estadísticas. Revisa la conexión y las migraciones necesarias.",
+    retry: "Reintentar",
+    unavailable:
+      "Este partido no tiene estadísticas individuales registradas. Se conserva el resultado original.",
+    overtimes: "Prórrogas",
+    player: "Jugador",
+    minutes: "Tiempo jugado (minutos:segundos)",
+    fieldGoals: "Tiros de campo convertidos-intentados",
+    threePointers: "Triples convertidos-intentados",
+    freeThrows: "Tiros libres convertidos-intentados",
+    offensiveRebounds: "Rebotes ofensivos",
+    defensiveRebounds: "Rebotes defensivos",
+    rebounds: "Rebotes totales",
+    assists: "Asistencias",
+    steals: "Robos",
+    blocks: "Tapones",
+    turnovers: "Pérdidas",
+    personalFouls: "Faltas personales",
+    points: "Puntos",
+    didNotPlay: "NJ",
+  },
   playerAttributes: {
     overall: "Valoración general",
     closeShot: "Tiro cercano",

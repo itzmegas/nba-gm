@@ -1,4 +1,28 @@
 export const en = {
+  boxScore: {
+    title: "Box score",
+    loading: "Loading box score…",
+    loadFailed: "Unable to load the box score. Check the connection and required migrations.",
+    retry: "Retry",
+    unavailable:
+      "No individual statistics were recorded for this game. Existing results are preserved.",
+    overtimes: "Overtime periods",
+    player: "Player",
+    minutes: "Minutes played (minutes:seconds)",
+    fieldGoals: "Field goals made-attempted",
+    threePointers: "Three-pointers made-attempted",
+    freeThrows: "Free throws made-attempted",
+    offensiveRebounds: "Offensive rebounds",
+    defensiveRebounds: "Defensive rebounds",
+    rebounds: "Total rebounds",
+    assists: "Assists",
+    steals: "Steals",
+    blocks: "Blocks",
+    turnovers: "Turnovers",
+    personalFouls: "Personal fouls",
+    points: "Points",
+    didNotPlay: "DNP",
+  },
   playerAttributes: {
     overall: "Overall rating",
     closeShot: "Close shot",

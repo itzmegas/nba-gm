@@ -10,6 +10,7 @@ import {
 } from "@/application/hooks/schedule/calendar";
 import { useSchedule } from "@/application/hooks/schedule/useSchedule";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { GameBoxScore } from "@/components/games/GameBoxScore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -270,7 +271,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
       <Dialog open={selectedDate !== null} onOpenChange={(open) => !open && setSelectedDate(null)}>
         <DialogContent
           aria-describedby={undefined}
-          className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-xl"
+          className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-5xl"
         >
           <DialogHeader>
             <DialogTitle className="capitalize">
@@ -312,6 +313,14 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                   <span className="text-xs uppercase text-muted-foreground">
                     {completed ? t("dashboard", "final") : t("dashboard", "scheduled")}
                   </span>
+                  {completed && (
+                    <GameBoxScore
+                      gameId={gameId}
+                      fixtureId={scheduledGame.id}
+                      homeLabel={home?.name ?? t("dashboard", "home")}
+                      awayLabel={away?.name ?? t("dashboard", "away")}
+                    />
+                  )}
                 </div>
               );
             })}
