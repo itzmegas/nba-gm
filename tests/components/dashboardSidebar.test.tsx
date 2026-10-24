@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/application/providers/I18nProvider";
 import { DashboardSidebar } from "@/components/dashboard/layout-components";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { postseasonFixture } from "@/infrastructure/repositories/postseason.test-fixture";
+
+const { postseason, offseason } = vi.hoisted(() => ({ postseason: vi.fn(), offseason: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard/roster" }));
 vi.mock("@/application/hooks/postseason/usePostseason", () => ({
-  usePostseason: () => ({ data: undefined }),
+  usePostseason: postseason,
+}));
+vi.mock("@/application/hooks/offseason/useOffseason", () => ({
+  useOffseason: offseason,
 }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({
   useTeams: () => ({
@@ -27,7 +33,14 @@ vi.mock("@/application/hooks/simulation/useCurrentTeamGame", () => ({
   useCurrentTeamGame: () => ({ data: undefined, isPending: false, isError: false }),
 }));
 
-afterEach(cleanup);
+beforeEach(() => {
+  postseason.mockReturnValue({ data: undefined });
+  offseason.mockReturnValue({ data: null });
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 function renderSidebar(defaultOpen = true) {
   return render(
@@ -47,6 +60,27 @@ function renderSidebar(defaultOpen = true) {
 }
 
 describe("game sidebar visual adjustments", () => {
+  it("shows persisted offseason planning without enabling simulation or changing the season", () => {
+    postseason.mockReturnValue({
+      data: postseasonFixture({ phase: "complete", championTeamId: "team" }),
+    });
+    offseason.mockReturnValue({ data: { seasonYear: 2026, enteredAt: "2027-06-10T00:00:00Z" } });
+    renderSidebar();
+    expect(offseason).toHaveBeenCalledWith("game", 2026);
+    expect(screen.getByRole("link", { name: "Offseason planning open" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/postseason"
+    );
+    expect(screen.getByText("Season complete")).toBeTruthy();
+    expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
+    expect(screen.getByText("Oct 1, 2026")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Simulate day" }).hasAttribute("disabled")).toBe(
+      true
+    );
+    expect(
+      screen.getByRole("button", { name: "More simulation options" }).hasAttribute("disabled")
+    ).toBe(true);
+  });
+
   it("places Calendar immediately after Dashboard", () => {
     const { container } = renderSidebar();
     const links = [...container.querySelectorAll('[data-slot="sidebar-menu-button"]')];

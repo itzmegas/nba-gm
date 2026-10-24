@@ -1,4 +1,29 @@
 export const en = {
+  offseason: {
+    title: "Offseason",
+    enter: "Enter offseason planning",
+    entering: "Opening offseason…",
+    entered: "Offseason planning open",
+    preserved:
+      "Open read-only planning without changing the current season, simulation date, roster, or history. The next season is not playable yet.",
+    informational:
+      "Informational only: no options are exercised, contracts renewed, or players released. Known coverage does not imply guaranteed salary. Missing contract data is shown as unknown.",
+    contractOutlook: "Selected team · Next-season contract outlook",
+    player: "Player",
+    contractStatus: "Contract status",
+    nextSalary: "Next-season salary",
+    expiring: "Expiring contract",
+    player_option: "Player option",
+    team_option: "Team option",
+    continuing: "Known next-season coverage",
+    unknown: "Unknown contract outlook",
+    estimated: "Estimated",
+    unknownSalary: "Unknown salary",
+    empty: "No eligible players on the selected team's roster.",
+    loadFailed: "Unable to confirm offseason entry. Retry before taking any action.",
+    enterFailed: "Unable to open offseason planning. Try again; the season remains unchanged.",
+    rosterFailed: "Unable to load the contract outlook. Retry to see the selected team's roster.",
+  },
   postseason: {
     title: "Postseason",
     eliminatedShort: "Your team is eliminated",

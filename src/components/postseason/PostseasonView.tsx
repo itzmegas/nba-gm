@@ -5,15 +5,17 @@ import { usePostseason } from "@/application/hooks/postseason/usePostseason";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useT } from "@/application/providers/I18nProvider";
 import { GameBoxScoreContent } from "@/components/games/GameBoxScore";
+import { OffseasonPanel } from "@/components/offseason/OffseasonPanel";
 import { PostseasonStatus } from "@/components/postseason/PostseasonStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type {
-  PostseasonConference,
-  PostseasonGame,
-  PostseasonState,
+import {
+  hasPostseasonChampion,
+  type PostseasonConference,
+  type PostseasonGame,
+  type PostseasonState,
 } from "@/domain/entities/Postseason";
 import type { Team } from "@/domain/entities/Team";
 
@@ -233,6 +235,9 @@ export function PostseasonView({ gameId, selectedTeamId }: PostseasonViewProps) 
   return (
     <div className="space-y-6">
       <PostseasonStatus state={state} selectedTeamId={selectedTeamId} teams={teams.data} />
+      {hasPostseasonChampion(state) && (
+        <OffseasonPanel gameId={gameId} selectedTeamId={selectedTeamId} />
+      )}
       {state.games.some((game) => game.stage !== null) && (
         <Card>
           <CardContent className="space-y-3">

@@ -1,6 +1,34 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  offseason: {
+    title: "Entretemporada",
+    enter: "Entrar en la planificación de entretemporada",
+    entering: "Abriendo entretemporada…",
+    entered: "Planificación de entretemporada abierta",
+    preserved:
+      "Abre la planificación de solo lectura sin cambiar la temporada actual, la fecha de simulación, la plantilla ni el historial. La siguiente temporada todavía no se puede jugar.",
+    informational:
+      "Solo informativo: no se ejercen opciones, no se renuevan contratos ni se liberan jugadores. La cobertura conocida no implica un salario garantizado. Los datos contractuales faltantes se muestran como desconocidos.",
+    contractOutlook: "Equipo seleccionado · Perspectiva contractual para la siguiente temporada",
+    player: "Jugador",
+    contractStatus: "Estado contractual",
+    nextSalary: "Salario de la siguiente temporada",
+    expiring: "Contrato por vencer",
+    player_option: "Opción de jugador",
+    team_option: "Opción de equipo",
+    continuing: "Cobertura conocida para la siguiente temporada",
+    unknown: "Perspectiva contractual desconocida",
+    estimated: "Estimado",
+    unknownSalary: "Salario desconocido",
+    empty: "No hay jugadores elegibles en la plantilla del equipo seleccionado.",
+    loadFailed:
+      "No se pudo confirmar la entrada en entretemporada. Reintenta antes de realizar una acción.",
+    enterFailed:
+      "No se pudo abrir la planificación de entretemporada. Reintenta; la temporada no ha cambiado.",
+    rosterFailed:
+      "No se pudo cargar la perspectiva contractual. Reintenta para ver la plantilla del equipo seleccionado.",
+  },
   postseason: {
     title: "Postemporada",
     eliminatedShort: "Tu equipo está eliminado",

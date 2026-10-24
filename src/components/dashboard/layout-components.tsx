@@ -19,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import { useOffseason } from "@/application/hooks/offseason/useOffseason";
 import { usePostseason } from "@/application/hooks/postseason/usePostseason";
 import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation";
 import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
@@ -269,6 +270,9 @@ export function DashboardSidebar({
                 <p>{t("postseason", "eliminatedShort")}</p>
               )}
               {championConfirmed && <p>{t("postseason", "noRollover")}</p>}
+              {championConfirmed && (
+                <OffseasonSidebarStatus gameId={gameId} seasonYear={seasonYear} />
+              )}
             </div>
           )}
           <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
@@ -402,6 +406,23 @@ export function DashboardSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+function OffseasonSidebarStatus({
+  gameId,
+  seasonYear,
+}: Pick<DashboardSidebarProps, "gameId" | "seasonYear">) {
+  const t = useT();
+  const offseason = useOffseason(gameId, seasonYear);
+  if (!offseason.data) return null;
+  return (
+    <Link
+      className="block font-semibold underline underline-offset-2"
+      href={`/games/${gameId}/dashboard/postseason`}
+    >
+      {t("offseason", "entered")}
+    </Link>
   );
 }
 

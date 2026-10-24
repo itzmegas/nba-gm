@@ -44,4 +44,8 @@ El runner PostgreSQL utiliza un contenedor desechable sin red externa ni credenc
 
 **Comprobado localmente:** ambas temporadas de prueba llegan al campeón; dos conexiones compiten por cada día, incluidos los seis cambios de ronda. Tres fallos inyectados comprueban rollback completo antes de reintentar. También se verifican barrido, séptimo partido, localías, desempates de Finales y aislamiento. La suite de interfaz/repositorios suma 762 tests en 112 archivos; TypeScript, Biome (382 archivos), build y esquema canónico desde cero pasan.
 
-**Aceptación manual parcial (2026-10-25):** el usuario confirmó el recorrido hasta el cierre con el equipo eliminado. Queda comprobar el cuadro y el campeón mostrado, y contrastar las tres fases de estadísticas con sus box scores: la captura del cierre no verifica esas vistas. No recalcular encuentros ni reiniciar la partida.
+**Aceptación manual parcial (2026-10-25):** el usuario confirmó el cierre con Sacramento eliminado y mostró Toronto campeón, Houston subcampeón, cuadro del Este completo y Toronto 130–116 Houston con box score en el calendario. Las capturas de Liga verifican el cambio visible entre regular y playoffs: cobertura 855/870 frente a 88/88 y actuaciones distintas. No verifican el cuadro completo de Oeste/Finales, el modal de box score desde Postemporada, Play-in, Plantilla ni todos los totales individuales. No recalcular encuentros ni reiniciar la partida.
+
+## Siguiente etapa: offseason
+
+La migración posterior `053` añade una entrada explícita de planificación en esta misma vista después de confirmar al campeón. Conserva el año, la fecha, los resultados y el cuadro de esta temporada; no inicia la próxima campaña ni ejecuta decisiones contractuales. Ver [Entrada a la offseason](OFFSEASON.md).

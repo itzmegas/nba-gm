@@ -23,6 +23,9 @@ const { query, teams, boxScore } = vi.hoisted(() => ({
 vi.mock("@/application/hooks/postseason/usePostseason", () => ({ usePostseason: query }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: teams }));
 vi.mock("@/application/hooks/schedule/useBoxScore", () => ({ useBoxScore: boxScore }));
+vi.mock("@/components/offseason/OffseasonPanel", () => ({
+  OffseasonPanel: () => <div>Offseason planning panel</div>,
+}));
 beforeEach(() => {
   teams.mockReturnValue({
     data: postseasonTeamsFixture(),
@@ -55,11 +58,13 @@ describe("postseason phases and fixed visual bracket", () => {
     expect(screen.getByText(/Six teams per conference/)).toBeTruthy();
     expect(container.querySelector("[data-bracket-slot]")).toBeNull();
     expect(screen.queryByText(/Your team is eliminated/)).toBeNull();
+    expect(screen.queryByText("Offseason planning panel")).toBeNull();
   });
 
   it("shows all 15 slots and the fixed first-round order before series preparation", () => {
     const { container } = show(postseasonFixture());
     expect(screen.getByText("Playoff field ready")).toBeTruthy();
+    expect(screen.queryByText("Offseason planning panel")).toBeNull();
     expect(screen.getByText(/Advance the simulation to prepare/)).toBeTruthy();
     expect(screen.getByText(/Your team is eliminated/)).toBeTruthy();
     expect(screen.getByText(/#13/)).toBeTruthy();
@@ -159,6 +164,7 @@ describe("postseason phases and fixed visual bracket", () => {
       1
     );
     expect(screen.getByText("Champion: East Team 1")).toBeTruthy();
+    expect(screen.getByText("Offseason planning panel")).toBeTruthy();
     expect(screen.getByText("Runner-up: West Team 1")).toBeTruthy();
     expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
     expect(screen.queryByText(/Your team is eliminated/)).toBeNull();

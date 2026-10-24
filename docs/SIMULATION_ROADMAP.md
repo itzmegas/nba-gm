@@ -1,7 +1,7 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** atributos, posesiones/box score, estadísticas individuales y postemporada implementados. El usuario confirmó el recorrido hasta el cierre de playoffs el 10 de junio de 2027 en la partida existente. Pendiente comprobar visualmente el cuadro y los filtros de estadísticas por fase; la continuidad entre temporadas queda fuera de esta entrega.
-**Fecha:** 2026-10-24.
+**Estado:** atributos, posesiones/box score, estadísticas individuales y postemporada implementados. El usuario confirmó el cierre del 10 de junio de 2027, el campeón mostrado, el cuadro del Este y el cambio de regular a playoffs en las estadísticas de Liga. El primer avance entre temporadas es una entrada explícita a offseason con resumen contractual; no inicia la próxima campaña.
+**Fecha:** 2026-10-25.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
 
@@ -74,7 +74,7 @@ Tratarlo como un bloque cerrado que pueda aprovechar el motor disponible, sin es
 
 Separarla de los playoffs: cambiar el año no alcanza. Hay que definir contratos que vencen, opciones, agencia libre, draft, calendario nuevo y conservación del historial.
 
-El alcance inicial de esta etapa queda por acordar; no implica implementar todas las reglas de la NBA de una vez.
+**Primer alcance acordado:** entrar explícitamente a offseason después del campeón y consultar vencimientos, opciones e información desconocida de la plantilla actual. Conservar la misma partida, fecha, año e historial, sin ejecutar decisiones contractuales ni iniciar 2027–28. Detalle: [Entrada a la offseason](OFFSEASON.md).
 
 ## Antes de implementar
 
@@ -83,7 +83,7 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Definir compatibilidad con partidas existentes: sin backfill y sin inventar resultados de partidos completados.
 - [x] Integrar en la función SQL diaria real; cambiar únicamente `SeasonSimulator.ts` no alcanzaba el flujo que usa el juego.
 
-**Siguiente paso recomendado:** comprobar el selector de estadísticas en Plantilla y Liga, preservando la partida existente y sus resultados históricos.
+**Siguiente paso recomendado:** entregar la entrada mínima a offseason conservando la partida y su historial. Mantener identificadas las comprobaciones visuales aún pendientes, sin confundirlas con errores confirmados.
 
 ## Avance del bloque 1
 
@@ -133,7 +133,8 @@ Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).
 - [x] Selector de plantilla/atributos y estadísticas en Plantilla y Liga, respetando los jugadores y filtros existentes, con totales/por partido y porcentajes ponderados por intentos, en español e inglés.
 - [x] DNP excluidos de partidos jugados; aviso de cobertura incompleta para encuentros sin box score.
 - [x] El usuario confirmó la instalación de 048; no se consultó ni modificó Supabase desde el agente.
-- [ ] Comprobar el selector de vistas en la partida existente.
+- [x] El usuario mostró la vista de estadísticas de Liga en regular y playoffs: cambia de 855/870 a 88/88 encuentros con box score, y actualiza las actuaciones mostradas.
+- [ ] Comprobar manualmente Play-in, la vista de Plantilla y la correspondencia numérica con box scores; las capturas no completan esas comprobaciones.
 
 Detalle: [Estadísticas de temporada](SEASON_STATISTICS.md).
 
@@ -148,7 +149,9 @@ Detalle: [Estadísticas de temporada](SEASON_STATISTICS.md).
 - [x] Adaptar avance diario/por lotes, vista de postemporada y estadísticas separadas por fase, implementados localmente.
 - [x] Verificar el recorrido completo hasta campeón en PostgreSQL aislado, con motor v2 y fallback antiguo, concurrencia, rollback y conservación de la clasificación e historial regular y del play-in.
 - [x] El usuario confirmó el recorrido con `052` hasta el cierre de playoffs en la partida existente, con avance bloqueado y sin cambio de temporada.
-- [ ] Comprobar visualmente el cuadro, el campeón mostrado y los filtros de estadísticas por fase; la captura del cierre no permite verificar esas vistas.
+- [x] Comprobar visualmente campeón y subcampeón, cuadro completo del Este y box score desde el calendario. Las capturas muestran Toronto campeón y Houston subcampeón.
+- [x] Comprobar que el selector de regular/playoffs en Liga cambia la cobertura y la tabla de estadísticas.
+- [ ] Comprobar las partes no visibles del cuadro de Oeste/Finales, el box score abierto desde Postemporada y las comprobaciones estadísticas restantes del bloque 3.
 
 El cierre SQL guarda los 30 seeds y un sorteo determinista una sola vez cuando el calendario regular realmente termina. Las inconsistencias entre resultados y clasificación bloquean el cierre sin corregir datos silenciosamente. `050` continúa automáticamente hacia el play-in, separado de la clasificación regular, y guarda las 16 plazas de playoffs en otra tabla. `052` reemplaza la parada intermedia por cuatro rondas al mejor de siete y guarda campeón/subcampeón. La interfaz delega el punto de parada al backend: solo el campeón confirmado cierra el avance, sin cambio de temporada.
 
@@ -156,8 +159,18 @@ Las migraciones no avanzan partidas al instalarse. La partida de referencia se c
 
 **Corrección de compatibilidad `051`:** completa únicamente conferencias ausentes de equipos NBA reconocidos. La interfaz ya mostraba esas conferencias mediante un fallback local que no se persistía. El runner reproduce el bloqueo al cerrar el 15 de abril con 30 conferencias NULL y comprueba que la reparación permite continuar, sin recalcular encuentros completados ni modificar el historial. No reiniciar la partida: aplicar la migración y reintentar el avance pendiente.
 
-**Entrega confirmada por el usuario (2026-10-25):** la partida `8d2d44b9-9634-4a74-94fc-0732825122e8` continuó desde el play-in del 19 de abril hasta el cierre del 10 de junio de 2027, aunque su equipo quedó 13.º. La captura muestra temporada finalizada, equipo eliminado, avance bloqueado y ausencia de cambio de temporada. Este mensaje requiere fase completada y campeón registrado. No se identificó al campeón ni se comprobaron el cuadro o los filtros de estadísticas mediante esa captura. El agente no accedió ni modificó datos remotos.
+**Entrega confirmada por el usuario (2026-10-25):** la partida `8d2d44b9-9634-4a74-94fc-0732825122e8` continuó desde el play-in del 19 de abril hasta el cierre del 10 de junio de 2027, aunque Sacramento quedó 13.º. Las capturas posteriores muestran Toronto campeón, Houston subcampeón, cuadro del Este completo y Toronto 130–116 Houston con box score desde el calendario. En Liga, Durant pasa de 57 partidos y 23,6 puntos en regular a 25 y 24,2 en playoffs; la cobertura cambia de 855/870 a 88/88. Esto verifica el cambio visible de fase, no una auditoría de todos los totales ni las vistas no mostradas. El agente no accedió ni modificó datos remotos.
 
 Verificación reproducible: `bun scripts/test-postseason-qualification-postgres.ts`. El runner crea y elimina únicamente su contenedor PostgreSQL aislado, sin credenciales ni red externa; incluye 50 escenarios de paridad entre dominio y SQL.
 
 **Verificación local de `052`:** 762 tests en 112 archivos, TypeScript, Biome (382 archivos), build de producción y arranque del esquema canónico en PostgreSQL aislado correctos. El runner completa ambas temporadas de prueba hasta campeón, hace competir dos conexiones en cada día —incluidos los seis cambios de ronda— y prueba tres fallos con rollback de resultados, box scores, series, vínculos, campeón y reloj. Comprueba localía, barridos, séptimo partido, cuadro fijo, desempates de Finales, permisos y estadísticas separadas por fase. El usuario confirmó el cierre; solo quedan pendientes las comprobaciones visuales indicadas arriba. El agente no aplicó migraciones remotas.
+
+## Avance del bloque 5: entrada a offseason
+
+- [x] Acordar una transición explícita y persistente tras el campeón, sin iniciar otra temporada.
+- [x] Implementar localmente la entrada por partida/temporada y la vista informativa de contratos, con datos desconocidos explícitos y sin decisiones automáticas.
+- [x] El usuario mostró la planificación abierta en la partida existente y confirmó que el estado y el resumen persisten después de recargar, sin volver a pedir la entrada. El agente no aplicó migraciones remotas ni avanzó la partida.
+
+No hay draft, mercado de verano, regeneración de calendarios, envejecimiento ni cambios automáticos de contratos o plantilla. Las verificaciones locales de este bloque se registran en la entrega; no sustituyen la aceptación manual de la partida remota.
+
+**Verificación local:** 796 tests en 116 archivos, TypeScript, Biome (394 archivos), build y runner PostgreSQL aislado correctos. `053` y su copia canónica son idénticos. Se verificaron reintentos concurrentes, permisos, rollback y conservación de todas las tablas anteriores. Detalle y límites: [Entrada a la offseason](OFFSEASON.md).

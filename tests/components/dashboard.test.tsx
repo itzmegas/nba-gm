@@ -21,6 +21,9 @@ const { day, range, postseason } = vi.hoisted(() => ({
   postseason: vi.fn(),
 }));
 vi.mock("@/application/hooks/postseason/usePostseason", () => ({ usePostseason: postseason }));
+vi.mock("@/application/hooks/offseason/useOffseason", () => ({
+  useOffseason: () => ({ data: null }),
+}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard" }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: [] }) }));
 vi.mock("@/application/hooks/simulation", () => ({
