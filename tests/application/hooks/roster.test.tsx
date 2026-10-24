@@ -9,6 +9,7 @@ import type { GamePlayerContractState } from "@/domain/contracts/GameContract";
 import type { PlayerState } from "@/domain/entities/PlayerState";
 import { SupabaseGameContractRepository } from "@/infrastructure/contracts/SupabaseGameContractRepository";
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
+import { SupabasePlayerRatingsRepository } from "@/infrastructure/repositories/SupabasePlayerRatingsRepository";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
 
 const gameId = "11111111-1111-4111-8111-111111111111";
@@ -48,7 +49,7 @@ const from = vi.fn(() => {
 });
 vi.mock("@/infrastructure/supabase/client", () => ({ createClient: () => ({ from }) }));
 
-function renderRoster() {
+function renderRoster(seasonYear?: number) {
   const states: PlayerState[] = [
     ...Array.from({ length: 11 }, (_, n) => n),
     1500,
@@ -99,7 +100,7 @@ function renderRoster() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useRoster(gameId, teamId), { wrapper });
+  return renderHook(() => useRoster(gameId, teamId, seasonYear), { wrapper });
 }
 
 afterEach(() => {
@@ -109,7 +110,39 @@ afterEach(() => {
 });
 
 describe("complete game roster reads", () => {
+  it("attaches saved ratings for the requested season to the correct player", async () => {
+    const ratings = {
+      attributes: { closeShot: 80 },
+      estimated: false,
+    } as unknown as import("@/domain/entities/PlayerAttributes").PlayerRatings;
+    const getRatings = vi
+      .spyOn(SupabasePlayerRatingsRepository.prototype, "getByPlayers")
+      .mockResolvedValue(new Map([[playerRows[1500].id, ratings]]));
+    const { result } = renderRoster(2026);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getRatings).toHaveBeenCalledWith(
+      gameId,
+      2026,
+      expect.arrayContaining([playerRows[1500].id])
+    );
+    expect(
+      result.current.data?.find(({ player }) => player.id === playerRows[1500].id)?.ratings
+    ).toEqual(ratings);
+    expect(
+      result.current.data?.find(({ player }) => player.id === playerRows[0].id)?.ratings
+    ).toBeNull();
+  });
+
+  it("surfaces ratings read failures instead of claiming the values are missing", async () => {
+    vi.spyOn(SupabasePlayerRatingsRepository.prototype, "getByPlayers").mockRejectedValue(
+      new Error("Ratings unavailable")
+    );
+    const { result } = renderRoster(2026);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe("Ratings unavailable");
+  });
   it("shows all 15 standard and 2 two-way players beyond the global 1000-player limit", async () => {
+    const getRatings = vi.spyOn(SupabasePlayerRatingsRepository.prototype, "getByPlayers");
     const { result } = renderRoster();
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(17);
@@ -117,6 +150,7 @@ describe("complete game roster reads", () => {
       result.current.data?.filter(({ gameContract }) => gameContract?.contractType === "two-way")
     ).toHaveLength(2);
     expect(result.current.data?.some(({ player }) => player.id === playerRows[1500].id)).toBe(true);
+    expect(getRatings).not.toHaveBeenCalled();
   });
 
   it("surfaces a later player-page failure instead of displaying a partial roster", async () => {

@@ -1,12 +1,19 @@
 import { z } from "zod";
 import type { RosterEntry, RosterTeam } from "@/application/roster/currentRosterRefresh";
 
+const birthDateSchema = z
+  .union([z.iso.date(), z.iso.datetime({ offset: true })])
+  .transform((value) => value.slice(0, 10))
+  .nullish();
+
 const athleteSchema = z.object({
   id: z.string().regex(/^\d+$/),
   firstName: z.string().min(1),
   lastName: z.string(),
   fullName: z.string().min(1),
   age: z.number().int().nonnegative().max(120).nullish(),
+  displayDOB: birthDateSchema,
+  dateOfBirth: birthDateSchema,
   displayHeight: z.string().optional(),
   displayWeight: z.string().optional(),
   jersey: z.string().nullable().optional(),
@@ -121,6 +128,7 @@ export async function fetchCurrentRosterForTeam(
       last_name: athlete.lastName,
       full_name: athlete.fullName,
       age: athlete.age ?? null,
+      birth_date: athlete.dateOfBirth ?? athlete.displayDOB ?? null,
       position: athlete.position?.abbreviation ?? null,
       height: athlete.displayHeight ?? null,
       weight: athlete.displayWeight ?? null,

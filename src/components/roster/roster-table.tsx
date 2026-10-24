@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { type ReactNode, useState } from "react";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { createT } from "@/application/i18n/createT";
 import type { Locale } from "@/application/i18n/types";
@@ -9,13 +10,13 @@ import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { ReleasePlayerButton } from "@/components/roster/release-player-button";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { SortableTableHeader } from "@/components/ui/sortable-table-header";
+import { TableActions } from "@/components/ui/table-actions";
 import { CONTRACT_IDENTITY_RESOLUTION_STATUS } from "@/domain/contracts/GameContract";
 import { CONTRACT_ORIGIN } from "@/domain/entities/Contract";
-import {
-  formatSalarySeasonLabel,
-  getSalarySeasonYears,
-  getYearsRemaining,
-} from "@/domain/entities/Season";
+import type { PlayerAttributes } from "@/domain/entities/PlayerAttributes";
+import { formatSalarySeasonLabel, getYearsRemaining } from "@/domain/entities/Season";
 
 export function formatRosterSalary(
   amount: number | null | undefined,
@@ -85,7 +86,11 @@ function getContractYearsLeft(baseSeasonYear: number, endYear: number): number {
   return getYearsRemaining(baseSeasonYear, endYear);
 }
 
-function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number, locale: Locale) {
+export function getContractStatus(
+  rosterPlayer: RosterPlayer,
+  baseSeasonYear: number,
+  locale: Locale
+) {
   const t = createT(locale);
   const { contract } = rosterPlayer;
   if (!contract)
@@ -135,33 +140,41 @@ function getContractStatus(rosterPlayer: RosterPlayer, baseSeasonYear: number, l
   };
 }
 
-function ContractYearsBar({
-  baseSeasonYear,
-  endYear,
-}: {
-  baseSeasonYear: number;
-  endYear: number;
-}) {
-  const t = useT();
-  const yearsLeft = getContractYearsLeft(baseSeasonYear, endYear);
-  const maxYears = 5;
-  const pct = Math.min((yearsLeft / maxYears) * 100, 100);
+const ATTRIBUTE_COLUMNS = [
+  { key: "closeShot", label: "CLOSE" },
+  { key: "midRangeShot", label: "MID" },
+  { key: "threePointShot", label: "3PT" },
+  { key: "freeThrow", label: "FT" },
+  { key: "drawFoul", label: "FOUL" },
+  { key: "ballHandle", label: "HANDLE" },
+  { key: "passAccuracy", label: "PASS" },
+  { key: "interiorDefense", label: "INT D" },
+  { key: "perimeterDefense", label: "PER D" },
+  { key: "steal", label: "STL" },
+  { key: "block", label: "BLK" },
+  { key: "offensiveRebound", label: "OREB" },
+  { key: "defensiveRebound", label: "DREB" },
+  { key: "stamina", label: "STA" },
+] as const satisfies readonly { key: keyof PlayerAttributes; label: string }[];
 
-  let barColor = "bg-primary";
-  if (yearsLeft === 1) barColor = "bg-destructive";
-  else if (yearsLeft === 2) barColor = "bg-orange-500";
+const SORT_VALUES = {
+  jerseyNumber: ({ player }: RosterPlayer) =>
+    player.jerseyNumber?.trim() ? Number(player.jerseyNumber) : null,
+  player: ({ player }: RosterPlayer) => player.fullName,
+  position: ({ player }: RosterPlayer) => player.position,
+  height: ({ player }: RosterPlayer) => {
+    const parts = player.height?.match(/^(\d+)\s*'\s*(\d+)\s*"?$/);
+    return parts ? Number(parts[1]) * 12 + Number(parts[2]) : null;
+  },
+  salary: ({ contract }: RosterPlayer) => contract?.salaryY1,
+  overall: ({ ratings }: RosterPlayer) => ratings?.overall,
+};
 
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
-        <div className={`h-full ${barColor} rounded-full`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {yearsLeft}
-        {t("dashboard", "yearsShort")}
-      </span>
-    </div>
-  );
+type SortColumn = keyof typeof SORT_VALUES | keyof PlayerAttributes;
+
+function getSortValue(row: RosterPlayer, column: SortColumn) {
+  if (column in SORT_VALUES) return SORT_VALUES[column as keyof typeof SORT_VALUES](row);
+  return row.ratings?.attributes[column as keyof PlayerAttributes];
 }
 
 interface RosterTableProps {
@@ -170,6 +183,8 @@ interface RosterTableProps {
   seasonYear: number;
   leagueTeamId?: string;
   canRelease?: boolean;
+  onSelectPlayer?: (playerId: string) => void;
+  selectedPlayerId?: string;
 }
 
 export function RosterTable({
@@ -178,70 +193,129 @@ export function RosterTable({
   seasonYear,
   leagueTeamId,
   canRelease = false,
+  onSelectPlayer,
+  selectedPlayerId,
 }: RosterTableProps) {
   const router = useRouter();
   const t = useT();
   const locale = useLocale();
-
-  const salarySeasonYears = getSalarySeasonYears(seasonYear, 2);
+  const [sort, setSort] = useState<{ column: SortColumn; ascending: boolean }>({
+    column: "salary",
+    ascending: false,
+  });
+  const collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
 
   const sorted = players.filter(shouldRenderRosterPlayer).sort((a, b) => {
-    const sa = a.contract?.salaryY1 ?? 0;
-    const sb = b.contract?.salaryY1 ?? 0;
-    return sb - sa;
+    const sa = getSortValue(a, sort.column);
+    const sb = getSortValue(b, sort.column);
+    const missingA = sa == null || sa === "" || (typeof sa === "number" && !Number.isFinite(sa));
+    const missingB = sb == null || sb === "" || (typeof sb === "number" && !Number.isFinite(sb));
+    if (missingA || missingB) return Number(missingA) - Number(missingB);
+    const comparison =
+      typeof sa === "number" && typeof sb === "number"
+        ? sa - sb
+        : collator.compare(String(sa), String(sb));
+    return sort.ascending ? comparison : -comparison;
   });
+
+  function header(column: SortColumn, label: ReactNode, className: string) {
+    return (
+      <SortableTableHeader
+        key={column}
+        className={className}
+        ascending={sort.column === column ? sort.ascending : undefined}
+        onSort={() =>
+          setSort({
+            column,
+            ascending:
+              sort.column === column
+                ? !sort.ascending
+                : column === "player" ||
+                  column === "position" ||
+                  column === "height" ||
+                  column === "jerseyNumber",
+          })
+        }
+      >
+        {label}
+      </SortableTableHeader>
+    );
+  }
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-border/50">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border/50 bg-muted/30">
-            <th className="py-3 px-4 text-left font-medium text-muted-foreground w-8">#</th>
-            <th className="py-3 px-4 text-left font-medium text-muted-foreground">
-              {t("dashboard", "rosterPlayer")}
-            </th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-16">
-              {t("dashboard", "rosterPosition")}
-            </th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-20 hidden md:table-cell">
-              {t("dashboard", "rosterHeight")}
-            </th>
-            <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28">
-              {t("dashboard", "rosterSalary")} {formatSalarySeasonLabel(salarySeasonYears[0])}
-            </th>
-            <th className="py-3 px-2 text-right font-medium text-muted-foreground w-28 hidden lg:table-cell">
-              {t("dashboard", "rosterSalary")} {formatSalarySeasonLabel(salarySeasonYears[1])}
-            </th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-28 hidden md:table-cell">
-              {t("dashboard", "rosterDuration")}
-            </th>
-            <th className="py-3 px-4 text-center font-medium text-muted-foreground w-36">
-              {t("dashboard", "rosterStatus")}
-            </th>
-            {canRelease && (
-              <th className="py-3 px-4 text-right font-medium text-muted-foreground">
-                {t("dashboard", "rosterActions")}
-              </th>
+            {header(
+              "jerseyNumber",
+              "#",
+              "py-3 px-4 text-left font-medium text-muted-foreground w-8"
             )}
+            {header(
+              "player",
+              t("dashboard", "rosterPlayer"),
+              "py-3 px-4 text-left font-medium text-muted-foreground [&>button]:justify-start"
+            )}
+            {header(
+              "position",
+              t("dashboard", "rosterPosition"),
+              "py-3 px-4 text-center font-medium text-muted-foreground w-16"
+            )}
+            {header(
+              "height",
+              t("dashboard", "rosterHeight"),
+              "py-3 px-4 text-center font-medium text-muted-foreground w-20 hidden md:table-cell"
+            )}
+            {header(
+              "salary",
+              `${t("dashboard", "rosterSalary")} ${formatSalarySeasonLabel(seasonYear)}`,
+              "min-w-36 whitespace-nowrap py-3 px-4 text-right font-medium text-muted-foreground [&>button]:justify-end"
+            )}
+            {header(
+              "overall",
+              <abbr title={t("playerAttributes", "overall")} className="cursor-help no-underline">
+                OVR
+              </abbr>,
+              "min-w-16 border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-bold"
+            )}
+            {ATTRIBUTE_COLUMNS.map(({ key, label }) =>
+              header(
+                key,
+                <abbr title={t("playerAttributes", key)} className="cursor-help no-underline">
+                  {label}
+                </abbr>,
+                "px-3 py-3 text-center font-medium text-muted-foreground whitespace-nowrap"
+              )
+            )}
+            <th className="py-3 px-4 text-right font-medium text-muted-foreground">
+              {t("dashboard", "rosterActions")}
+            </th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((rosterPlayer, idx) => {
             const { player, contract } = rosterPlayer;
-            const status = getContractStatus(rosterPlayer, seasonYear, locale);
             const classification = getRosterContractClassification(rosterPlayer, locale);
-            const StatusIcon = status.icon;
             const isEven = idx % 2 === 0;
 
             return (
               <tr
                 key={player.id}
-                onClick={() =>
-                  router.push(
-                    `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                onClick={(event) => {
+                  if (
+                    event.target instanceof Element &&
+                    event.target.closest("button, [role=menu]")
                   )
-                }
-                className={`border-b border-border/30 transition-colors hover:bg-muted/40 cursor-pointer ${isEven ? "" : "bg-muted/10"}`}
+                    return;
+                  if (onSelectPlayer) onSelectPlayer(player.id);
+                  else
+                    router.push(
+                      `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                    );
+                }}
+                data-state={selectedPlayerId === player.id ? "selected" : undefined}
+                className={`border-b border-border/30 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/10 ${onSelectPlayer ? "cursor-pointer" : ""} ${isEven ? "" : "bg-muted/10"}`}
               >
                 {/* Número camiseta */}
                 <td className="py-3 px-4 text-muted-foreground font-mono text-xs">
@@ -259,10 +333,27 @@ export function RosterTable({
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold whitespace-nowrap">{player.fullName}</span>
+                      <button
+                        type="button"
+                        className="font-semibold whitespace-nowrap hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                        aria-pressed={onSelectPlayer ? selectedPlayerId === player.id : undefined}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (onSelectPlayer) onSelectPlayer(player.id);
+                          else
+                            router.push(
+                              `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                            );
+                        }}
+                      >
+                        {player.fullName}
+                      </button>
                       <Badge variant="outline" title={classification.title}>
                         {classification.label}
                       </Badge>
+                      {rosterPlayer.ratings?.estimated && (
+                        <Badge variant="outline">{t("playerAttributes", "estimated")}</Badge>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -280,41 +371,34 @@ export function RosterTable({
                 </td>
 
                 {/* Salario Y1 */}
-                <td className="py-3 px-4 text-right font-mono font-semibold">
+                <td className="min-w-36 whitespace-nowrap py-3 px-4 text-right font-mono font-semibold">
                   {formatRosterSalary(contract?.salaryY1, locale)}
                 </td>
-
-                {/* Salario Y2 */}
-                <td className="py-3 px-4 text-right font-mono text-muted-foreground hidden lg:table-cell">
-                  {formatRosterSalary(contract?.salaryY2, locale)}
+                <td className="border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-mono text-base font-black tabular-nums">
+                  {rosterPlayer.ratings?.overall ?? "—"}
                 </td>
 
-                {/* Barra de años */}
-                <td className="py-3 px-4 hidden md:table-cell">
-                  {contract ? (
-                    <div className="flex justify-center">
-                      <ContractYearsBar baseSeasonYear={seasonYear} endYear={contract.endYear} />
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-center block">—</span>
-                  )}
-                </td>
-
-                {/* Estado del contrato */}
-                <td className="py-3 px-4 text-center">
-                  <Badge
-                    variant={status.variant}
-                    className="inline-flex items-center gap-1 text-xs"
-                  >
-                    <StatusIcon className="h-3 w-3" />
-                    {status.label}
-                  </Badge>
-                </td>
-                {canRelease && (
-                  <td className="py-3 px-4 text-right">
-                    <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} />
+                {ATTRIBUTE_COLUMNS.map(({ key }) => (
+                  <td key={key} className="px-3 py-3 text-center font-mono tabular-nums">
+                    {rosterPlayer.ratings?.attributes[key] ?? "—"}
                   </td>
-                )}
+                ))}
+                <td className="py-3 px-4 text-right">
+                  <TableActions label={`${t("dashboard", "rosterActions")} — ${player.fullName}`}>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        router.push(
+                          `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                        )
+                      }
+                    >
+                      {t("dashboard", "viewPlayer")}
+                    </DropdownMenuItem>
+                    {canRelease && (
+                      <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} asMenuItem />
+                    )}
+                  </TableActions>
+                </td>
               </tr>
             );
           })}

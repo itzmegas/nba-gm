@@ -31,7 +31,11 @@ afterEach(() => {
   useBatchSimulationStore.setState({ isActive: false });
 });
 
-function renderRoster(canRelease = true, leagueTeamId?: string) {
+function renderRoster(
+  canRelease = true,
+  leagueTeamId?: string,
+  onSelectPlayer?: (id: string) => void
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   for (const key of ["roster", "contracts", "free-agency", "release-cap-charge", "player-states"]) {
     client.setQueryData(["games", gameId, key], "cached");
@@ -45,6 +49,7 @@ function renderRoster(canRelease = true, leagueTeamId?: string) {
           seasonYear={2026}
           canRelease={canRelease}
           leagueTeamId={leagueTeamId}
+          onSelectPlayer={onSelectPlayer}
         />
       </I18nProvider>
     </QueryClientProvider>
@@ -52,9 +57,21 @@ function renderRoster(canRelease = true, leagueTeamId?: string) {
   return client;
 }
 
+function openActions() {
+  fireEvent.pointerDown(screen.getByRole("button", { name: "Actions — Test Player" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+}
+
+function openRelease() {
+  openActions();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Release Test Player" }));
+}
+
 it("requires confirmation, cancels without writing, and does not navigate to the player", () => {
   renderRoster();
-  fireEvent.click(screen.getByRole("button", { name: "Release Test Player" }));
+  openRelease();
   expect(screen.getByRole("alertdialog")).toBeTruthy();
   expect(screen.getByText(/remain on your payroll/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -68,7 +85,7 @@ it("retains the request ID after an uncertain failure and reconciles all game re
     .mockResolvedValueOnce({ data: null, error: { message: "Connection lost" } })
     .mockResolvedValueOnce({ data: releaseId, error: null });
   const client = renderRoster();
-  fireEvent.click(screen.getByRole("button", { name: "Release Test Player" }));
+  openRelease();
   fireEvent.click(screen.getByRole("button", { name: "Confirm release" }));
   expect(await screen.findByRole("alert")).toHaveProperty(
     "textContent",
@@ -93,7 +110,7 @@ it("retains the request ID after an uncertain failure and reconciles all game re
 
 it("blocks confirmation when simulation starts while the dialog is open", async () => {
   renderRoster();
-  fireEvent.click(screen.getByRole("button", { name: "Release Test Player" }));
+  openRelease();
   await act(async () => {
     useBatchSimulationStore.setState({ isActive: true });
   });
@@ -106,7 +123,20 @@ it("blocks confirmation when simulation starts while the dialog is open", async 
 
 it("does not expose cuts on a read-only league roster", () => {
   renderRoster(false);
-  expect(screen.queryByRole("button", { name: "Release Test Player" })).toBeNull();
+  openActions();
+  expect(screen.queryByRole("menuitem", { name: "Release Test Player" })).toBeNull();
+});
+
+it("selects a roster player without navigating and uses the menu for full details", () => {
+  const select = vi.fn();
+  renderRoster(false, undefined, select);
+  fireEvent.click(screen.getByRole("button", { name: "Test Player" }));
+  expect(select).toHaveBeenCalledExactlyOnceWith(playerId);
+  expect(push).not.toHaveBeenCalled();
+  openActions();
+  expect(select).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("menuitem", { name: "View player" }));
+  expect(push).toHaveBeenCalledExactlyOnceWith(`/games/${gameId}/dashboard/player/${playerId}`);
 });
 
 it("uses 48px portraits while preserving read-only league navigation", () => {

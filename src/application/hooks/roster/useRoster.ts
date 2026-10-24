@@ -5,8 +5,10 @@ import {
 } from "@/domain/contracts/GameContract";
 import { CONTRACT_ORIGIN, type Contract } from "@/domain/entities/Contract";
 import type { Player } from "@/domain/entities/Player";
+import type { PlayerRatings } from "@/domain/entities/PlayerAttributes";
 import { SupabaseGameContractRepository } from "@/infrastructure/contracts/SupabaseGameContractRepository";
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
+import { SupabasePlayerRatingsRepository } from "@/infrastructure/repositories/SupabasePlayerRatingsRepository";
 import { SupabasePlayerRepository } from "@/infrastructure/repositories/SupabasePlayerRepository";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
 import { createClient } from "@/infrastructure/supabase/client";
@@ -15,11 +17,12 @@ export interface RosterPlayer {
   player: Player;
   contract: Contract | null;
   gameContract: GamePlayerContractState | null;
+  ratings?: PlayerRatings | null;
 }
 
-export function useRoster(gameId: string | null, teamId: string | null) {
+export function useRoster(gameId: string | null, teamId: string | null, seasonYear?: number) {
   return useQuery({
-    queryKey: ["games", gameId, "roster", teamId],
+    queryKey: ["games", gameId, "roster", teamId, seasonYear],
     queryFn: async (): Promise<RosterPlayer[]> => {
       if (!gameId || !teamId) return [];
 
@@ -37,6 +40,14 @@ export function useRoster(gameId: string | null, teamId: string | null) {
       ]);
 
       const playerById = new Map<string, Player>(allPlayers.map((player) => [player.id, player]));
+      const ratings =
+        seasonYear === undefined
+          ? new Map<string, PlayerRatings>()
+          : await new SupabasePlayerRatingsRepository(supabase).getByPlayers(
+              gameId,
+              seasonYear,
+              playerStates.map((state) => state.playerId)
+            );
 
       const contractByPlayerId = new Map<string, Contract>();
       for (const contract of contracts) {
@@ -69,6 +80,7 @@ export function useRoster(gameId: string | null, teamId: string | null) {
           player,
           contract,
           gameContract,
+          ratings: ratings.get(player.id) ?? null,
         });
       }
 

@@ -37,7 +37,11 @@ export default function LeaguePage({ params }: LeaguePageProps) {
   const selectedTeamId =
     teams?.find((team) => team.id === requestedTeamId)?.id ?? fallbackTeamId ?? null;
   const selectedTeam = teams?.find((team) => team.id === selectedTeamId);
-  const { data: rosterPlayers, isLoading: isLoadingRoster } = useRoster(gameId, selectedTeamId);
+  const {
+    data: rosterPlayers,
+    isLoading: isLoadingRoster,
+    isError: isRosterError,
+  } = useRoster(gameId, selectedTeamId, game?.seasonYear);
   const t = useT();
 
   useEffect(() => {
@@ -135,6 +139,10 @@ export default function LeaguePage({ params }: LeaguePageProps) {
           </div>
           {isLoadingRoster ? (
             <p className="px-6 py-12 text-center text-muted-foreground">{t("common", "loading")}</p>
+          ) : isRosterError ? (
+            <p role="alert" className="px-6 py-12 text-center text-destructive">
+              {t("dashboard", "rosterLoadFailed")}
+            </p>
           ) : !rosterPlayers?.length ? (
             <p className="px-6 py-12 text-center text-muted-foreground">
               {t("dashboard", "noPlayersRoster")}
