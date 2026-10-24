@@ -91,22 +91,28 @@ BEGIN
   ASSERT public.get_simulation_team_rating('93000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000001') = 55,
     'Legacy modern games without snapshots retain the roster-count formula';
 
-  v_seed := ('x' || substr(md5('93000000-0000-4000-8000-000000000001:2026-10-02:91000000-0000-4000-8000-000000000001:91000000-0000-4000-8000-000000000002'),1,8))::bit(32)::bigint;
-  expected_home := greatest(70,round(105+(home_rating+3-75)*0.55+(mod(abs(v_seed),2400)/100.0-12)));
-  expected_away := greatest(70,round(105+(away_rating-75)*0.55+(mod(abs(v_seed/2400),2400)/100.0-12)));
+  BEGIN
+    PERFORM * FROM public.advance_simulation_day('93000000-0000-4000-8000-000000000001','2026-10-01');
+    RAISE EXCEPTION 'Undersized attribute roster accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'At least five available players per team are required' THEN RAISE; END IF;
+  END;
+  v_seed := ('x' || substr(md5('93000000-0000-4000-8000-000000000002:2026-10-02:91000000-0000-4000-8000-000000000001:91000000-0000-4000-8000-000000000002'),1,8))::bit(32)::bigint;
+  expected_home := greatest(70,round(105+(55+3-75)*0.55+(mod(abs(v_seed),2400)/100.0-12)));
+  expected_away := greatest(70,round(105+(55-75)*0.55+(mod(abs(v_seed/2400),2400)/100.0-12)));
   IF expected_home = expected_away THEN expected_away := expected_away-1; END IF;
   SELECT home_score,away_score INTO actual_home,actual_away FROM public.advance_simulation_day(
-    '93000000-0000-4000-8000-000000000001','2026-10-01');
-  ASSERT (actual_home,actual_away) = (expected_home,expected_away), 'Daily SQL uses individual attribute strength';
+    '93000000-0000-4000-8000-000000000002','2026-10-01');
+  ASSERT (actual_home,actual_away) = (expected_home,expected_away), 'Legacy daily SQL retains the established strength formula';
   SELECT home_score,away_score INTO initial_home,initial_away FROM public.scheduled_games
-    WHERE game_id='93000000-0000-4000-8000-000000000001';
+    WHERE game_id='93000000-0000-4000-8000-000000000002';
 
   UPDATE public.game_player_attributes SET attributes=low_attrs
     WHERE game_id='93000000-0000-4000-8000-000000000001'
       AND player_id IN ('92000000-0000-4000-8000-000000000001','92000000-0000-4000-8000-000000000002');
-  PERFORM * FROM public.advance_simulation_day('93000000-0000-4000-8000-000000000001','2026-10-02');
+  PERFORM * FROM public.advance_simulation_day('93000000-0000-4000-8000-000000000002','2026-10-02');
   ASSERT (SELECT (home_score,away_score)=(initial_home,initial_away) FROM public.scheduled_games
-    WHERE game_id='93000000-0000-4000-8000-000000000001'), 'Completed results are never recalculated';
+    WHERE game_id='93000000-0000-4000-8000-000000000002'), 'Completed results are never recalculated';
   DELETE FROM public.game_player_attributes
     WHERE game_id='93000000-0000-4000-8000-000000000001'
       AND player_id='92000000-0000-4000-8000-000000000001';

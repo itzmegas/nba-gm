@@ -4936,3 +4936,452 @@ GRANT EXECUTE ON FUNCTION promote_current_roster(UUID) TO service_role;
 
 COMMIT;
 -- End canonical schema mirror for migration 043.
+
+-- Canonical schema mirror for migration 044. Keep byte-identical below.
+BEGIN;
+
+-- Stateless draws keep retries reproducible without changing the session RNG.
+CREATE FUNCTION public.possession_random(p_seed TEXT, p_draw INTEGER)
+RETURNS DOUBLE PRECISION LANGUAGE sql IMMUTABLE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT ('x' || substr(md5(p_seed || ':' || p_draw::TEXT), 1, 8))::bit(32)::bigint / 4294967296.0
+$$;
+REVOKE ALL ON FUNCTION public.possession_random(TEXT, INTEGER)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.simulate_possession_game(p_home JSONB, p_away JSONB, p_seed TEXT)
+RETURNS JSONB LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  roster JSONB := p_home || p_away;
+  home_count INTEGER := jsonb_array_length(p_home);
+  player_count INTEGER := jsonb_array_length(roster);
+  attrs JSONB[];
+  -- seconds, FGM, FGA, 3PM, 3PA, FTM, FTA, OREB, DREB, AST, STL, BLK, TOV, PF, PTS.
+  stats INTEGER[][] := array_fill(0, ARRAY[player_count, 15]);
+  home_lineup INTEGER[];
+  away_lineup INTEGER[];
+  offense INTEGER[];
+  defense INTEGER[];
+  period INTEGER := 1;
+  pairs INTEGER;
+  duration INTEGER;
+  tick INTEGER;
+  side INTEGER;
+  i INTEGER;
+  shooter INTEGER;
+  defender INTEGER;
+  passer INTEGER;
+  rebounder INTEGER;
+  attempt INTEGER;
+  shot_value INTEGER;
+  free_throws INTEGER;
+  ft INTEGER;
+  home_score INTEGER := 0;
+  away_score INTEGER := 0;
+  weight DOUBLE PRECISION;
+  target DOUBLE PRECISION;
+  probability DOUBLE PRECISION;
+  total_weight DOUBLE PRECISION;
+  shot_attribute TEXT;
+  draw_seed TEXT;
+  made BOOLEAN;
+  foul BOOLEAN;
+  blocked BOOLEAN;
+  missed BOOLEAN;
+  rows JSONB := '[]';
+BEGIN
+  IF home_count NOT BETWEEN 5 AND 15 OR jsonb_array_length(p_away) NOT BETWEEN 5 AND 15
+     OR (SELECT count(DISTINCT r->>'playerId') FROM jsonb_array_elements(roster) r) <> player_count
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(roster) r
+       WHERE NOT coalesce(public.is_valid_player_attributes(r->'attributes'), false)
+         OR nullif(r->>'playerName', '') IS NULL) THEN
+    RAISE EXCEPTION 'Invalid possession simulation roster';
+  END IF;
+  SELECT array_agg(r->'attributes' ORDER BY n) INTO attrs
+    FROM jsonb_array_elements(roster) WITH ORDINALITY AS r(r, n);
+
+  LOOP
+    pairs := CASE WHEN period <= 4 THEN 25 ELSE 11 END;
+    duration := CASE WHEN period <= 4 THEN 720 ELSE 300 END;
+    FOR tick IN 1..pairs LOOP
+      -- Five-player shifts, weighted by quality/stamina, with a ten-player rotation.
+      -- shortcut: foul-outs apply at shift boundaries; use event-clock substitutions for play-by-play.
+      IF tick = 1 OR (tick - 1) % 5 = 0 THEN
+        SELECT array_agg(idx) INTO home_lineup FROM (
+          SELECT idx FROM generate_series(1, home_count) idx
+          ORDER BY (stats[idx][14] >= 6), (idx > 10),
+            stats[idx][1] / (0.5 + (attrs[idx]->>'stamina')::NUMERIC / 198
+              + ((attrs[idx]->>'closeShot')::NUMERIC + (attrs[idx]->>'threePointShot')::NUMERIC
+                + (attrs[idx]->>'interiorDefense')::NUMERIC) / 594), idx LIMIT 5
+        ) selected;
+        SELECT array_agg(idx) INTO away_lineup FROM (
+          SELECT idx FROM generate_series(home_count + 1, player_count) idx
+          ORDER BY (stats[idx][14] >= 6), (idx > home_count + 10),
+            stats[idx][1] / (0.5 + (attrs[idx]->>'stamina')::NUMERIC / 198
+              + ((attrs[idx]->>'closeShot')::NUMERIC + (attrs[idx]->>'threePointShot')::NUMERIC
+                + (attrs[idx]->>'interiorDefense')::NUMERIC) / 594), idx LIMIT 5
+        ) selected;
+      END IF;
+      FOREACH i IN ARRAY home_lineup || away_lineup LOOP
+        stats[i][1] := stats[i][1] + (tick * duration / pairs - (tick - 1) * duration / pairs);
+      END LOOP;
+
+      FOR side IN 0..1 LOOP
+        offense := CASE WHEN side = 0 THEN home_lineup ELSE away_lineup END;
+        defense := CASE WHEN side = 0 THEN away_lineup ELSE home_lineup END;
+        attempt := 0;
+        LOOP
+          attempt := attempt + 1;
+          IF attempt > 100 THEN RAISE EXCEPTION 'Possession did not terminate'; END IF;
+          draw_seed := p_seed || ':' || period || ':' || tick || ':' || side || ':' || attempt;
+          total_weight := 0;
+          FOREACH i IN ARRAY offense LOOP
+            total_weight := total_weight + 30 + (attrs[i]->>'closeShot')::INTEGER
+              + (attrs[i]->>'threePointShot')::INTEGER + (attrs[i]->>'drawFoul')::INTEGER;
+          END LOOP;
+          target := public.possession_random(draw_seed, 1) * total_weight;
+          shooter := offense[1];
+          FOREACH i IN ARRAY offense LOOP
+            target := target - (30 + (attrs[i]->>'closeShot')::INTEGER
+              + (attrs[i]->>'threePointShot')::INTEGER + (attrs[i]->>'drawFoul')::INTEGER);
+            IF target < 0 THEN shooter := i; EXIT; END IF;
+          END LOOP;
+          defender := defense[1 + floor(public.possession_random(draw_seed, 2) * 5)::INTEGER];
+          probability := 0.14 + ((attrs[defender]->>'steal')::INTEGER
+            - ((attrs[shooter]->>'ballHandle')::INTEGER + (attrs[shooter]->>'passAccuracy')::INTEGER) / 2.0) * 0.001;
+          IF public.possession_random(draw_seed, 3) < probability THEN
+            stats[shooter][13] := stats[shooter][13] + 1;
+            IF public.possession_random(draw_seed, 4) < 0.45 + (attrs[defender]->>'steal')::INTEGER * 0.003 THEN
+              stats[defender][11] := stats[defender][11] + 1;
+            END IF;
+            EXIT;
+          END IF;
+          shot_value := CASE WHEN public.possession_random(draw_seed, 5)
+            < 0.15 + (attrs[shooter]->>'threePointShot')::INTEGER * 0.004 THEN 3 ELSE 2 END;
+          shot_attribute := CASE WHEN shot_value = 3 THEN 'threePointShot'
+            WHEN public.possession_random(draw_seed, 6) < 0.7 THEN 'closeShot' ELSE 'midRangeShot' END;
+          foul := public.possession_random(draw_seed, 7) < 0.04 + (attrs[shooter]->>'drawFoul')::INTEGER * 0.001;
+          blocked := NOT foul AND public.possession_random(draw_seed, 8)
+            < 0.005 + (attrs[defender]->>'block')::INTEGER * CASE WHEN shot_value = 3 THEN 0.0003 ELSE 0.0007 END;
+          probability := CASE shot_attribute WHEN 'closeShot' THEN 0.35 WHEN 'midRangeShot' THEN 0.24 ELSE 0.19 END
+            + (attrs[shooter]->>shot_attribute)::INTEGER * 0.004
+            - (attrs[defender]->>CASE WHEN shot_value = 3 THEN 'perimeterDefense' ELSE 'interiorDefense' END)::INTEGER * 0.0015
+            + CASE WHEN side = 0 THEN 0.012 ELSE 0 END;
+          made := NOT blocked AND public.possession_random(draw_seed, 9) < probability;
+          IF NOT foul OR made THEN
+            stats[shooter][3] := stats[shooter][3] + 1;
+            IF shot_value = 3 THEN stats[shooter][5] := stats[shooter][5] + 1; END IF;
+          END IF;
+          IF blocked THEN stats[defender][12] := stats[defender][12] + 1; END IF;
+          IF made THEN
+            stats[shooter][2] := stats[shooter][2] + 1;
+            IF shot_value = 3 THEN stats[shooter][4] := stats[shooter][4] + 1; END IF;
+            stats[shooter][15] := stats[shooter][15] + shot_value;
+            SELECT idx INTO passer FROM unnest(offense) idx WHERE idx <> shooter
+              ORDER BY public.possession_random(draw_seed || ':' || idx, 10)
+                / (20 + (attrs[idx]->>'passAccuracy')::INTEGER) LIMIT 1;
+            IF public.possession_random(draw_seed, 11) < 0.3 + (attrs[passer]->>'passAccuracy')::INTEGER * 0.005 THEN
+              stats[passer][10] := stats[passer][10] + 1;
+            END IF;
+          END IF;
+          missed := NOT made;
+          IF foul THEN
+            stats[defender][14] := stats[defender][14] + 1;
+            free_throws := CASE WHEN made THEN 1 ELSE shot_value END;
+            FOR ft IN 1..free_throws LOOP
+              stats[shooter][7] := stats[shooter][7] + 1;
+              missed := public.possession_random(draw_seed, 11 + ft)
+                >= 0.4 + (attrs[shooter]->>'freeThrow')::INTEGER * 0.0055;
+              IF NOT missed THEN
+                stats[shooter][6] := stats[shooter][6] + 1;
+                stats[shooter][15] := stats[shooter][15] + 1;
+              END IF;
+            END LOOP;
+          END IF;
+          IF NOT missed THEN EXIT; END IF;
+          total_weight := 0;
+          FOREACH i IN ARRAY offense || defense LOOP
+            total_weight := total_weight + CASE WHEN i = ANY(offense)
+              THEN 10 + (attrs[i]->>'offensiveRebound')::INTEGER
+              ELSE 40 + (attrs[i]->>'defensiveRebound')::INTEGER * 2 END;
+          END LOOP;
+          target := public.possession_random(draw_seed, 15) * total_weight;
+          rebounder := defense[1];
+          FOREACH i IN ARRAY offense || defense LOOP
+            weight := CASE WHEN i = ANY(offense) THEN 10 + (attrs[i]->>'offensiveRebound')::INTEGER
+              ELSE 40 + (attrs[i]->>'defensiveRebound')::INTEGER * 2 END;
+            target := target - weight;
+            IF target < 0 THEN rebounder := i; EXIT; END IF;
+          END LOOP;
+          IF rebounder = ANY(defense) THEN
+            stats[rebounder][9] := stats[rebounder][9] + 1;
+            EXIT;
+          END IF;
+          stats[rebounder][8] := stats[rebounder][8] + 1;
+        END LOOP;
+      END LOOP;
+    END LOOP;
+    IF period >= 4 THEN
+      home_score := 0; away_score := 0;
+      FOR i IN 1..player_count LOOP
+        IF i <= home_count THEN home_score := home_score + stats[i][15];
+        ELSE away_score := away_score + stats[i][15]; END IF;
+      END LOOP;
+      IF home_score <> away_score THEN EXIT; END IF;
+      IF period >= 24 THEN RAISE EXCEPTION 'Overtime limit exceeded'; END IF;
+    END IF;
+    period := period + 1;
+  END LOOP;
+  FOR i IN 1..player_count LOOP
+    rows := rows || jsonb_build_array(jsonb_build_object(
+      'playerId', roster->(i-1)->>'playerId', 'playerName', roster->(i-1)->>'playerName',
+      'side', CASE WHEN i <= home_count THEN 'home' ELSE 'away' END,
+      'seconds', stats[i][1], 'fieldGoalsMade', stats[i][2], 'fieldGoalsAttempted', stats[i][3],
+      'threePointersMade', stats[i][4], 'threePointersAttempted', stats[i][5],
+      'freeThrowsMade', stats[i][6], 'freeThrowsAttempted', stats[i][7],
+      'offensiveRebounds', stats[i][8], 'defensiveRebounds', stats[i][9],
+      'assists', stats[i][10], 'steals', stats[i][11], 'blocks', stats[i][12],
+      'turnovers', stats[i][13], 'personalFouls', stats[i][14], 'points', stats[i][15]));
+  END LOOP;
+  RETURN jsonb_build_object('engineVersion', 'possessions-v1', 'overtimes', period - 4,
+    'homeScore', home_score, 'awayScore', away_score, 'players', rows);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.simulate_possession_game(JSONB, JSONB, TEXT)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 044.
+
+-- Canonical schema mirror for migration 045. Keep byte-identical below.
+BEGIN;
+
+CREATE FUNCTION public.is_valid_game_box_score(p_result JSONB)
+RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  row JSONB;
+  field TEXT;
+  side TEXT;
+  elapsed INTEGER;
+BEGIN
+  IF p_result->>'engineVersion' IS DISTINCT FROM 'possessions-v1'
+     OR jsonb_typeof(p_result->'overtimes') IS DISTINCT FROM 'number'
+     OR jsonb_typeof(p_result->'homeScore') IS DISTINCT FROM 'number'
+     OR jsonb_typeof(p_result->'awayScore') IS DISTINCT FROM 'number'
+     OR (p_result->>'overtimes') !~ '^[0-9]+$'
+     OR (p_result->>'homeScore') !~ '^[0-9]+$'
+     OR (p_result->>'awayScore') !~ '^[0-9]+$'
+     OR jsonb_typeof(p_result->'players') IS DISTINCT FROM 'array'
+     OR NOT (p_result ?& ARRAY['overtimes','homeScore','awayScore','players']) THEN RETURN false; END IF;
+  elapsed := 2880 + 300 * (p_result->>'overtimes')::INTEGER;
+  IF (p_result->>'overtimes')::INTEGER NOT BETWEEN 0 AND 20
+     OR (p_result->>'homeScore')::INTEGER = (p_result->>'awayScore')::INTEGER THEN RETURN false; END IF;
+  FOR row IN SELECT * FROM jsonb_array_elements(p_result->'players') LOOP
+    PERFORM (row->>'playerId')::UUID;
+    IF nullif(row->>'playerId','') IS NULL OR nullif(row->>'playerName','') IS NULL
+       OR row->>'side' IS NULL OR row->>'side' NOT IN ('home','away') THEN RETURN false; END IF;
+    FOREACH field IN ARRAY ARRAY['seconds','fieldGoalsMade','fieldGoalsAttempted',
+      'threePointersMade','threePointersAttempted','freeThrowsMade','freeThrowsAttempted',
+      'offensiveRebounds','defensiveRebounds','assists','steals','blocks','turnovers','personalFouls','points'] LOOP
+      IF NOT (row ? field) OR jsonb_typeof(row->field) IS DISTINCT FROM 'number'
+        OR row->>field !~ '^[0-9]+$' THEN RETURN false; END IF;
+    END LOOP;
+    IF (row->>'seconds')::INTEGER > elapsed
+      OR (row->>'fieldGoalsMade')::INTEGER > (row->>'fieldGoalsAttempted')::INTEGER
+      OR (row->>'threePointersMade')::INTEGER > (row->>'threePointersAttempted')::INTEGER
+      OR (row->>'threePointersMade')::INTEGER > (row->>'fieldGoalsMade')::INTEGER
+      OR (row->>'threePointersAttempted')::INTEGER > (row->>'fieldGoalsAttempted')::INTEGER
+      OR (row->>'fieldGoalsMade')::INTEGER - (row->>'threePointersMade')::INTEGER
+        > (row->>'fieldGoalsAttempted')::INTEGER - (row->>'threePointersAttempted')::INTEGER
+      OR (row->>'freeThrowsMade')::INTEGER > (row->>'freeThrowsAttempted')::INTEGER
+      OR (row->>'points')::INTEGER <> 2*(row->>'fieldGoalsMade')::INTEGER
+        + (row->>'threePointersMade')::INTEGER + (row->>'freeThrowsMade')::INTEGER THEN RETURN false; END IF;
+  END LOOP;
+  IF (SELECT count(DISTINCT r->>'playerId') <> count(*) FROM jsonb_array_elements(p_result->'players') r)
+    THEN RETURN false; END IF;
+  FOREACH side IN ARRAY ARRAY['home','away'] LOOP
+    IF (SELECT count(*) NOT BETWEEN 5 AND 15 OR sum((r->>'seconds')::INTEGER) <> elapsed * 5
+      OR sum((r->>'points')::INTEGER) <> (p_result->>(side || 'Score'))::INTEGER
+      OR sum((r->>'assists')::INTEGER) > sum((r->>'fieldGoalsMade')::INTEGER)
+      FROM jsonb_array_elements(p_result->'players') r WHERE r->>'side' = side) THEN RETURN false; END IF;
+  END LOOP;
+  RETURN true;
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN RETURN false;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.is_valid_game_box_score(JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE UNIQUE INDEX scheduled_games_game_id_id_key ON public.scheduled_games(game_id, id);
+CREATE TABLE public.game_box_scores (
+  game_id UUID NOT NULL REFERENCES public.games(id) ON DELETE CASCADE,
+  scheduled_game_id UUID PRIMARY KEY,
+  payload JSONB NOT NULL CHECK (public.is_valid_game_box_score(payload)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  FOREIGN KEY (game_id, scheduled_game_id) REFERENCES public.scheduled_games(game_id, id) ON DELETE CASCADE
+);
+CREATE INDEX game_box_scores_game_id_idx ON public.game_box_scores(game_id);
+ALTER TABLE public.game_box_scores ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.game_box_scores FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.game_box_scores TO authenticated, service_role;
+CREATE POLICY game_box_scores_owner_read ON public.game_box_scores
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.games g WHERE g.id = game_id AND g.user_id = auth.uid()
+      AND g.deleted_at IS NULL
+  ));
+
+CREATE FUNCTION public.simulate_fixture_box_score(p_fixture_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  fixture public.scheduled_games%ROWTYPE;
+  career public.games%ROWTYPE;
+  home JSONB;
+  away JSONB;
+  available INTEGER;
+  result JSONB;
+BEGIN
+  SELECT * INTO fixture FROM public.scheduled_games WHERE id = p_fixture_id FOR UPDATE;
+  SELECT * INTO career FROM public.games WHERE id = fixture.game_id AND user_id = auth.uid()
+    AND deleted_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  IF fixture.status <> 'scheduled' THEN RAISE EXCEPTION 'Fixture already completed'; END IF;
+  -- Legacy careers keep their established score-only simulation; never backfill past results.
+  IF career.season_era_id <> 'modern' OR NOT EXISTS (
+    SELECT 1 FROM public.game_attribute_materializations
+      WHERE game_id = career.id AND season_year = career.season_year
+  ) THEN RETURN NULL; END IF;
+  SELECT count(*) INTO available FROM public.game_player_states s
+    WHERE s.game_id = career.id AND s.team_id IN (fixture.home_team_id, fixture.away_team_id)
+      AND s.is_active AND NOT s.is_injured;
+  SELECT jsonb_agg(jsonb_build_object('playerId', s.player_id, 'playerName', p.full_name,
+    'attributes', a.attributes) ORDER BY
+    ((a.attributes->>'closeShot')::INTEGER + (a.attributes->>'threePointShot')::INTEGER
+      + (a.attributes->>'interiorDefense')::INTEGER) DESC, s.player_id)
+    FILTER (WHERE s.team_id = fixture.home_team_id),
+    jsonb_agg(jsonb_build_object('playerId', s.player_id, 'playerName', p.full_name,
+    'attributes', a.attributes) ORDER BY
+    ((a.attributes->>'closeShot')::INTEGER + (a.attributes->>'threePointShot')::INTEGER
+      + (a.attributes->>'interiorDefense')::INTEGER) DESC, s.player_id)
+    FILTER (WHERE s.team_id = fixture.away_team_id)
+  INTO home, away FROM public.game_player_states s
+    JOIN public.players p ON p.id = s.player_id
+    JOIN public.game_player_attributes a ON a.game_id = s.game_id AND a.player_id = s.player_id
+      AND a.season_year = career.season_year
+    WHERE s.game_id = career.id AND s.team_id IN (fixture.home_team_id, fixture.away_team_id)
+      AND s.is_active AND NOT s.is_injured;
+  IF coalesce(jsonb_array_length(home),0) + coalesce(jsonb_array_length(away),0) <> available
+    THEN RAISE EXCEPTION 'Player attribute coverage is incomplete'; END IF;
+  IF coalesce(jsonb_array_length(home),0) < 5 OR coalesce(jsonb_array_length(away),0) < 5
+    THEN RAISE EXCEPTION 'At least five available players per team are required'; END IF;
+  -- A career roster can include extra two-way players; dress at most fifteen per fixture.
+  SELECT jsonb_agg(r ORDER BY n) INTO home
+    FROM jsonb_array_elements(home) WITH ORDINALITY AS r(r,n) WHERE n <= 15;
+  SELECT jsonb_agg(r ORDER BY n) INTO away
+    FROM jsonb_array_elements(away) WITH ORDINALITY AS r(r,n) WHERE n <= 15;
+  result := public.simulate_possession_game(home, away,
+    career.id::TEXT || ':' || fixture.game_date::TEXT || ':' || fixture.home_team_id::TEXT || ':' || fixture.away_team_id::TEXT);
+  INSERT INTO public.game_box_scores(game_id, scheduled_game_id, payload)
+    VALUES (career.id, fixture.id, result);
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.simulate_fixture_box_score(UUID)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 045.
+
+-- Canonical schema mirror for migration 046. Keep byte-identical below.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.advance_simulation_day_core(p_game_id UUID, p_expected_date DATE)
+RETURNS TABLE (
+  new_date DATE, season_complete BOOLEAN, result_id UUID, home_team_id UUID,
+  away_team_id UUID, home_score SMALLINT, away_score SMALLINT, winner_team_id UUID,
+  standing_team_id UUID, wins INTEGER, losses INTEGER
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  v_game public.games%ROWTYPE;
+  v_new_date DATE;
+  v_match public.scheduled_games%ROWTYPE;
+  v_home_rating SMALLINT;
+  v_away_rating SMALLINT;
+  v_home_score SMALLINT;
+  v_away_score SMALLINT;
+  v_winner UUID;
+  v_seed BIGINT;
+  v_count INTEGER := 0;
+  v_box_score JSONB;
+BEGIN
+  SELECT * INTO v_game FROM public.games WHERE id = p_game_id AND user_id = auth.uid() FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Game not found or access denied'; END IF;
+  IF v_game.simulation_date IS DISTINCT FROM p_expected_date THEN
+    new_date := v_game.simulation_date;
+    season_complete := v_game.simulation_date >= make_date(v_game.season_year + 1, 4, 15);
+    RETURN NEXT; RETURN;
+  END IF;
+  v_new_date := v_game.simulation_date + 1;
+  IF v_new_date > make_date(v_game.season_year + 1, 4, 15) THEN
+    new_date := v_game.simulation_date; season_complete := true; RETURN NEXT; RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.scheduled_games WHERE game_id = p_game_id) THEN
+    WITH teams_ordered AS (SELECT id, row_number() OVER (ORDER BY nba_id) - 1 AS slot FROM public.teams),
+    rounds AS (
+      SELECT c, r, 0 AS home_slot, 1 + r % 29 AS away_slot
+      FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
+      UNION ALL
+      SELECT c, r, 1 + (r + k) % 29, 1 + (r - k + 29) % 29
+      FROM generate_series(0, 1) AS cycles(c) CROSS JOIN generate_series(0, 28) AS round_values(r)
+      CROSS JOIN generate_series(1, 14) AS pairs(k)
+    )
+    INSERT INTO public.scheduled_games (game_id, game_date, home_team_id, away_team_id)
+    SELECT p_game_id, make_date(v_game.season_year, 10, 15) + (((c * 29 + r) * 182 / 57)::INTEGER),
+      home.id, away.id FROM rounds
+    JOIN teams_ordered home ON home.slot = CASE WHEN c = 0 THEN home_slot ELSE away_slot END
+    JOIN teams_ordered away ON away.slot = CASE WHEN c = 0 THEN away_slot ELSE home_slot END;
+    INSERT INTO public.league_standings (game_id, team_id)
+    SELECT p_game_id, id FROM public.teams ON CONFLICT DO NOTHING;
+  END IF;
+  FOR v_match IN SELECT * FROM public.scheduled_games
+    WHERE game_id = p_game_id AND game_date = v_new_date AND status = 'scheduled' ORDER BY id FOR UPDATE
+  LOOP
+    v_box_score := public.simulate_fixture_box_score(v_match.id);
+    IF v_box_score IS NOT NULL THEN
+      v_home_score := (v_box_score->>'homeScore')::SMALLINT;
+      v_away_score := (v_box_score->>'awayScore')::SMALLINT;
+    ELSE
+      v_home_rating := public.get_simulation_team_rating(p_game_id, v_match.home_team_id);
+      v_away_rating := public.get_simulation_team_rating(p_game_id, v_match.away_team_id);
+      v_seed := ('x' || substr(md5(p_game_id::TEXT || ':' || v_new_date::TEXT || ':' ||
+        v_match.home_team_id::TEXT || ':' || v_match.away_team_id::TEXT), 1, 8))::bit(32)::bigint;
+      v_home_score := greatest(70, round(105 + (v_home_rating + 3 - 75) * 0.55 +
+        (mod(abs(v_seed), 2400) / 100.0 - 12)));
+      v_away_score := greatest(70, round(105 + (v_away_rating - 75) * 0.55 +
+        (mod(abs(v_seed / 2400), 2400) / 100.0 - 12)));
+      IF v_home_score = v_away_score THEN v_away_score := v_away_score - 1; END IF;
+    END IF;
+    v_winner := CASE WHEN v_home_score > v_away_score THEN v_match.home_team_id ELSE v_match.away_team_id END;
+    UPDATE public.scheduled_games SET status = 'completed', home_score = v_home_score,
+      away_score = v_away_score, winner_team_id = v_winner WHERE id = v_match.id;
+    UPDATE public.league_standings SET wins = league_standings.wins + CASE WHEN team_id = v_winner THEN 1 ELSE 0 END,
+      losses = league_standings.losses + CASE WHEN team_id <> v_winner AND team_id IN (v_match.home_team_id, v_match.away_team_id)
+        THEN 1 ELSE 0 END
+    WHERE game_id = p_game_id AND team_id IN (v_match.home_team_id, v_match.away_team_id);
+    new_date := v_new_date; season_complete := false; result_id := v_match.id;
+    home_team_id := v_match.home_team_id; away_team_id := v_match.away_team_id;
+    home_score := v_home_score; away_score := v_away_score; winner_team_id := v_winner;
+    standing_team_id := NULL; wins := NULL; losses := NULL; v_count := v_count + 1; RETURN NEXT;
+  END LOOP;
+  UPDATE public.games SET simulation_date = v_new_date, updated_at = now() WHERE id = p_game_id;
+  IF v_count = 0 THEN new_date := v_new_date; season_complete := false; RETURN NEXT; END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.advance_simulation_day_core(UUID, DATE)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMIT;
+-- End canonical schema mirror for migration 046.
