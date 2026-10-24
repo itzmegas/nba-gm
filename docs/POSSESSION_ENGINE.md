@@ -1,15 +1,15 @@
 # Motor por posesiones y box score individual
 
-**Primera versión implementada localmente.** Los próximos encuentros de una partida moderna con atributos producen actuaciones individuales; el marcador es la suma de sus puntos. Los resultados anteriores permanecen intactos y no reciben estadísticas inventadas.
+**Primera versión probada por el usuario; calibración v2 implementada localmente.** Los próximos encuentros de una partida moderna con atributos producen actuaciones individuales; el marcador es la suma de sus puntos. Los resultados anteriores permanecen intactos y no reciben estadísticas inventadas.
 
-## Activación pendiente
+## Activación de la calibración pendiente
 
-1. Tener instaladas las migraciones previas hasta `043_player_demographics.sql`.
-2. Aplicar, en orden, `044_possession_engine.sql`, `045_game_box_scores.sql` y `046_daily_possession_simulation.sql` con el procedimiento autorizado para el entorno. No ejecutar todo `schema.sql` sobre una base existente.
-3. Conservar el encuentro ya jugado de la partida de referencia. Tras instalar las migraciones, avanzar hasta el próximo partido y abrir **Calendario → fecha → Estadísticas del partido**.
-4. Verificar que el resultado anterior no cambió, que no tiene estadísticas inventadas y que el nuevo muestra puntos individuales iguales al marcador.
+1. Tener instaladas las migraciones hasta `046_daily_possession_simulation.sql`. El usuario confirmó 044–046 y la persistencia de ambos box scores tras reiniciar.
+2. Actualizar primero la aplicación para aceptar resultados `possessions-v1` y `possessions-v2`.
+3. Aplicar **solo** `047_possession_rotation_calibration.sql` con el procedimiento autorizado para el entorno. No volver a ejecutar las migraciones instaladas ni todo `schema.sql` sobre una base existente.
+4. Conservar los encuentros ya jugados. Avanzar hasta un partido nuevo y abrir **Calendario → fecha → Estadísticas del partido**: la primera unidad debe recibir más tiempo que la banca, manteniendo 240 minutos por equipo y puntos individuales iguales al marcador.
 
-No se aplicaron migraciones ni se simuló la partida remota durante esta implementación.
+El agente no aplicó migraciones ni simuló la partida remota. La migración 047 sigue pendiente de instalación; no cambia los payloads v1 existentes.
 
 ## Qué hace esta versión
 
@@ -17,13 +17,23 @@ No se aplicaron migraciones ni se simuló la partida remota durante esta impleme
 | --- | --- |
 | Participantes | Solo jugadores activos y no lesionados de la plantilla de la partida; atributos de su temporada. |
 | Convocatoria | Hasta 15 disponibles por equipo, ordenados por tiro cercano, triple y defensa interior; desempate por ID. Admite plantillas de carrera más grandes con jugadores two-way. |
-| Rotación | Diez jugadores prioritarios, cinco en cancha; tiempo distribuido según calidad y resistencia. Los demás aportan profundidad ante faltas. |
+| Rotación | Diez jugadores prioritarios, cinco en cancha; orden por media de los 14 atributos. La primera unidad tiene doble peso de minutos que la banca, ajustado por calidad y resistencia. Los demás aportan profundidad ante faltas. |
 | Posesiones | 100 por equipo en tiempo reglamentario; pérdidas, robos, tiros de dos/tres, tapones, faltas de tiro, tiros libres, asistencias y rebotes. El rebote ofensivo continúa la posesión. |
 | Duración | Cuatro cuartos de 12 minutos; prórrogas de 5 minutos y 11 posesiones por equipo hasta desempatar. |
 | Consistencia | Cada equipo suma exactamente 240 minutos, más 25 por prórroga. Los puntos se calculan con los tiros convertidos, no con un marcador previo. |
-| Determinismo | Semilla por partida, fecha y equipos; no modifica el generador aleatorio global de PostgreSQL. Versión guardada: `possessions-v1`. |
+| Determinismo | Semilla por partida, fecha y equipos; no modifica el generador aleatorio global de PostgreSQL. Los encuentros nuevos tras 047 guardan `possessions-v2`; los anteriores conservan `possessions-v1`. |
 
-La calibración inicial es aproximada, no una reproducción estadística certificada de la NBA. Con atributos uniformes de 70, la muestra fija de 100 semillas produjo 117,71 puntos por equipo y 7 períodos de prórroga. La prueba admite un intervalo amplio de anotación, no exige ese promedio exacto.
+La calibración es aproximada, no una reproducción estadística certificada de la NBA. La comparación usa las mismas **300 semillas**, plantillas de 12 jugadores y atributos uniformes de 70:
+
+| Medida | v1 | v2 |
+| --- | --- | --- |
+| Puntos por equipo | 116,75 | 109,88 |
+| Acierto de triples | 38,96 % | 36,90 % |
+| Intentos de triple / tiros de campo | 42,52 % | 34,69 % |
+| Minutos por jugador de primera unidad, normalizados a 48 minutos | 24,01 | 31,70 |
+| Minutos por jugador de banca, normalizados a 48 minutos | 23,99 | 16,30 |
+
+V2 elimina la cuota mínima de triples para atributos de tiro exterior de 35 o menos, ajusta el acierto exterior y reduce segundas oportunidades mediante el rebote defensivo. No limita artificialmente el marcador: un partido de muchos puntos sigue siendo posible. Las pruebas verifican intervalos amplios, no estos valores exactos ni una única captura.
 
 ## Guardado y seguridad
 
@@ -40,7 +50,7 @@ Marcador, box score, clasificación, fecha y resolución del mercado conservan l
 
 ## Límites deliberados
 
-No hay reloj por evento, ritmo variable, táctica ni configuración manual de rotaciones. Las alineaciones se revisan por turnos de cinco pares de posesiones: las exclusiones por faltas se aplican en el siguiente turno, no inmediatamente. Si quedan menos de cinco jugadores sin seis faltas, se mantienen cinco participantes para poder completar el encuentro.
+No hay reloj por evento, ritmo variable, táctica ni configuración manual de rotaciones. Las alineaciones se revisan por turnos de tres pares de posesiones: las exclusiones por faltas se aplican en el siguiente turno, no inmediatamente. Si quedan menos de cinco jugadores sin seis faltas, se mantienen cinco participantes para poder completar el encuentro. Los puestos de cancha y las tendencias reales de tiro no se importan: el perfil se aproxima con atributos.
 
 Solo se modelan faltas de tiro; no hay bonus colectivo, faltas técnicas, lesiones durante el encuentro, fatiga persistente, tiempos muertos ni jugada a jugada guardada. No se añaden estadísticas de temporada, playoffs ni progresión de atributos.
 
@@ -58,6 +68,6 @@ bun scripts/test-possession-engine-postgres.ts
 
 El runner necesita Docker y la imagen local `postgres:17-alpine`: no la descarga. Crea y elimina su propio contenedor, sin red, puertos ni montajes del host. No lee credenciales ni conecta a Supabase.
 
-Cobertura: determinismo, 100 partidos y prórrogas, efecto de atributos, identidades duplicadas, minutos/puntos/tiros inválidos, persistencia, cobertura incompleta, plantillas grandes, lesionados/inactivos, rollback de un día con varios encuentros, compatibilidad histórica, permisos/RLS y dos avances concurrentes de la misma fecha. Las pruebas de interfaz cubren carga diferida, tablas, resultados históricos sin estadísticas, errores y reintento.
+Cobertura: muestra inicial de 100 partidos, comparación v1/v2 de 300 semillas por versión, prórrogas, determinismo, efecto de atributos, identidades duplicadas, minutos/puntos/tiros inválidos, persistencia, cobertura incompleta, plantillas grandes, lesionados/inactivos, rollback, permisos/RLS y avances concurrentes. La actualización se aplica sobre resultados v1 guardados: se comparan sus payloads sin cambios y se verifica que el encuentro siguiente use v2. También se comprueban minutos de primera unidad/banca, una figura al final del orden de entrada y perfiles de no tirador/especialista. Las pruebas de interfaz cubren carga diferida, tablas, resultados históricos sin estadísticas, errores y reintento.
 
-Pendiente: instalación remota y comprobación visual en navegador con una sesión real.
+Pendiente: instalación remota de 047 y comprobación visual de las rotaciones v2 en la misma partida, sin recalcular encuentros anteriores.

@@ -1,6 +1,6 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** atributos y primera versión de posesiones/box score implementados y verificados localmente. El bloque 2 requiere las migraciones 044–046; no se aplicaron al entorno remoto en esta entrega.
+**Estado:** atributos y primera versión de posesiones/box score implementados. El usuario confirmó la instalación de 044–046 y box scores persistentes tras reiniciar. La calibración v2 está verificada localmente; requiere instalar 047 y comprobar las nuevas rotaciones.
 **Fecha:** 2026-10-24.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
@@ -122,4 +122,6 @@ Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).
 - [x] Box score persistente por encuentro, aislado por partida, con lectura del propietario y sin escritura desde el cliente.
 - [x] Consulta bajo demanda desde los partidos completados del calendario, en español e inglés.
 - [x] Compatibilidad hacia adelante: sin recalcular partidos anteriores ni inventar sus estadísticas; las partidas sin atributos conservan el motor anterior.
-- [ ] Aplicar migraciones 044–046 y verificar visualmente la partida de referencia. No se modificaron datos remotos.
+- [x] El usuario confirmó 044–046, consulta de ambos equipos y persistencia tras reiniciar en la partida de referencia. El agente no modificó datos remotos.
+- [x] Calibración v2 local: primera unidad con más minutos, tiros exteriores por perfil y comparación reproducible de 300 partidos por versión; historial v1 conservado.
+- [ ] Instalar 047 con la aplicación que acepta ambas versiones y comprobar visualmente las nuevas rotaciones en partidos futuros.

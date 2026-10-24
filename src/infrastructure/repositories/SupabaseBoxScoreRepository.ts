@@ -31,7 +31,7 @@ const playerBoxScoreSchema = z.object({
 
 export const gameBoxScoreSchema = z
   .object({
-    engineVersion: z.literal(POSSESSION_ENGINE_VERSION),
+    engineVersion: z.enum(POSSESSION_ENGINE_VERSION),
     overtimes: count.max(20),
     homeScore: count,
     awayScore: count,

@@ -40,7 +40,14 @@ function sql(label: string, input: string): void {
 try {
   let ready = false;
   for (let attempt = 0; attempt < 50; attempt++) {
-    const result = spawnSync("docker", ["exec", container, "pg_isready", "-U", "postgres"]);
+    // The image briefly starts a temporary server during init; wait for the final PID 1 server.
+    const result = spawnSync("docker", [
+      "exec",
+      container,
+      "sh",
+      "-c",
+      "grep -qx postgres /proc/1/comm && pg_isready -U postgres",
+    ]);
     if (result.status === 0) {
       ready = true;
       break;
@@ -65,7 +72,9 @@ try {
     GRANT USAGE ON SCHEMA auth TO authenticated;
   `
   );
-  sql("Canonical schema", readFileSync(resolve("scripts/schema.sql"), "utf8"));
+  const schema = readFileSync(resolve("scripts/schema.sql"), "utf8");
+  const baseline = schema.split("-- Canonical schema mirror for migration 047.")[0];
+  sql("Canonical schema through 046", baseline);
   sql("Supabase default owner-policy dependency", "GRANT SELECT ON public.games TO authenticated;");
   for (const file of ["possessionEngine", "gameBoxScores", "playerAttributeSimulation"]) {
     const input = readFileSync(
@@ -74,6 +83,18 @@ try {
     );
     sql(file, file === "gameBoxScores" ? input.replace(/ROLLBACK;\s*$/, "COMMIT;") : input);
   }
+  const calibration = readFileSync(
+    resolve("tests/infrastructure/supabase/possessionCalibration.postgres.sql"),
+    "utf8"
+  );
+  const phases = calibration.split("-- AFTER_MIGRATION_047\n");
+  if (phases.length !== 2) throw new Error("Missing calibration upgrade test boundary");
+  sql("V1 scoring sample and saved history", phases[0]);
+  sql(
+    "Calibration migration 047",
+    readFileSync(resolve("scripts/migrations/047_possession_rotation_calibration.sql"), "utf8")
+  );
+  sql("V2 calibration and history preservation", phases[1]);
   sql(
     "Concurrent day fixture",
     `
@@ -114,6 +135,8 @@ try {
     ASSERT (SELECT count(*)=2 FROM public.game_box_scores), 'One box score per fixture';
     ASSERT (SELECT simulation_date='2026-10-04' FROM public.games WHERE id='a3000000-0000-4000-8000-000000000001'), 'Date advances once';
     ASSERT (SELECT sum(wins)=2 AND sum(losses)=2 FROM public.league_standings WHERE game_id='a3000000-0000-4000-8000-000000000001'), 'Standings advance once';
+    ASSERT (SELECT payload->>'engineVersion'='possessions-v1' FROM public.game_box_scores WHERE scheduled_game_id='a5000000-0000-4000-8000-000000000002'), 'Stored v1 history remains v1';
+    ASSERT (SELECT payload->>'engineVersion'='possessions-v2' FROM public.game_box_scores WHERE scheduled_game_id='a5000000-0000-4000-8000-000000000005'), 'Future games use v2';
   END; $$;`
   );
   console.log("Possession engine and atomic daily integration verified in isolated PostgreSQL.");

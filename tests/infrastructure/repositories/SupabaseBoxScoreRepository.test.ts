@@ -23,6 +23,16 @@ function mockClient(data: unknown, error: unknown = null) {
 }
 
 describe("SupabaseBoxScoreRepository", () => {
+  it("accepts preserved v1 and calibrated v2 results but rejects unknown versions", () => {
+    const saved = boxScoreFixture();
+    expect(gameBoxScoreSchema.safeParse(saved).success).toBe(true);
+    expect(
+      gameBoxScoreSchema.safeParse({ ...saved, engineVersion: "possessions-v2" }).success
+    ).toBe(true);
+    expect(gameBoxScoreSchema.safeParse({ ...saved, engineVersion: "unknown" }).success).toBe(
+      false
+    );
+  });
   it("reads persisted statistics scoped to career and fixture", async () => {
     const saved = boxScoreFixture();
     const mock = mockClient({ payload: saved });

@@ -5,6 +5,7 @@ it.each([
   "044_possession_engine",
   "045_game_box_scores",
   "046_daily_possession_simulation",
+  "047_possession_rotation_calibration",
 ])("keeps %s in the canonical schema", (name) => {
   const version = name.slice(0, 3);
   const migration = readFileSync(`scripts/migrations/${name}.sql`, "utf8");

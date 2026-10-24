@@ -1,6 +1,6 @@
 export const BOX_SCORE_SIDE = { HOME: "home", AWAY: "away" } as const;
 export type BoxScoreSide = (typeof BOX_SCORE_SIDE)[keyof typeof BOX_SCORE_SIDE];
-export const POSSESSION_ENGINE_VERSION = "possessions-v1";
+export const POSSESSION_ENGINE_VERSION = { V1: "possessions-v1", V2: "possessions-v2" } as const;
 
 export interface PlayerBoxScore {
   playerId: string;
@@ -24,7 +24,7 @@ export interface PlayerBoxScore {
 }
 
 export interface GameBoxScore {
-  engineVersion: typeof POSSESSION_ENGINE_VERSION;
+  engineVersion: (typeof POSSESSION_ENGINE_VERSION)[keyof typeof POSSESSION_ENGINE_VERSION];
   overtimes: number;
   homeScore: number;
   awayScore: number;
