@@ -1,6 +1,24 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  playerAttributes: {
+    overall: "Valoración general",
+    closeShot: "Tiro cercano",
+    midRangeShot: "Tiro de media distancia",
+    threePointShot: "Tiro de tres puntos",
+    freeThrow: "Tiro libre",
+    drawFoul: "Provocar faltas",
+    ballHandle: "Manejo del balón",
+    passAccuracy: "Precisión de pase",
+    interiorDefense: "Defensa interior",
+    perimeterDefense: "Defensa perimetral",
+    steal: "Robo",
+    block: "Tapón",
+    offensiveRebound: "Rebote ofensivo",
+    defensiveRebound: "Rebote defensivo",
+    stamina: "Resistencia",
+    estimated: "Atributos estimados",
+  },
   freeAgency: {
     title: "Mercado de agentes libres",
     description: "Compite por agentes libres inscritos explícitamente en esta partida.",
@@ -208,6 +226,8 @@ export const es: Messages = {
     contractGuaranteed: "Garantizado",
     contractGuaranteeUnknown: "Garantía desconocida",
     rosterActions: "Acciones",
+    rosterLoadFailed:
+      "No se pudieron cargar el roster y los atributos de los jugadores. Recarga para reintentar.",
     viewPlayer: "Ver jugador completo",
     playerAge: "Edad",
     playerContract: "Contrato",

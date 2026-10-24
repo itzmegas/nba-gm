@@ -14,3 +14,9 @@ export interface PlayerAttributes {
   defensiveRebound: number;
   stamina: number;
 }
+
+export interface PlayerRatings {
+  attributes: PlayerAttributes;
+  estimated: boolean;
+  overall: number | null;
+}

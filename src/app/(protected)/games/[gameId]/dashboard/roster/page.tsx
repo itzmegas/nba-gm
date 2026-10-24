@@ -43,7 +43,11 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
   const selectedTeamId = game?.selectedTeamId ?? null;
 
   const { data: team } = useTeam(selectedTeamId ?? "");
-  const { data: rosterPlayers, isLoading: isLoadingRoster } = useRoster(gameId, selectedTeamId);
+  const {
+    data: rosterPlayers,
+    isLoading: isLoadingRoster,
+    isError: isRosterError,
+  } = useRoster(gameId, selectedTeamId, game?.seasonYear);
   const { data: contracts } = useTeamContracts(gameId, selectedTeamId);
   const releaseCapCharge = useReleaseCapCharge(gameId, selectedTeamId, game?.seasonYear ?? 2026);
 
@@ -251,7 +255,11 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
           <CardTitle className="text-lg">{t("dashboard", "activeContracts")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0 pb-4">
-          {rosterPlayers && rosterPlayers.length > 0 ? (
+          {isRosterError ? (
+            <p role="alert" className="px-6 py-12 text-center text-destructive">
+              {t("dashboard", "rosterLoadFailed")}
+            </p>
+          ) : rosterPlayers && rosterPlayers.length > 0 ? (
             <RosterTable
               gameId={gameId}
               players={rosterPlayers}
