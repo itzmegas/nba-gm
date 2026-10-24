@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { type CSSProperties, useState } from "react";
 import { useTeams } from "@/application";
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/application/hooks/schedule/calendar";
 import { useSchedule } from "@/application/hooks/schedule/useSchedule";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { FixtureGameCard } from "@/components/games/FixtureGameCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -74,7 +76,9 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
     timeZone: "UTC",
   }).format(new Date(Date.UTC(visibleMonth.year, visibleMonth.month, 1)));
   const hasGames = cells.some((date) => date && gamesByDate.has(date));
-  const selectedDateGames = selectedDate ? (gamesByDate.get(selectedDate) ?? []) : [];
+  const selectedDateGame = selectedDate
+    ? getTeamGameSummary(gamesByDate.get(selectedDate) ?? [], selectedTeamId).selectedTeamGame
+    : undefined;
   const selectedDateLabel = selectedDate
     ? new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
         dateStyle: "full",
@@ -201,7 +205,7 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                             <button
                               type="button"
                               onClick={() => setSelectedDate(date)}
-                              aria-label={`${t("dashboard", "viewAllGames")} ${date} · ${location} · ${opponent?.name ?? "—"} · ${stateLabel}${completed ? ` · ${scheduledGame.awayScore ?? "—"}-${scheduledGame.homeScore ?? "—"}` : ""}`}
+                              aria-label={`${t("dailyGames", "gameDetails")} ${date} · ${location} · ${opponent?.name ?? "—"} · ${stateLabel}${completed ? ` · ${scheduledGame.awayScore ?? "—"}-${scheduledGame.homeScore ?? "—"}` : ""}`}
                               title={`${away?.name ?? t("dashboard", "away")} @ ${home?.name ?? t("dashboard", "home")}`}
                               className="flex min-h-24 w-full flex-col items-center gap-1 rounded-sm py-1 text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
@@ -247,16 +251,15 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
                           );
                         })()}
                       {games.length > 0 && (remainingGameCount > 0 || !selectedTeamGame) && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDate(date)}
+                        <Link
+                          href={`/games/${gameId}/dashboard/schedule/day/${date}`}
                           aria-label={`${t("dashboard", "viewGames")} ${games.length} ${t("dashboard", "gamesCount")} ${date}`}
-                          className="w-full rounded-sm py-1 text-left text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="block w-full rounded-sm py-1 text-left text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {selectedTeamGame
                             ? `+${remainingGameCount} ${t("dashboard", "gamesCount")}`
                             : `${t("dashboard", "viewGames")} ${games.length} ${t("dashboard", "gamesCount")}`}
-                        </button>
+                        </Link>
                       )}
                     </div>
                   </>
@@ -270,51 +273,24 @@ export function Calendar({ gameId, selectedTeamId, simulationDate }: CalendarPro
       <Dialog open={selectedDate !== null} onOpenChange={(open) => !open && setSelectedDate(null)}>
         <DialogContent
           aria-describedby={undefined}
-          className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-xl"
+          className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-5xl"
         >
           <DialogHeader>
             <DialogTitle className="capitalize">
-              {t("dashboard", "gamesOn")} {selectedDateLabel}
+              {t("dailyGames", "gameDetails")} · {selectedDateLabel}
             </DialogTitle>
           </DialogHeader>
           <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
-            {selectedDateGames.map((scheduledGame) => {
-              const away = teamsById.get(scheduledGame.awayTeamId);
-              const home = teamsById.get(scheduledGame.homeTeamId);
-              const completed = scheduledGame.status === SCHEDULED_GAME_STATUS.COMPLETED;
-
-              return (
-                <div key={scheduledGame.id} className="rounded-lg border p-3 text-sm">
-                  <div className="space-y-1 font-semibold">
-                    <div className="flex items-center gap-3">
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="inline-block w-8">{away?.abbreviation ?? "—"}</span> ·{" "}
-                        {away?.name ?? t("dashboard", "away")}
-                      </span>
-                      {completed && (
-                        <span className="w-8 shrink-0 text-right tabular-nums">
-                          {scheduledGame.awayScore ?? "—"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="inline-block w-8">{home?.abbreviation ?? "—"}</span> ·{" "}
-                        {home?.name ?? t("dashboard", "home")}
-                      </span>
-                      {completed && (
-                        <span className="w-8 shrink-0 text-right tabular-nums">
-                          {scheduledGame.homeScore ?? "—"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs uppercase text-muted-foreground">
-                    {completed ? t("dashboard", "final") : t("dashboard", "scheduled")}
-                  </span>
-                </div>
-              );
-            })}
+            {selectedDateGame && (
+              <FixtureGameCard
+                gameId={gameId}
+                fixture={selectedDateGame}
+                home={teamsById.get(selectedDateGame.homeTeamId)}
+                away={teamsById.get(selectedDateGame.awayTeamId)}
+                ownGame
+                expanded
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

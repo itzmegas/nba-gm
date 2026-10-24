@@ -20,6 +20,13 @@ vi.mock("@/application/hooks/games/useGame", () => ({
 vi.mock("@/application/hooks/roster/useRoster", () => ({
   useRoster: () => ({ data: [], isLoading: false }),
 }));
+vi.mock("@/application/hooks/schedule/useSeasonStatistics", () => ({
+  useSeasonStatistics: () => ({
+    data: { completedGames: 0, coveredGames: 0, players: [] },
+    isPending: false,
+    isError: false,
+  }),
+}));
 vi.mock("@/application/hooks/games/useCreateGame", () => ({
   useCreateGame: () => ({ mutateAsync: vi.fn() }),
 }));

@@ -24,10 +24,13 @@ vi.mock("@/application/hooks/games/useGame", () => ({
     isError: false,
   }),
 }));
-const { schedule } = vi.hoisted(() => ({ schedule: vi.fn() }));
+const { schedule, boxScore } = vi.hoisted(() => ({ schedule: vi.fn(), boxScore: vi.fn() }));
 vi.mock("@/application/hooks/schedule/useSchedule", () => ({ useSchedule: schedule }));
+vi.mock("@/application/hooks/schedule/useBoxScore", () => ({ useBoxScore: boxScore }));
 
 beforeEach(() => {
+  boxScore.mockReset();
+  boxScore.mockReturnValue({ data: null, isPending: false, isError: false });
   schedule.mockReturnValue({
     isLoading: false,
     isError: false,
@@ -105,17 +108,54 @@ it("uses one tinted day surface, an unframed larger logo and a restrained curren
   expect(day?.classList.contains("ring-inset")).toBe(true);
 });
 
-it.each(["fixture", "remaining games"])("opens all games for the day from %s", async (action) => {
+it("opens only our game and loads its box score directly", async () => {
   render(calendar());
-  fireEvent.click(
-    action === "fixture"
-      ? screen.getByTitle("Boston Celtics @ Chicago Bulls")
-      : screen.getByRole("button", { name: "View games 2 games 2026-10-16" })
-  );
+  expect(boxScore).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTitle("Boston Celtics @ Chicago Bulls"));
   const dialog = await screen.findByRole("dialog");
-  expect(within(dialog).getByText(/Los Angeles Lakers/)).toBeTruthy();
+  expect(within(dialog).queryByText(/Los Angeles Lakers/)).toBeNull();
   expect(within(dialog).getByText("114")).toBeTruthy();
   expect(within(dialog).getByText("102")).toBeTruthy();
+  expect(boxScore).toHaveBeenCalledWith("game", "selected");
+  expect(dialog.querySelector("details")).toBeNull();
+  expect(within(dialog).getByText(/Existing results are preserved/)).toBeTruthy();
+});
+
+it("links remaining games to the full daily-results route, without opening a dialog", () => {
+  render(calendar());
+  const link = screen.getByRole("link", { name: "View games 2 games 2026-10-16" });
+  expect(link.getAttribute("href")).toBe("/games/game/dashboard/schedule/day/2026-10-16");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(boxScore).not.toHaveBeenCalled();
+});
+
+it("shows only scheduled details for our future game without requesting statistics", async () => {
+  render(calendar());
+  fireEvent.click(screen.getByTitle("Chicago Bulls @ Unknown team"));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByText("Scheduled")).toBeTruthy();
+  expect(boxScore).not.toHaveBeenCalled();
+});
+
+it("links to league games on a day when our team does not play", () => {
+  schedule.mockReturnValue({
+    isLoading: false,
+    isError: false,
+    data: [
+      {
+        id: "other",
+        date: "2026-10-16",
+        homeTeamId: "bos",
+        awayTeamId: "lal",
+        status: "scheduled",
+      },
+    ],
+  });
+  render(calendar());
+  expect(
+    screen.getByRole("link", { name: "View games 1 games 2026-10-16" }).getAttribute("href")
+  ).toBe("/games/game/dashboard/schedule/day/2026-10-16");
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("preserves the manually browsed month during a simulation update within the same month", () => {

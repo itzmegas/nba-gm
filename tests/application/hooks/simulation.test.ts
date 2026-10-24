@@ -135,7 +135,10 @@ describe("batch simulation", () => {
     }
     expect(useBatchSimulationStore.getState().completedDays).toBe(3);
     expect(useBatchSimulationStore.getState().isActive).toBe(false);
-    expect(invalidateQueries).toHaveBeenCalledTimes(15);
+    expect(invalidateQueries).toHaveBeenCalledTimes(18);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["season-statistics", input.gameId],
+    });
   });
 
   it.each([
@@ -202,7 +205,7 @@ describe("batch simulation", () => {
     });
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(useBatchSimulationStore.getState().completedDays).toBe(1);
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
   });
 
   it("treats month end as a zero-day boundary", async () => {
@@ -268,7 +271,7 @@ describe("batch simulation", () => {
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(useBatchSimulationStore.getState().completedDays).toBe(1);
     expect(useBatchSimulationStore.getState().error).toBe("stale simulation date");
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
   });
 
   it("retries after failure from the persisted date", async () => {

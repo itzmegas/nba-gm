@@ -9,6 +9,13 @@ import type { Locale } from "@/application/i18n/types";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { ReleasePlayerButton } from "@/components/roster/release-player-button";
+import {
+  AppTable,
+  AppTableCell,
+  AppTableHead,
+  AppTableHeader,
+  AppTableRow,
+} from "@/components/ui/app-table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { SortableTableHeader } from "@/components/ui/sortable-table-header";
@@ -243,167 +250,147 @@ export function RosterTable({
   }
 
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-border/50">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border/50 bg-muted/30">
-            {header(
-              "jerseyNumber",
-              "#",
-              "py-3 px-4 text-left font-medium text-muted-foreground w-8"
-            )}
-            {header(
-              "player",
-              t("dashboard", "rosterPlayer"),
-              "py-3 px-4 text-left font-medium text-muted-foreground [&>button]:justify-start"
-            )}
-            {header(
-              "position",
-              t("dashboard", "rosterPosition"),
-              "py-3 px-4 text-center font-medium text-muted-foreground w-16"
-            )}
-            {header(
-              "height",
-              t("dashboard", "rosterHeight"),
-              "py-3 px-4 text-center font-medium text-muted-foreground w-20 hidden md:table-cell"
-            )}
-            {header(
-              "salary",
-              `${t("dashboard", "rosterSalary")} ${formatSalarySeasonLabel(seasonYear)}`,
-              "min-w-36 whitespace-nowrap py-3 px-4 text-right font-medium text-muted-foreground [&>button]:justify-end"
-            )}
-            {header(
-              "overall",
-              <abbr title={t("playerAttributes", "overall")} className="cursor-help no-underline">
-                OVR
+    <AppTable>
+      <AppTableHeader>
+        <AppTableRow>
+          {header("jerseyNumber", "#", "w-8")}
+          {header("player", t("dashboard", "rosterPlayer"), "[&>button]:justify-start")}
+          {header("position", t("dashboard", "rosterPosition"), "w-16 text-center")}
+          {header(
+            "height",
+            t("dashboard", "rosterHeight"),
+            "w-20 text-center hidden md:table-cell"
+          )}
+          {header(
+            "salary",
+            `${t("dashboard", "rosterSalary")} ${formatSalarySeasonLabel(seasonYear)}`,
+            "min-w-36 whitespace-nowrap text-right [&>button]:justify-end"
+          )}
+          {header(
+            "overall",
+            <abbr title={t("playerAttributes", "overall")} className="cursor-help no-underline">
+              OVR
+            </abbr>,
+            "min-w-16 border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-bold"
+          )}
+          {ATTRIBUTE_COLUMNS.map(({ key, label }) =>
+            header(
+              key,
+              <abbr title={t("playerAttributes", key)} className="cursor-help no-underline">
+                {label}
               </abbr>,
-              "min-w-16 border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-bold"
-            )}
-            {ATTRIBUTE_COLUMNS.map(({ key, label }) =>
-              header(
-                key,
-                <abbr title={t("playerAttributes", key)} className="cursor-help no-underline">
-                  {label}
-                </abbr>,
-                "px-3 py-3 text-center font-medium text-muted-foreground whitespace-nowrap"
-              )
-            )}
-            <th className="py-3 px-4 text-right font-medium text-muted-foreground">
-              {t("dashboard", "rosterActions")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((rosterPlayer, idx) => {
-            const { player, contract } = rosterPlayer;
-            const classification = getRosterContractClassification(rosterPlayer, locale);
-            const isEven = idx % 2 === 0;
+              "px-3 text-center whitespace-nowrap"
+            )
+          )}
+          <AppTableHead className="text-right">{t("dashboard", "rosterActions")}</AppTableHead>
+        </AppTableRow>
+      </AppTableHeader>
+      <tbody>
+        {sorted.map((rosterPlayer) => {
+          const { player, contract } = rosterPlayer;
+          const classification = getRosterContractClassification(rosterPlayer, locale);
 
-            return (
-              <tr
-                key={player.id}
-                onClick={(event) => {
-                  if (
-                    event.target instanceof Element &&
-                    event.target.closest("button, [role=menu]")
-                  )
-                    return;
-                  if (onSelectPlayer) onSelectPlayer(player.id);
-                  else
-                    router.push(
-                      `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
-                    );
-                }}
-                data-state={selectedPlayerId === player.id ? "selected" : undefined}
-                className={`border-b border-border/30 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/10 ${onSelectPlayer ? "cursor-pointer" : ""} ${isEven ? "" : "bg-muted/10"}`}
-              >
-                {/* Número camiseta */}
-                <td className="py-3 px-4 text-muted-foreground font-mono text-xs">
-                  {player.jerseyNumber ? `${player.jerseyNumber}` : "—"}
-                </td>
+          return (
+            <AppTableRow
+              key={player.id}
+              onClick={(event) => {
+                if (event.target instanceof Element && event.target.closest("button, [role=menu]"))
+                  return;
+                if (onSelectPlayer) onSelectPlayer(player.id);
+                else
+                  router.push(
+                    `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                  );
+              }}
+              data-state={selectedPlayerId === player.id ? "selected" : undefined}
+              className={onSelectPlayer ? "cursor-pointer" : undefined}
+            >
+              {/* Número camiseta */}
+              <AppTableCell className="text-muted-foreground font-mono text-xs">
+                {player.jerseyNumber ? `${player.jerseyNumber}` : "—"}
+              </AppTableCell>
 
-                {/* Nombre y Foto */}
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
-                      <PlayerHeadshot
-                        src={player.headshotUrl}
-                        alt={player.fullName}
-                        className="h-full w-full object-cover object-top"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="font-semibold whitespace-nowrap hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                        aria-pressed={onSelectPlayer ? selectedPlayerId === player.id : undefined}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (onSelectPlayer) onSelectPlayer(player.id);
-                          else
-                            router.push(
-                              `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
-                            );
-                        }}
-                      >
-                        {player.fullName}
-                      </button>
-                      <Badge variant="outline" title={classification.title}>
-                        {classification.label}
-                      </Badge>
-                      {rosterPlayer.ratings?.estimated && (
-                        <Badge variant="outline">{t("playerAttributes", "estimated")}</Badge>
-                      )}
-                    </div>
+              {/* Nombre y Foto */}
+              <AppTableCell>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                    <PlayerHeadshot
+                      src={player.headshotUrl}
+                      alt={player.fullName}
+                      className="h-full w-full object-cover object-top"
+                    />
                   </div>
-                </td>
-
-                {/* Posición */}
-                <td className="py-3 px-2 text-center">
-                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                    {player.position ?? "—"}
-                  </span>
-                </td>
-
-                {/* Altura */}
-                <td className="py-3 px-4 text-center text-muted-foreground hidden md:table-cell">
-                  {player.height ?? "—"}
-                </td>
-
-                {/* Salario Y1 */}
-                <td className="min-w-36 whitespace-nowrap py-3 px-4 text-right font-mono font-semibold">
-                  {formatRosterSalary(contract?.salaryY1, locale)}
-                </td>
-                <td className="border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-mono text-base font-black tabular-nums">
-                  {rosterPlayer.ratings?.overall ?? "—"}
-                </td>
-
-                {ATTRIBUTE_COLUMNS.map(({ key }) => (
-                  <td key={key} className="px-3 py-3 text-center font-mono tabular-nums">
-                    {rosterPlayer.ratings?.attributes[key] ?? "—"}
-                  </td>
-                ))}
-                <td className="py-3 px-4 text-right">
-                  <TableActions label={`${t("dashboard", "rosterActions")} — ${player.fullName}`}>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        router.push(
-                          `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
-                        )
-                      }
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="font-semibold whitespace-nowrap hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                      aria-pressed={onSelectPlayer ? selectedPlayerId === player.id : undefined}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (onSelectPlayer) onSelectPlayer(player.id);
+                        else
+                          router.push(
+                            `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                          );
+                      }}
                     >
-                      {t("dashboard", "viewPlayer")}
-                    </DropdownMenuItem>
-                    {canRelease && (
-                      <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} asMenuItem />
+                      {player.fullName}
+                    </button>
+                    <Badge variant="outline" title={classification.title}>
+                      {classification.label}
+                    </Badge>
+                    {rosterPlayer.ratings?.estimated && (
+                      <Badge variant="outline">{t("playerAttributes", "estimated")}</Badge>
                     )}
-                  </TableActions>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  </div>
+                </div>
+              </AppTableCell>
+
+              {/* Posición */}
+              <AppTableCell className="px-2 text-center">
+                <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  {player.position ?? "—"}
+                </span>
+              </AppTableCell>
+
+              {/* Altura */}
+              <AppTableCell className="text-center text-muted-foreground hidden md:table-cell">
+                {player.height ?? "—"}
+              </AppTableCell>
+
+              {/* Salario Y1 */}
+              <AppTableCell className="min-w-36 whitespace-nowrap text-right font-mono font-semibold">
+                {formatRosterSalary(contract?.salaryY1, locale)}
+              </AppTableCell>
+              <AppTableCell className="border-x border-primary/20 bg-primary/10 px-3 text-center font-mono text-base font-black tabular-nums">
+                {rosterPlayer.ratings?.overall ?? "—"}
+              </AppTableCell>
+
+              {ATTRIBUTE_COLUMNS.map(({ key }) => (
+                <AppTableCell key={key} className="px-3 text-center font-mono tabular-nums">
+                  {rosterPlayer.ratings?.attributes[key] ?? "—"}
+                </AppTableCell>
+              ))}
+              <AppTableCell className="text-right">
+                <TableActions label={`${t("dashboard", "rosterActions")} — ${player.fullName}`}>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      router.push(
+                        `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                      )
+                    }
+                  >
+                    {t("dashboard", "viewPlayer")}
+                  </DropdownMenuItem>
+                  {canRelease && (
+                    <ReleasePlayerButton gameId={gameId} rosterPlayer={rosterPlayer} asMenuItem />
+                  )}
+                </TableActions>
+              </AppTableCell>
+            </AppTableRow>
+          );
+        })}
+      </tbody>
+    </AppTable>
   );
 }

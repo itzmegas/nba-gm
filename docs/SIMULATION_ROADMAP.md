@@ -1,7 +1,7 @@
 # Simulación: de gestionar una plantilla a construir una franquicia
 
-**Estado:** módulo de atributos implementado y verificado localmente: fuente autenticada, caché compartida, identidades revisadas, estimaciones deterministas, copias por partida y ajuste de calidad en SQL. Queda instalar migraciones y probar una partida nueva en el entorno que se use.
-**Fecha:** 2026-10-23.
+**Estado:** atributos, posesiones/box score y estadísticas individuales implementados. El usuario confirmó la instalación de 044–048, persistencia y rotaciones v2. Selector de atributos/estadísticas en Plantilla y Liga implementado localmente; pendiente comprobar la interfaz.
+**Fecha:** 2026-10-24.
 
 **Recomendación:** dar consecuencias deportivas a las decisiones del GM antes de ampliar la cantidad de temporadas jugables.
 
@@ -17,7 +17,7 @@
 | 4 | Play-in y playoffs | La temporada termina con un campeón, no con un bloqueo del calendario. |
 | 5 | Entre temporadas | La franquicia continúa al año siguiente conservando su historia. |
 
-## Punto de partida
+## Punto de partida histórico, antes de estos bloques
 
 En el código revisado al guardar este documento:
 
@@ -47,10 +47,12 @@ Empezar por acciones suficientes para producir un partido coherente: pérdidas, 
 
 ### 3. Box score: el resultado individual
 
-- [ ] Los atributos individuales influyen en la simulación.
-- [ ] Cada partido permite consultar minutos, tiros, puntos, rebotes, asistencias, robos, tapones y pérdidas.
-- [ ] Los puntos individuales coinciden con el marcador de cada equipo y los minutos son coherentes con la duración del partido.
-- [ ] El resultado queda guardado y consultable sin volver a simularlo.
+- [x] Los atributos individuales influyen en la simulación.
+- [x] Cada partido nuevo permite consultar minutos, tiros, puntos, rebotes, asistencias, robos, tapones y pérdidas.
+- [x] Los puntos individuales coinciden con el marcador de cada equipo y los minutos son coherentes con la duración del partido.
+- [x] El resultado queda guardado y consultable sin volver a simularlo.
+
+Arquitectura y verificación local: [Motor por posesiones y box score](POSSESSION_ENGINE.md). La instalación de 044–047 fue confirmada posteriormente por el usuario.
 
 **Fuera de este primer hito:** registrar cada pase, visor en vivo, animaciones, estadísticas avanzadas y progresión de atributos. El detalle jugada a jugada puede ampliarse después; no es un requisito para empezar a generar estadísticas.
 
@@ -81,7 +83,7 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 - [x] Definir compatibilidad con partidas existentes: sin backfill y sin inventar resultados de partidos completados.
 - [x] Integrar en la función SQL diaria real; cambiar únicamente `SeasonSimulator.ts` no alcanzaba el flujo que usa el juego.
 
-**Siguiente paso recomendado:** delimitar el primer partido con atributos y box score, no construir todo el roadmap en una sola entrega.
+**Siguiente paso recomendado:** comprobar el selector de estadísticas en Plantilla y Liga, preservando la partida existente y sus resultados históricos.
 
 ## Avance del bloque 1
 
@@ -112,3 +114,25 @@ El alcance inicial de esta etapa queda por acordar; no implica implementar todas
 La caché comparte **datos de origen**, no estado mutable entre carreras. Las actualizaciones externas no sobrescriben partidas existentes. La evolución por edad queda para una entrega futura, junto con los bloques posteriores del roadmap.
 
 Detalle, evidencia y comandos: [Atributos de jugadores](PLAYER_ATTRIBUTES.md).
+
+## Avance del bloque 2
+
+- [x] Motor determinista por posesiones con participación individual, rotación automática y prórrogas.
+- [x] Un único resultado produce puntos individuales, marcador y clasificación en la transacción diaria existente.
+- [x] Box score persistente por encuentro, aislado por partida, con lectura del propietario y sin escritura desde el cliente.
+- [x] Consulta bajo demanda desde los partidos completados del calendario, en español e inglés.
+- [x] Compatibilidad hacia adelante: sin recalcular partidos anteriores ni inventar sus estadísticas; las partidas sin atributos conservan el motor anterior.
+- [x] El usuario confirmó 044–046, consulta de ambos equipos y persistencia tras reiniciar en la partida de referencia. El agente no modificó datos remotos.
+- [x] Calibración v2 local: primera unidad con más minutos, tiros exteriores por perfil y comparación reproducible de 300 partidos por versión; historial v1 conservado.
+- [x] El usuario confirmó la instalación de 047 y comprobó las nuevas rotaciones en un partido futuro; no se consultó ni modificó Supabase desde el agente.
+
+## Avance del bloque 3
+
+- [x] Consulta de totales y promedios individuales desde box scores v1/v2, sin acumuladores ni cambios al motor.
+- [x] Temporada y fase explícitas en el calendario; consulta aislada por partida y propietario.
+- [x] Selector de plantilla/atributos y estadísticas en Plantilla y Liga, respetando los jugadores y filtros existentes, con totales/por partido y porcentajes ponderados por intentos, en español e inglés.
+- [x] DNP excluidos de partidos jugados; aviso de cobertura incompleta para encuentros sin box score.
+- [x] El usuario confirmó la instalación de 048; no se consultó ni modificó Supabase desde el agente.
+- [ ] Comprobar el selector de vistas en la partida existente.
+
+Detalle: [Estadísticas de temporada](SEASON_STATISTICS.md).

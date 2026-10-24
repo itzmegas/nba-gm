@@ -7,7 +7,7 @@ import { useGame } from "@/application/hooks/games/useGame";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useT } from "@/application/providers/I18nProvider";
-import { RosterTable } from "@/components/roster/roster-table";
+import { RosterTableViews } from "@/components/roster/roster-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -152,7 +152,7 @@ export default function LeaguePage({ params }: LeaguePageProps) {
               {t("dashboard", "noMatchingTeams")}
             </p>
           ) : (
-            <RosterTable
+            <RosterTableViews
               gameId={gameId}
               players={filteredPlayers}
               seasonYear={game.seasonYear}

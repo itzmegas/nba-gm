@@ -1,0 +1,38 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  SupabaseSeasonStatisticsRepository,
+  seasonStatisticsSchema,
+} from "@/infrastructure/repositories/SupabaseSeasonStatisticsRepository";
+
+describe("season statistics repository", () => {
+  it("uses explicit career, season and regular-season parameters", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { completedGames: 1, coveredGames: 0, players: [] },
+      error: null,
+    });
+    const repo = new SupabaseSeasonStatisticsRepository({ rpc } as unknown as SupabaseClient);
+    await expect(
+      repo.getRegularSeason("a0000000-0000-4000-8000-000000000001", 2026)
+    ).resolves.toMatchObject({ coveredGames: 0 });
+    expect(rpc).toHaveBeenCalledWith("get_player_season_statistics", {
+      p_game_id: "a0000000-0000-4000-8000-000000000001",
+      p_season_year: 2026,
+      p_phase: "regular_season",
+    });
+  });
+  it("rejects impossible coverage", () => {
+    expect(
+      seasonStatisticsSchema.safeParse({ completedGames: 0, coveredGames: 1, players: [] }).success
+    ).toBe(false);
+  });
+  it("surfaces database errors instead of reporting empty stats", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "missing migration" } });
+    await expect(
+      new SupabaseSeasonStatisticsRepository({ rpc } as unknown as SupabaseClient).getRegularSeason(
+        "a0000000-0000-4000-8000-000000000001",
+        2026
+      )
+    ).rejects.toThrow("Failed to load");
+  });
+});

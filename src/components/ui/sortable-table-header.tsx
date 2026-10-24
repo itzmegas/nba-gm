@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { ReactNode } from "react";
+import { AppTableHead } from "@/components/ui/app-table";
 
 interface SortableTableHeaderProps {
   children: ReactNode;
@@ -16,7 +17,7 @@ export function SortableTableHeader({
 }: SortableTableHeaderProps) {
   const Icon = ascending === undefined ? ArrowUpDown : ascending ? ArrowUp : ArrowDown;
   return (
-    <th
+    <AppTableHead
       scope="col"
       aria-sort={ascending === undefined ? "none" : ascending ? "ascending" : "descending"}
       className={className}
@@ -32,6 +33,6 @@ export function SortableTableHeader({
           className={`h-3 w-3 shrink-0 ${ascending === undefined ? "opacity-40" : ""}`}
         />
       </button>
-    </th>
+    </AppTableHead>
   );
 }
