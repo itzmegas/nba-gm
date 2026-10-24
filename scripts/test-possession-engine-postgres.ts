@@ -139,6 +139,17 @@ try {
     ASSERT (SELECT payload->>'engineVersion'='possessions-v2' FROM public.game_box_scores WHERE scheduled_game_id='a5000000-0000-4000-8000-000000000005'), 'Future games use v2';
   END; $$;`
   );
+  const statisticsTests = readFileSync(
+    resolve("tests/infrastructure/supabase/seasonStatistics.postgres.sql"),
+    "utf8"
+  );
+  sql(
+    "Season statistics upgrade, aggregation and owner isolation",
+    statisticsTests.replace(
+      "\\ir ../../../scripts/migrations/048_player_season_statistics.sql",
+      () => readFileSync(resolve("scripts/migrations/048_player_season_statistics.sql"), "utf8")
+    )
+  );
   console.log("Possession engine and atomic daily integration verified in isolated PostgreSQL.");
 } finally {
   docker(["rm", "-f", container]);
