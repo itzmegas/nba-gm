@@ -294,6 +294,121 @@ try {
   console.log(
     "Missing-conference blocker reproduced and repaired without replaying history; idempotency and unknown-team protection passed."
   );
+
+  const playoffHistoryBefore = sql(historyQuery);
+  const playoffs = readFileSync(
+    "tests/infrastructure/supabase/playoffSeries.postgres.sql",
+    "utf8"
+  ).split("-- AFTER_MIGRATION_052\n");
+  if (playoffs.length !== 2) throw new Error("Missing playoff migration test boundary");
+  // Keep upgrade/setup assertions separate from scenarios that require completed champions.
+  const journeys = playoffs[1].split("-- AFTER_PLAYOFF_JOURNEYS\n");
+  if (journeys.length !== 2) throw new Error("Missing playoff journey test boundary");
+  const edges = journeys[0].split("-- PLAYOFF_EDGE_CASES\n");
+  if (edges.length !== 2) throw new Error("Missing playoff edge test boundary");
+  const setup = edges[1].split("-- PLAYOFF_JOURNEY_SETUP\n");
+  if (setup.length !== 2) throw new Error("Missing playoff setup test boundary");
+  sql(
+    playoffs[0] +
+      readFileSync("scripts/migrations/052_playoff_series.sql", "utf8") +
+      edges[0] +
+      setup[1]
+  );
+  const failures = new Map([
+    ["Injected playoff link failure", "test_fail_playoff_link ON public.postseason_series_games"],
+    ["Injected playoff round failure", "test_fail_playoff_round ON public.postseason_series"],
+    ["Injected playoff result failure", "test_fail_playoff_result ON public.postseason_results"],
+  ]);
+  const verifiedFailures = new Set<string>();
+  let concurrentClinchDays = 0;
+  let concurrentRoundDays = 0;
+  for (const career of [1, 2]) {
+    const gameId = `b3000000-0000-4000-8000-${String(career).padStart(12, "0")}`;
+    const ownerId = `b0000000-0000-4000-8000-${String(career).padStart(12, "0")}`;
+    let complete = false;
+    for (let day = 0; day < 70; day++) {
+      const before = z
+        .object({
+          date: z.string(),
+          winners: z.number(),
+          rounds: z.number(),
+          complete: z.boolean(),
+        })
+        .parse(JSON.parse(sql(`SELECT public.test_playoff_progress('${gameId}');`)));
+      if (before.complete) {
+        complete = true;
+        break;
+      }
+      const statement = `SET ROLE authenticated;
+        SELECT set_config('request.jwt.claim.sub','${ownerId}',false);
+        SELECT set_config('request.jwt.claim.role','authenticated',false);
+        SELECT * FROM public.advance_simulation_day('${gameId}','${before.date}');`;
+      const snapshotBefore = sql(`SELECT md5(public.test_playoff_snapshot('${gameId}')::TEXT);`);
+      // Independent connections race the same expected day, including all decisive days.
+      for (;;) {
+        const attempts = await Promise.allSettled(
+          [0, 1].map(() =>
+            exec(
+              "docker",
+              [
+                "exec",
+                container,
+                "psql",
+                "-X",
+                "-q",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-U",
+                "postgres",
+                "-c",
+                statement,
+              ],
+              { timeout: 120_000 }
+            )
+          )
+        );
+        const rejected = attempts.filter((attempt) => attempt.status === "rejected");
+        if (rejected.length === 0) break;
+        const injected = [...failures].find(([message]) =>
+          rejected.every((attempt) => String(attempt.reason).includes(message))
+        );
+        if (rejected.length !== 2 || !injected || verifiedFailures.has(injected[0])) {
+          throw new Error(
+            `Unexpected playoff advancement failure: ${rejected.map((r) => String(r.reason)).join("\n")}`
+          );
+        }
+        if (
+          sql(`SELECT md5(public.test_playoff_snapshot('${gameId}')::TEXT);`) !== snapshotBefore
+        ) {
+          throw new Error(`${injected[0]} did not roll back the entire day`);
+        }
+        verifiedFailures.add(injected[0]);
+        sql(`DROP TRIGGER ${injected[1]};`);
+      }
+      sql(`SELECT public.test_assert_playoff_progress('${gameId}','${before.date}'::DATE + 1);`);
+      const after = z
+        .object({ winners: z.number(), rounds: z.number() })
+        .parse(JSON.parse(sql(`SELECT public.test_playoff_progress('${gameId}');`)));
+      if (after.winners > before.winners) concurrentClinchDays++;
+      if (after.rounds > before.rounds) concurrentRoundDays++;
+      const snapshotAfter = sql(`SELECT md5(public.test_playoff_snapshot('${gameId}')::TEXT);`);
+      sql(statement);
+      if (sql(`SELECT md5(public.test_playoff_snapshot('${gameId}')::TEXT);`) !== snapshotAfter) {
+        throw new Error("Stale playoff retry changed persisted state");
+      }
+    }
+    if (!complete) throw new Error(`Playoffs did not complete within 70 days: ${gameId}`);
+  }
+  if (verifiedFailures.size !== 3 || concurrentClinchDays < 2 || concurrentRoundDays < 6) {
+    throw new Error("Missing playoff rollback, concurrent clinch or round-transition evidence");
+  }
+  sql(journeys[1] + setup[0]);
+  if (sql(historyQuery) !== playoffHistoryBefore) {
+    throw new Error("Playoffs changed regular-season history, standings or qualification");
+  }
+  console.log(
+    `Playoffs passed: modern v2 and legacy champions, ${concurrentClinchDays} concurrent clinch days, ${concurrentRoundDays} concurrent round transitions, three full-state rollbacks, frozen history, bracket, Finals tiebreaks, statistics and access control.`
+  );
 } finally {
   docker(["rm", "-f", container]);
 }

@@ -6,6 +6,7 @@ describe("postseason qualification schema", () => {
     ["049", "postseason_qualification"],
     ["050", "play_in_tournament"],
     ["051", "missing_team_conferences"],
+    ["052", "playoff_series"],
   ])("keeps the canonical schema identical to migration %s", (number, name) => {
     const migration = readFileSync(`scripts/migrations/${number}_${name}.sql`, "utf8");
     const schema = readFileSync("scripts/schema.sql", "utf8");
