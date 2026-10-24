@@ -1,6 +1,50 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  postseason: {
+    title: "Postemporada",
+    eliminatedShort: "Tu equipo está eliminado",
+    regular_season: "Temporada regular en curso",
+    play_in: "Play-in en curso",
+    playoffs: "Playoffs en curso",
+    complete: "Temporada finalizada",
+    ready: "Cuadro de playoffs definido",
+    readyDescription:
+      "Las 16 plazas de playoffs están definidas. Avanza la simulación para preparar la primera ronda.",
+    regularDescription:
+      "La clasificación se define al completar el calendario regular. Seis equipos por conferencia clasifican directamente; los puestos 7–10 disputan el play-in.",
+    eliminated:
+      "Tu equipo está eliminado. Puedes seguir avanzando y acompañar al resto de la liga hasta las Finales.",
+    noRollover:
+      "Esta temporada termina con un campeón. El inicio de la siguiente temporada todavía no está disponible.",
+    qualification: "Puesto de temporada regular",
+    playoffSeed: "Puesto de playoffs",
+    champion: "Campeón",
+    runnerUp: "Subcampeón",
+    winner: "Ganador",
+    East: "Conferencia Este",
+    West: "Conferencia Oeste",
+    Finals: "Finales de la NBA",
+    firstRound: "Primera ronda",
+    semifinals: "Semifinales de conferencia",
+    conferenceFinals: "Finales de conferencia",
+    bestOfSeven: "Al mejor de siete · Gana el primero en llegar a cuatro · Cuadro fijo",
+    homeCourt:
+      "En las series preparadas, el primer equipo tiene ventaja de localía. Las sedes de cada partido alternan 2–2–1–1–1.",
+    tbd: "Por definir",
+    playIn: "Resultados del play-in",
+    seven_eight: "7 vs 8 · El ganador obtiene el puesto 7",
+    nine_ten: "9 vs 10 · El perdedor queda eliminado",
+    eighth_seed: "Última oportunidad · El ganador obtiene el puesto 8",
+    games: "Partidos de la serie",
+    wins: "Victorias",
+    game: "Partido",
+    scheduled: "Programado",
+    boxScore: "Abrir estadísticas del partido",
+    loadFailed:
+      "No se pudo cargar la postemporada. Revisa la conexión y la migración de postemporada requerida.",
+    retry: "Reintentar",
+  },
   dailyGames: {
     title: "Partidos de la jornada",
     gameDetails: "Detalle del partido",

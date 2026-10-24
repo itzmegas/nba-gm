@@ -1,0 +1,203 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@/application/providers/I18nProvider";
+import { PostseasonView } from "@/components/postseason/PostseasonView";
+import {
+  hasPostseasonChampion,
+  isTeamEliminated,
+  type PostseasonState,
+} from "@/domain/entities/Postseason";
+import {
+  postseasonFixture,
+  postseasonGameFixture,
+  postseasonId,
+  postseasonTeamsFixture,
+} from "@/infrastructure/repositories/postseason.test-fixture";
+
+const { query, teams, boxScore } = vi.hoisted(() => ({
+  query: vi.fn(),
+  teams: vi.fn(),
+  boxScore: vi.fn(),
+}));
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({ usePostseason: query }));
+vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: teams }));
+vi.mock("@/application/hooks/schedule/useBoxScore", () => ({ useBoxScore: boxScore }));
+beforeEach(() => {
+  teams.mockReturnValue({
+    data: postseasonTeamsFixture(),
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  });
+  boxScore.mockReturnValue({ data: null, isPending: false, isError: false });
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+function show(state: PostseasonState, selectedTeam = 13, locale: "en" | "es" = "en") {
+  query.mockReturnValue({ data: state, isPending: false, isError: false });
+  return render(
+    <I18nProvider locale={locale}>
+      <PostseasonView gameId={postseasonId(100)} selectedTeamId={postseasonId(selectedTeam)} />
+    </I18nProvider>
+  );
+}
+
+describe("postseason phases and fixed visual bracket", () => {
+  it("explains the regular season without inventing a draw", () => {
+    const { container } = show(
+      postseasonFixture({ phase: "regular_season", qualification: [], playoffSeeds: [] })
+    );
+    expect(screen.getByText("Regular season in progress")).toBeTruthy();
+    expect(screen.getByText(/Six teams per conference/)).toBeTruthy();
+    expect(container.querySelector("[data-bracket-slot]")).toBeNull();
+    expect(screen.queryByText(/Your team is eliminated/)).toBeNull();
+  });
+
+  it("shows all 15 slots and the fixed first-round order before series preparation", () => {
+    const { container } = show(postseasonFixture());
+    expect(screen.getByText("Playoff field ready")).toBeTruthy();
+    expect(screen.getByText(/Advance the simulation to prepare/)).toBeTruthy();
+    expect(screen.getByText(/Your team is eliminated/)).toBeTruthy();
+    expect(screen.getByText(/#13/)).toBeTruthy();
+    expect(container.querySelectorAll("[data-bracket-slot]")).toHaveLength(15);
+    for (const [slot, pair] of [
+      [1, [1, 8]],
+      [2, [4, 5]],
+      [3, [2, 7]],
+      [4, [3, 6]],
+    ] as const) {
+      const card = container.querySelector(`[data-bracket-slot="East-1-${slot}"]`);
+      expect(card?.textContent).toContain(`East Team ${pair[0]}`);
+      expect(card?.textContent).toContain(`East Team ${pair[1]}`);
+      expect(card?.textContent?.indexOf(`East Team ${pair[0]}`)).toBeLessThan(
+        card?.textContent?.indexOf(`East Team ${pair[1]}`) ?? -1
+      );
+    }
+    expect(screen.getAllByText("To be decided").length).toBeGreaterThan(0);
+  });
+
+  it("shows play-in results in Spanish and opens only completed saved box scores", () => {
+    show(
+      postseasonFixture({
+        phase: "play_in",
+        playoffSeeds: [],
+        games: [
+          postseasonGameFixture({ seriesId: null, stage: "seven_eight", gameNumber: null }),
+          postseasonGameFixture({
+            id: postseasonId(103),
+            seriesId: null,
+            stage: "eighth_seed",
+            gameNumber: null,
+            status: "scheduled",
+            homeScore: null,
+            awayScore: null,
+            winnerTeamId: null,
+          }),
+        ],
+      }),
+      8,
+      "es"
+    );
+    expect(screen.getByText("Play-in en curso")).toBeTruthy();
+    expect(screen.getByText(/7 vs 8 · El ganador obtiene el puesto 7/)).toBeTruthy();
+    expect(screen.getByText("Programado")).toBeTruthy();
+    expect(screen.queryByText(/Tu equipo está eliminado/)).toBeNull();
+    expect(boxScore).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Abrir estadísticas/ }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(boxScore).toHaveBeenCalledWith(postseasonId(100), postseasonId(102));
+    expect(screen.getByText(/Se conserva el resultado original/)).toBeTruthy();
+  });
+
+  it("preserves home-court team wins, shows winners in adjacent future slots, and opens series games", () => {
+    const state = postseasonFixture({
+      series: [
+        {
+          id: postseasonId(101),
+          round: 1,
+          conference: "East",
+          bracketSlot: 2,
+          homeTeamId: postseasonId(4),
+          awayTeamId: postseasonId(5),
+          homeWins: 2,
+          awayWins: 4,
+          winnerTeamId: postseasonId(5),
+        },
+      ],
+      games: [postseasonGameFixture()],
+    });
+    const { container } = show(state, 4);
+    expect(screen.getByText("Playoffs in progress")).toBeTruthy();
+    const slot = container.querySelector('[data-bracket-slot="East-1-2"]');
+    if (!(slot instanceof HTMLElement)) throw new Error("Missing series slot");
+    expect(within(slot).getByText("2")).toBeTruthy();
+    expect(within(slot).getByText("4")).toBeTruthy();
+    expect(within(slot).getByText("Winner")).toBeTruthy();
+    expect(container.querySelector('[data-bracket-slot="East-2-1"]')?.textContent).toContain(
+      "East Team 5"
+    );
+    expect(container.querySelector('[data-bracket-slot="East-2-2"]')?.textContent).not.toContain(
+      "East Team 5"
+    );
+    const details = slot.querySelector("details");
+    if (details) details.open = true;
+    fireEvent.click(within(slot).getByRole("button", { name: /Open box score/ }));
+    expect(boxScore).toHaveBeenCalledWith(postseasonId(100), postseasonId(102));
+  });
+
+  it("announces champion and runner-up with no season rollover", () => {
+    show(
+      postseasonFixture({
+        phase: "complete",
+        championTeamId: postseasonId(1),
+        runnerUpTeamId: postseasonId(16),
+      }),
+      1
+    );
+    expect(screen.getByText("Champion: East Team 1")).toBeTruthy();
+    expect(screen.getByText("Runner-up: West Team 1")).toBeTruthy();
+    expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
+    expect(screen.queryByText(/Your team is eliminated/)).toBeNull();
+  });
+
+  it("does not promise more advancement to an eliminated team after the champion is crowned", () => {
+    show(
+      postseasonFixture({
+        phase: "complete",
+        championTeamId: postseasonId(1),
+        runnerUpTeamId: postseasonId(16),
+      }),
+      16
+    );
+    expect(screen.getByText("Your team is eliminated")).toBeTruthy();
+    expect(screen.queryByText(/You can still advance/)).toBeNull();
+  });
+
+  it("offers retry instead of an empty bracket on errors", () => {
+    const refetch = vi.fn();
+    query.mockReturnValue({ isError: true, isPending: false, refetch });
+    render(
+      <I18nProvider locale="en">
+        <PostseasonView gameId={postseasonId(100)} selectedTeamId={postseasonId(1)} />
+      </I18nProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+});
+
+it("does not consider a first play-in loss elimination or a ready field a champion", () => {
+  const game = postseasonGameFixture({ seriesId: null, stage: "seven_eight", gameNumber: null });
+  const state = postseasonFixture({ phase: "play_in", games: [game] });
+  expect(isTeamEliminated(state, postseasonId(8))).toBe(false);
+  expect(
+    isTeamEliminated({ ...state, games: [{ ...game, stage: "eighth_seed" }] }, postseasonId(8))
+  ).toBe(true);
+  expect(hasPostseasonChampion(postseasonFixture())).toBe(false);
+  expect(hasPostseasonChampion(postseasonFixture({ phase: "complete" }))).toBe(false);
+});

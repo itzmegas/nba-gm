@@ -1,4 +1,47 @@
 export const en = {
+  postseason: {
+    title: "Postseason",
+    eliminatedShort: "Your team is eliminated",
+    regular_season: "Regular season in progress",
+    play_in: "Play-in in progress",
+    playoffs: "Playoffs in progress",
+    complete: "Season complete",
+    ready: "Playoff field ready",
+    readyDescription:
+      "All 16 playoff places are decided. Advance the simulation to prepare the first round.",
+    regularDescription:
+      "Qualification is decided after the regular-season schedule is complete. Six teams per conference qualify directly; seeds 7–10 enter the play-in.",
+    eliminated:
+      "Your team is eliminated. You can still advance and follow the rest of the league through the Finals.",
+    noRollover: "This season ends with a champion. Starting the next season is not available yet.",
+    qualification: "Regular-season seed",
+    playoffSeed: "Playoff seed",
+    champion: "Champion",
+    runnerUp: "Runner-up",
+    winner: "Winner",
+    East: "Eastern Conference",
+    West: "Western Conference",
+    Finals: "NBA Finals",
+    firstRound: "First round",
+    semifinals: "Conference semifinals",
+    conferenceFinals: "Conference finals",
+    bestOfSeven: "Best of seven · First to four wins · Fixed bracket",
+    homeCourt:
+      "In prepared series, the first team has home-court advantage. Individual game hosts alternate 2–2–1–1–1.",
+    tbd: "To be decided",
+    playIn: "Play-in results",
+    seven_eight: "7 vs 8 · Winner takes seed 7",
+    nine_ten: "9 vs 10 · Loser eliminated",
+    eighth_seed: "Last chance · Winner takes seed 8",
+    games: "Series games",
+    wins: "Wins",
+    game: "Game",
+    scheduled: "Scheduled",
+    boxScore: "Open box score",
+    loadFailed:
+      "Unable to load postseason. Check the connection and required postseason migration.",
+    retry: "Retry",
+  },
   dailyGames: {
     title: "Daily games",
     gameDetails: "Game details",

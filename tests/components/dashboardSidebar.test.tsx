@@ -8,6 +8,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard/roster" }));
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({
+  usePostseason: () => ({ data: undefined }),
+}));
 vi.mock("@/application/hooks/teams/useTeams", () => ({
   useTeams: () => ({
     data: [{ id: "team", name: "Chicago Bulls", city: "Chicago", logoUrl: "/team-logo.png" }],
@@ -77,7 +80,7 @@ describe("game sidebar visual adjustments", () => {
   it.each([true, false])("enlarges square navigation items with the sidebar open=%s", (open) => {
     const { container } = renderSidebar(open);
     const items = container.querySelectorAll('[data-slot="sidebar-menu-button"]');
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(8);
     for (const item of items) {
       expect(item.classList.contains("h-11")).toBe(true);
       expect(item.classList.contains("text-base")).toBe(true);

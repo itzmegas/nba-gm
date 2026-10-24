@@ -12,12 +12,14 @@ import {
   LogOut,
   Pause,
   Settings,
+  Trophy,
   Users,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import { usePostseason } from "@/application/hooks/postseason/usePostseason";
 import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation";
 import { useAdvanceDay } from "@/application/hooks/simulation/useAdvanceDay";
 import { useCurrentTeamGame } from "@/application/hooks/simulation/useCurrentTeamGame";
@@ -60,6 +62,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  hasPostseasonChampion,
+  isPlayoffsReady,
+  isTeamEliminated,
+} from "@/domain/entities/Postseason";
 import { SCHEDULED_GAME_STATUS } from "@/domain/entities/ScheduledGame";
 import { formatSeasonLabel } from "@/domain/entities/Season";
 
@@ -73,7 +80,15 @@ function getSimulationDateFormatter(locale: string): Intl.DateTimeFormat {
 }
 
 interface DashboardNavItem {
-  key: "dashboard" | "roster" | "league" | "trades" | "freeAgency" | "calendar" | "settings";
+  key:
+    | "dashboard"
+    | "roster"
+    | "league"
+    | "trades"
+    | "freeAgency"
+    | "calendar"
+    | "settings"
+    | "postseason";
   path: string;
   icon: ComponentType<{ className?: string }>;
 }
@@ -81,6 +96,7 @@ interface DashboardNavItem {
 const NAV_ITEMS: DashboardNavItem[] = [
   { key: "dashboard", path: "", icon: LayoutDashboard },
   { key: "calendar", path: "/schedule", icon: Calendar },
+  { key: "postseason", path: "/postseason", icon: Trophy },
   { key: "roster", path: "/roster", icon: Users },
   { key: "league", path: "/league", icon: Globe },
   { key: "trades", path: "/trades", icon: ArrowLeftRight },
@@ -118,6 +134,8 @@ export function DashboardSidebar({
   const totalDays = useBatchSimulationStore((state) => state.totalDays);
   const batchError = useBatchSimulationStore((state) => state.error);
   const currentGame = useCurrentTeamGame(gameId, selectedTeamId, simulationDate);
+  const postseason = usePostseason(gameId);
+  const championConfirmed = hasPostseasonChampion(postseason.data);
   const opponentId = currentGame.data
     ? currentGame.data.homeTeamId === selectedTeamId
       ? currentGame.data.awayTeamId
@@ -133,7 +151,7 @@ export function DashboardSidebar({
     Math.round((Date.parse(`${monthEnd}T00:00:00Z`) - simulationDate.getTime()) / 86_400_000)
   );
   const startBatch = (mode: BatchSimulationMode) => {
-    if (advanceDay.isPending || batchActive) return;
+    if (advanceDay.isPending || batchActive || championConfirmed) return;
     const total = mode === BATCH_SIMULATION_MODE.MONTH ? monthDays : null;
     if (useBatchSimulationStore.getState().startBatch(mode, total)) {
       advanceRange.mutate({ gameId, simulationDate, mode, seasonYear });
@@ -205,6 +223,8 @@ export function DashboardSidebar({
               ? pathname === href
               : pathname === href || pathname.startsWith(`${href}/`);
             const Icon = item.icon;
+            const label =
+              item.key === "postseason" ? t("postseason", "title") : t("dashboard", item.key);
 
             return (
               <SidebarMenuItem
@@ -214,14 +234,12 @@ export function DashboardSidebar({
                 <SidebarMenuButton
                   asChild
                   isActive={isActive}
-                  tooltip={t("dashboard", item.key)}
+                  tooltip={label}
                   className="h-11 gap-3 rounded-none text-base [&_svg]:size-5 group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
                 >
                   <Link href={href}>
                     <Icon />
-                    <span className="group-data-[collapsible=icon]:hidden">
-                      {t("dashboard", item.key)}
-                    </span>
+                    <span className="group-data-[collapsible=icon]:hidden">{label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -236,6 +254,23 @@ export function DashboardSidebar({
             {t("dashboard", "simulationDate")}
           </p>
           <p className="text-sm font-semibold">{simulationDateFormatter.format(simulationDate)}</p>
+          {postseason.data && (
+            <div aria-live="polite" className="space-y-1">
+              <Link
+                className="font-semibold underline underline-offset-2"
+                href={`${dashboardBasePath}/postseason`}
+              >
+                {t(
+                  "postseason",
+                  isPlayoffsReady(postseason.data) ? "ready" : postseason.data.phase
+                )}
+              </Link>
+              {isTeamEliminated(postseason.data, selectedTeamId) && (
+                <p>{t("postseason", "eliminatedShort")}</p>
+              )}
+              {championConfirmed && <p>{t("postseason", "noRollover")}</p>}
+            </div>
+          )}
           <p className={currentGame.isError ? "text-destructive" : "text-muted-foreground"}>
             {currentGame.isPending
               ? t("common", "loading")
@@ -255,7 +290,12 @@ export function DashboardSidebar({
                   aria-label={labelDay}
                   className="min-w-0 flex-1 justify-center group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:p-0"
                   onClick={() => advanceDay.mutate({ gameId, simulationDate })}
-                  disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
+                  disabled={
+                    championConfirmed ||
+                    advanceDay.isPending ||
+                    batchActive ||
+                    advanceRange.isPending
+                  }
                 >
                   <CalendarDays className="size-5" />
                   <span className="group-data-[collapsible=icon]:hidden">{labelDay}</span>
@@ -272,7 +312,12 @@ export function DashboardSidebar({
                   aria-label={t("dashboard", "advanceSimulation")}
                   title={t("dashboard", "advanceSimulation")}
                   className="shrink-0 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8"
-                  disabled={advanceDay.isPending || batchActive || advanceRange.isPending}
+                  disabled={
+                    championConfirmed ||
+                    advanceDay.isPending ||
+                    batchActive ||
+                    advanceRange.isPending
+                  }
                 >
                   <ChevronDown className="size-4" />
                 </Button>
@@ -409,7 +454,9 @@ export function DashboardHeader({
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   <BreadcrumbPage>
-                    {activeItem ? t("dashboard", activeItem.key) : null}
+                    {activeItem.key === "postseason"
+                      ? t("postseason", "title")
+                      : t("dashboard", activeItem.key)}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </>
