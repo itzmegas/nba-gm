@@ -16,6 +16,9 @@ const { game, entry, enter, roster, outlook, mutate, retryEntry, retryRoster } =
   retryRoster: vi.fn(),
 }));
 vi.mock("@/application/hooks/games/useGame", () => ({ useGame: game }));
+vi.mock("@/components/offseason/OffseasonContractLedger", () => ({
+  OffseasonContractLedger: () => null,
+}));
 vi.mock("@/application/hooks/offseason/useOffseason", () => ({ useOffseason: entry }));
 vi.mock("@/application/hooks/offseason/useEnterOffseason", () => ({ useEnterOffseason: enter }));
 vi.mock("@/application/hooks/roster/useRoster", () => ({ useRoster: roster }));

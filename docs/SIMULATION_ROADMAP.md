@@ -83,7 +83,7 @@ Separarla de los playoffs: cambiar el año no alcanza. Hay que definir contratos
 - [x] Definir compatibilidad con partidas existentes: sin backfill y sin inventar resultados de partidos completados.
 - [x] Integrar en la función SQL diaria real; cambiar únicamente `SeasonSimulator.ts` no alcanzaba el flujo que usa el juego.
 
-**Siguiente paso recomendado:** entregar la entrada mínima a offseason conservando la partida y su historial. Mantener identificadas las comprobaciones visuales aún pendientes, sin confundirlas con errores confirmados.
+**Estado entre temporadas:** entrada a offseason y registro de vencimientos/opciones de equipo implementados, conservando contratos originales, plantilla actual e historial. El usuario confirmó ejercicio y persistencia de sus dos opciones de equipo. Las opciones de jugador quedan pendientes; el siguiente bloque debe acordarse antes de editar, sin iniciar 2027–28. Mantener identificadas las comprobaciones visuales aún pendientes, sin confundirlas con errores confirmados.
 
 ## Avance del bloque 1
 
@@ -172,5 +172,13 @@ Verificación reproducible: `bun scripts/test-postseason-qualification-postgres.
 - [x] El usuario mostró la planificación abierta en la partida existente y confirmó que el estado y el resumen persisten después de recargar, sin volver a pedir la entrada. El agente no aplicó migraciones remotas ni avanzó la partida.
 
 No hay draft, mercado de verano, regeneración de calendarios, envejecimiento ni cambios automáticos de contratos o plantilla. Las verificaciones locales de este bloque se registran en la entrega; no sustituyen la aceptación manual de la partida remota.
+
+### Vencimientos y opciones de equipo
+
+Alcance aprobado: registro separado de salidas previstas por vencimiento y decisiones confirmadas de ejercer/rechazar opciones del equipo controlado. Sin modificar contratos originales ni quitar jugadores de la plantilla actual. Opciones de jugador pendientes; información desconocida, estimada o contradictoria sin acciones. La migración local `054` y sus RPC no inician otra temporada ni calculan un nuevo presupuesto. Detalle, instalación manual y límites: [Offseason](OFFSEASON.md#registrar-vencimientos-y-decidir-opciones-de-equipo).
+
+**Aceptación manual (2026-10-25):** el usuario informó que instaló `054`, mostró el registro y confirmó su persistencia al recargar y la cancelación sin decisión. Ejerció las opciones de Nique Clifford y Maxime Raynaud, mostró ambos planes guardados sin controles de cambio y confirmó que persisten tras recargar; Malik Monk sigue como opción de jugador pendiente. No se probaron manualmente rechazo, filas de vencimiento ni restricciones de otros equipos o datos inciertos. No se inició 2027–28.
+
+Implementado localmente con registro separado, validación de evidencia en servidor, confirmación de decisiones inmutables y protección de caché frente a lecturas atrasadas. Verificación: 819 tests en 119 archivos, TypeScript, Biome (403 archivos), build y runner PostgreSQL aislado con permisos, reintentos, concurrencia, rollback y conservación del estado anterior. Incluye regresiones de contratos liberados y vueltos a firmar, y contratos canónicos traspasados. El agente no aplicó migraciones remotas ni avanzó la partida.
 
 **Verificación local:** 796 tests en 116 archivos, TypeScript, Biome (394 archivos), build y runner PostgreSQL aislado correctos. `053` y su copia canónica son idénticos. Se verificaron reintentos concurrentes, permisos, rollback y conservación de todas las tablas anteriores. Detalle y límites: [Entrada a la offseason](OFFSEASON.md).

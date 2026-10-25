@@ -2,6 +2,26 @@ import type { Messages } from "../types";
 
 export const es: Messages = {
   offseason: {
+    ledger: "Planes de entretemporada guardados",
+    ledgerHelp:
+      "Registra vencimientos conocidos y opciones de equipo por separado. Los contratos y las plantillas actuales no cambian. Las opciones de jugador quedan pendientes; no se pueden decidir contratos desconocidos o estimados.",
+    prepareLedger: "Registrar vencimientos y opciones de equipo",
+    savingLedger: "Guardando…",
+    ledgerFailed:
+      "No se pudieron cargar o guardar los planes. Vuelve a intentarlo antes de decidir.",
+    otherTeamReadOnly:
+      "Los otros equipos son de solo lectura. Selecciona tu equipo para registrar planes y decidir opciones de equipo.",
+    plannedDeparture: "Salida prevista",
+    optionExercised: "Opción de equipo ejercida (plan guardado)",
+    optionDeclined: "Opción de equipo rechazada · Salida prevista",
+    optionPending: "Opción de equipo pendiente",
+    playerOptionPending: "Opción de jugador pendiente (no depende del equipo)",
+    exercise: "Ejercer opción de equipo",
+    decline: "Rechazar opción de equipo",
+    confirmLedger:
+      "Esta decisión es definitiva para este plan. No cambia la plantilla, el contrato, el calendario ni la temporada actuales.",
+    cancelDecision: "Cancelar",
+    confirmDecision: "Confirmar decisión",
     title: "Entretemporada",
     enter: "Entrar en la planificación de entretemporada",
     entering: "Abriendo entretemporada…",

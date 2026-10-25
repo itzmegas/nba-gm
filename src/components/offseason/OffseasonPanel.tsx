@@ -6,6 +6,7 @@ import { useEnterOffseason } from "@/application/hooks/offseason/useEnterOffseas
 import { useOffseason } from "@/application/hooks/offseason/useOffseason";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { OffseasonContractLedger } from "@/components/offseason/OffseasonContractLedger";
 import {
   AppTable,
   AppTableCell,
@@ -26,6 +27,7 @@ interface OffseasonPanelProps {
 
 interface OffseasonPlanningProps extends OffseasonPanelProps {
   seasonYear: number;
+  ownerTeamId: string;
 }
 
 export function OffseasonPanel(props: OffseasonPanelProps) {
@@ -39,10 +41,21 @@ export function OffseasonPanel(props: OffseasonPanelProps) {
         <Button onClick={() => void game.refetch()}>{t("postseason", "retry")}</Button>
       </div>
     );
-  return <OffseasonPlanning {...props} seasonYear={game.data.seasonYear} />;
+  return (
+    <OffseasonPlanning
+      {...props}
+      seasonYear={game.data.seasonYear}
+      ownerTeamId={game.data.selectedTeamId}
+    />
+  );
 }
 
-function OffseasonPlanning({ gameId, selectedTeamId, seasonYear }: OffseasonPlanningProps) {
+function OffseasonPlanning({
+  gameId,
+  selectedTeamId,
+  seasonYear,
+  ownerTeamId,
+}: OffseasonPlanningProps) {
   const t = useT();
   const locale = useLocale();
   const entry = useOffseason(gameId, seasonYear);
@@ -96,6 +109,14 @@ function OffseasonPlanning({ gameId, selectedTeamId, seasonYear }: OffseasonPlan
         ) : (
           <>
             <output className="block font-semibold">{t("offseason", "entered")}</output>
+            <OffseasonContractLedger
+              key={`${gameId}:${seasonYear}:${selectedTeamId}`}
+              gameId={gameId}
+              seasonYear={seasonYear}
+              selectedTeamId={selectedTeamId}
+              ownerTeamId={ownerTeamId}
+              roster={roster.isError ? [] : (roster.data ?? [])}
+            />
             <h3 className="font-semibold">
               {t("offseason", "contractOutlook")} · {formatSeasonLabel(seasonYear + 1)}
             </h3>

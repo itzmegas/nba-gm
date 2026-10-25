@@ -1,5 +1,24 @@
 export const en = {
   offseason: {
+    ledger: "Saved offseason plans",
+    ledgerHelp:
+      "Record known expiries and team options separately. Current contracts and rosters remain unchanged. Player options stay pending; unknown or estimated contracts cannot be decided.",
+    prepareLedger: "Record expiries and team options",
+    savingLedger: "Saving…",
+    ledgerFailed: "Unable to load or save offseason plans. Retry before deciding.",
+    otherTeamReadOnly:
+      "Other teams are read-only. Select your team to record plans and decide team options.",
+    plannedDeparture: "Planned departure",
+    optionExercised: "Team option exercised (saved plan)",
+    optionDeclined: "Team option declined · Planned departure",
+    optionPending: "Team option pending",
+    playerOptionPending: "Player option pending (not controlled by team)",
+    exercise: "Exercise team option",
+    decline: "Decline team option",
+    confirmLedger:
+      "This decision is final for this offseason plan. It does not change the current roster, contract, calendar, or season.",
+    cancelDecision: "Cancel",
+    confirmDecision: "Confirm decision",
     title: "Offseason",
     enter: "Enter offseason planning",
     entering: "Opening offseason…",
