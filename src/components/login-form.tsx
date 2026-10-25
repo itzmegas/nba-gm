@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useT } from "@/application/providers/I18nProvider";
@@ -126,6 +127,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 )}
               </Button>
 
+              {!isSignUp && (
+                <Link href="/account/password" className="text-center text-sm underline">
+                  {t("auth", "forgotPassword")}
+                </Link>
+              )}
               <FieldDescription className="text-center">
                 {isSignUp ? (
                   <>

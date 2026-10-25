@@ -46,12 +46,17 @@ export default function GameMenuPage() {
             </span>
           </div>
 
-          <Link href="/games/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              {t("games", "newGame")}
-            </Button>
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/account/password" className="text-sm underline">
+              {t("auth", "changePassword")}
+            </Link>
+            <Link href="/games/new">
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t("games", "newGame")}
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
