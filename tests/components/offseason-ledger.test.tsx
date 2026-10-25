@@ -13,6 +13,12 @@ const { hook, mutate, prepare, outlook } = vi.hoisted(() => ({
 vi.mock("@/application/hooks/offseason/useOffseasonContracts", () => ({
   useOffseasonContracts: hook,
 }));
+vi.mock("@/application/hooks/offseason/useOffseasonPlayerOptions", () => ({
+  useOffseasonPlayerOptions: () => ({
+    options: { data: [], isPending: false, isError: false },
+    resolve: { isPending: false },
+  }),
+}));
 vi.mock("@/domain/services/OffseasonContractOutlook", () => ({
   getOffseasonContractOutlook: outlook,
 }));

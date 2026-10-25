@@ -182,3 +182,15 @@ Alcance aprobado: registro separado de salidas previstas por vencimiento y decis
 Implementado localmente con registro separado, validación de evidencia en servidor, confirmación de decisiones inmutables y protección de caché frente a lecturas atrasadas. Verificación: 819 tests en 119 archivos, TypeScript, Biome (403 archivos), build y runner PostgreSQL aislado con permisos, reintentos, concurrencia, rollback y conservación del estado anterior. Incluye regresiones de contratos liberados y vueltos a firmar, y contratos canónicos traspasados. El agente no aplicó migraciones remotas ni avanzó la partida.
 
 **Verificación local:** 796 tests en 116 archivos, TypeScript, Biome (394 archivos), build y runner PostgreSQL aislado correctos. `053` y su copia canónica son idénticos. Se verificaron reintentos concurrentes, permisos, rollback y conservación de todas las tablas anteriores. Detalle y límites: [Entrada a la offseason](OFFSEASON.md).
+
+### Opciones de jugador: política inicial
+
+Política inicial de simulación aprobada e implementada localmente en `055`: comparar el salario conocido de la opción con el de la temporada terminada. Si es igual o mayor, el jugador ejerce; si es menor, rechaza. Datos ausentes, estimados o contradictorios dejan la opción pendiente. El cero se conserva como importe conocido. Es una simplificación de juego, no una regla NBA ni una estimación de preferencias reales.
+
+Una acción explícita con confirmación resuelve las opciones de jugador del equipo controlado, con resultado calculado en servidor y registro persistente de decisión, motivo, entradas y versión `salary-comparison-v1`. El GM no elige el resultado ni puede recalcularlo al recargar. Se conservan contratos originales, plantilla, decisiones de equipo e historial; no inicia 2027–28. El usuario confirmó la instalación de `055`, cancelación sin resolver y ejercicio de la opción de Malik Monk persistente tras recargar, con importes, motivo y versión visibles; las opciones de Clifford y Raynaud permanecen ejercidas. Rechazo y datos inciertos no se comprobaron manualmente. Detalle: [Resolver opciones de jugador](OFFSEASON.md#resolver-opciones-de-jugador-política-inicial).
+
+**Verificación local de `055`:** 871 tests en 122 archivos, TypeScript, Biome (412 archivos), build y runner PostgreSQL aislado correctos. Se verificaron la política y sus entradas inciertas, cero conocido, precedencia de fuentes, permisos, reintentos, concurrencia, rollback y conservación del historial y de las decisiones de equipo anteriores. La migración y su copia canónica son idénticas. No hubo operaciones remotas del agente.
+
+### Bloque futuro pendiente: modelar expectativas de mercado
+
+Recordatorio solicitado por el usuario (2026-10-25): retomar una estimación de lo que un jugador podría obtener en el mercado para mejorar la política de opciones de jugador. Queda fuera de la política inicial de comparación salarial. Antes de implementarlo, acordar alcance, datos de entrada, tratamiento de incertidumbre y criterios de aceptación; no inventar valoraciones de mercado ni preferencias como si fueran datos observados.

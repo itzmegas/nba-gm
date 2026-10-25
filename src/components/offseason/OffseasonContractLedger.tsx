@@ -2,8 +2,10 @@
 
 import { useRef, useState } from "react";
 import { useOffseasonContracts } from "@/application/hooks/offseason/useOffseasonContracts";
+import { useOffseasonPlayerOptions } from "@/application/hooks/offseason/useOffseasonPlayerOptions";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { useT } from "@/application/providers/I18nProvider";
+import { OffseasonPlayerOptions } from "@/components/offseason/OffseasonPlayerOptions";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -38,10 +40,16 @@ export function OffseasonContractLedger({
 }: Props) {
   const t = useT();
   const { ledger, prepare, decide } = useOffseasonContracts(gameId, seasonYear);
+  const playerRows = ledger.data?.filter((row) => row.status === "player_option") ?? [];
+  const playerOptions = useOffseasonPlayerOptions(
+    gameId,
+    seasonYear,
+    !ledger.isPending && !ledger.isError && playerRows.length > 0
+  );
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const submitting = useRef(false);
   const ownerSelected = selectedTeamId === ownerTeamId;
-  const busy = prepare.isPending || decide.isPending;
+  const busy = prepare.isPending || decide.isPending || playerOptions.resolve.isPending;
   const canDecide = (row: OffseasonContract) => {
     const member = roster.find((member) => member.player.id === row.playerId);
     const outlook = member
@@ -106,7 +114,7 @@ export function OffseasonContractLedger({
           {!ownerSelected && <p>{t("offseason", "otherTeamReadOnly")}</p>}
           <ul className="space-y-2">
             {ledger.data
-              ?.filter((row) => row.teamId === selectedTeamId)
+              ?.filter((row) => row.teamId === selectedTeamId && row.status !== "player_option")
               .map((row) => {
                 const member = roster.find((member) => member.player.id === row.playerId);
                 const actionable = canDecide(row);
@@ -120,11 +128,9 @@ export function OffseasonContractLedger({
                           ? "plannedDeparture"
                           : row.decision === "decline"
                             ? "optionDeclined"
-                            : row.status === "player_option"
-                              ? "playerOptionPending"
-                              : row.decision === "exercise"
-                                ? "optionExercised"
-                                : "optionPending"
+                            : row.decision === "exercise"
+                              ? "optionExercised"
+                              : "optionPending"
                       )}
                     </span>
                     {actionable &&
@@ -148,6 +154,13 @@ export function OffseasonContractLedger({
                 );
               })}
           </ul>
+          <OffseasonPlayerOptions
+            rows={playerRows.filter((row) => row.teamId === selectedTeamId)}
+            roster={roster}
+            ownerSelected={ownerSelected}
+            busy={busy || confirmation !== null}
+            playerOptions={playerOptions}
+          />
         </>
       )}
       {prepare.isError && <p role="alert">{t("offseason", "ledgerFailed")}</p>}

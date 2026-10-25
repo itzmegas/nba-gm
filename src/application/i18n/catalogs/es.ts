@@ -4,7 +4,7 @@ export const es: Messages = {
   offseason: {
     ledger: "Planes de entretemporada guardados",
     ledgerHelp:
-      "Registra vencimientos conocidos y opciones de equipo por separado. Los contratos y las plantillas actuales no cambian. Las opciones de jugador quedan pendientes; no se pueden decidir contratos desconocidos o estimados.",
+      "Registra vencimientos y opciones conocidos por separado. Los contratos y las plantillas actuales no cambian. Las opciones de jugador las resuelve la simulación, no el equipo; los contratos desconocidos o estimados quedan pendientes.",
     prepareLedger: "Registrar vencimientos y opciones de equipo",
     savingLedger: "Guardando…",
     ledgerFailed:
@@ -16,6 +16,22 @@ export const es: Messages = {
     optionDeclined: "Opción de equipo rechazada · Salida prevista",
     optionPending: "Opción de equipo pendiente",
     playerOptionPending: "Opción de jugador pendiente (no depende del equipo)",
+    playerOptions: "Simulación de opciones de jugador",
+    playerOptionsHelp:
+      "Heurística inicial de comparación salarial, no una valoración de mercado: el servidor ejerce la opción si el salario siguiente conocido es igual o mayor que el actual conocido, y la rechaza si es menor. Los datos desconocidos, estimados o contradictorios quedan pendientes. El gerente no elige el resultado.",
+    resolvePlayerOptions: "Resolver opciones de jugador",
+    confirmPlayerOptions:
+      "¿Aplicar la heurística de comparación salarial a las opciones de jugador pendientes de tu equipo? Los resultados elegibles se guardan definitivamente para este plan. Los datos desconocidos, estimados o contradictorios quedan pendientes. No cambia contratos, plantillas, historial ni temporada actuales.",
+    playerOptionsFailed:
+      "No se pudieron cargar o resolver las opciones de jugador. Reintenta antes de resolver.",
+    playerOptionExercised: "Opción de jugador ejercida (plan guardado)",
+    playerOptionDeclined: "Opción de jugador rechazada · Salida prevista",
+    playerOptionUnresolved:
+      "Sin resolución guardada. Los salarios desconocidos, estimados o contradictorios siguen pendientes, incluso después de resolver.",
+    currentSalary: "Salario de la temporada actual",
+    salary_not_lower: "El salario siguiente es igual o mayor que el actual",
+    salary_lower: "El salario siguiente es menor que el actual",
+    playerOptionPolicy: "Política",
     exercise: "Ejercer opción de equipo",
     decline: "Rechazar opción de equipo",
     confirmLedger:
@@ -29,7 +45,7 @@ export const es: Messages = {
     preserved:
       "Abre la planificación de solo lectura sin cambiar la temporada actual, la fecha de simulación, la plantilla ni el historial. La siguiente temporada todavía no se puede jugar.",
     informational:
-      "Solo informativo: no se ejercen opciones, no se renuevan contratos ni se liberan jugadores. La cobertura conocida no implica un salario garantizado. Los datos contractuales faltantes se muestran como desconocidos.",
+      "Perspectiva contractual de solo lectura: esta tabla no ejerce opciones, no renueva contratos ni libera jugadores. Los planes guardados se muestran por separado arriba. La cobertura conocida no implica un salario garantizado. Los datos contractuales faltantes se muestran como desconocidos.",
     contractOutlook: "Equipo seleccionado · Perspectiva contractual para la siguiente temporada",
     player: "Jugador",
     contractStatus: "Estado contractual",

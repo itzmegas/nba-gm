@@ -630,8 +630,8 @@ This section maps every major rule to its implementation fidelity in the MVP and
 | Max contract length (4 vs 5 years) | **[FULL]** | Distinguish own-player vs new-team signings |
 | Annual raises (8% vs 5%) | **[SIMPLIFIED]** | Implement flat raises, skip compounding edge cases |
 | Supermax eligibility | **[DEFERRED]** | Requires awards tracking |
-| Player Options | **[DEFERRED]** | Adds decision complexity for AI; defer to post-MVP |
-| Team Options | **[DEFERRED]** | Same as above |
+| Player Options | **[SIMPLIFIED]** | Local offseason policy `055`: exercise if known option salary is at least the current salary, otherwise decline; uncertain inputs stay pending. A gameplay heuristic, not a market valuation or NBA rule. Saved plans only; no next-season contract materialization. See [offseason](OFFSEASON.md#resolver-opciones-de-jugador-política-inicial). |
+| Team Options | **[SIMPLIFIED]** | `054` records explicit, confirmed decisions for the controlled team only; saved plans do not change current contracts or rosters. |
 | Early Termination Options | **[DEFERRED]** | Rare; defer |
 | Guaranteed vs Non-Guaranteed | **[SIMPLIFIED]** | All contracts fully guaranteed in MVP |
 | Signing bonuses & incentives | **[DEFERRED]** | Rarely impacts macro decisions |

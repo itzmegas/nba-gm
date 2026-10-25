@@ -15,9 +15,25 @@ Con `053` instalada, aplicar manualmente **solo** `scripts/migrations/054_offsea
 1. En la planificación, seleccionar el equipo de la partida y pulsar el botón de registro de vencimientos y opciones. Abrir la página o consultar el resumen no escribe datos.
 2. El registro conserva vencimientos conocidos como salidas previstas y opciones pendientes. No quita jugadores de la plantilla ni modifica contratos originales.
 3. Para una opción de equipo con salario conocido, elegir ejercer o rechazar y confirmar. Cancelar no guarda nada. Una decisión confirmada es definitiva: repetirla devuelve el mismo registro; intentar cambiarla se rechaza.
-4. Recargar conserva el registro y las decisiones. Las opciones de jugador siguen pendientes; otros equipos son de solo lectura. Los datos desconocidos, estimados o contradictorios no habilitan decisiones.
+4. Recargar conserva el registro y las decisiones. Las opciones de jugador quedan pendientes hasta resolverlas mediante el bloque siguiente; otros equipos son de solo lectura. Los datos desconocidos, estimados o contradictorios no habilitan decisiones.
 
-El registro pertenece al equipo controlado por el usuario. Prepararlo omite clasificaciones sin evidencia suficiente; una opción conocida con salario desconocido puede registrarse, pero no decidirse. No hay decisiones automáticas para otros equipos ni para jugadores.
+El registro pertenece al equipo controlado por el usuario. Prepararlo omite clasificaciones sin evidencia suficiente; una opción conocida con salario desconocido puede registrarse, pero no decidirse. Esta preparación no resuelve opciones de jugador ni decide por otros equipos.
+
+### Resolver opciones de jugador: política inicial
+
+Con `054` instalada, aplicar manualmente **solo** `scripts/migrations/055_offseason_player_options.sql`. No ejecutar el esquema canónico sobre una base existente. Instalar la migración o consultar la página no resuelve opciones.
+
+La acción explícita de resolver opciones de jugador, con confirmación, aplica únicamente al equipo controlado. El GM no elige ejercer o rechazar: el servidor compara el salario conocido de la opción con el de la temporada terminada.
+
+| Datos conocidos | Resultado simulado |
+| --- | --- |
+| Salario de opción igual o mayor al actual | Ejerce. |
+| Salario de opción menor al actual | Rechaza; salida prevista, sin quitar al jugador de la plantilla actual. |
+| Salario ausente, estimado o evidencia contradictoria | Sigue pendiente. |
+
+El cero es un importe conocido, no un dato ausente. Cada resolución guarda ambos importes, decisión, motivo, evidencia y versión `salary-comparison-v1` en `game_offseason_player_options`, separada de las opciones de equipo. Reintentar no cambia resultados guardados; recargar solo los consulta. Cancelar la confirmación no ejecuta la resolución.
+
+Esta es una heurística de simulación, no una regla NBA ni una predicción de preferencias reales. **Modelar expectativas de mercado** queda como [bloque futuro pendiente](SIMULATION_ROADMAP.md#bloque-futuro-pendiente-modelar-expectativas-de-mercado), con alcance por acordar. No forma parte de esta política inicial.
 
 La instalación no avanza ninguna partida. La transición tampoco cambia la fecha de simulación: una partida cerrada el 10 de junio de 2027 permanece en esa fecha y en la temporada 2026–27. El año siguiente se muestra únicamente como contexto del resumen contractual.
 
@@ -46,13 +62,16 @@ La única escritura de esta transición es el marcador de entrada. No modifica l
 
 La titularidad se toma de la plantilla actual de la partida: los equipos de origen de un contrato importado son procedencia, no impiden decidirlo después de un traspaso. Los contratos simulados liberados se excluyen; una nueva firma utiliza exclusivamente el acuerdo activo. Ambos casos tienen regresiones en PostgreSQL aislado.
 
-**Fuera de alcance:** iniciar 2027–28, nuevo calendario, draft, renovaciones, decisiones de jugadores u otros equipos, liberaciones, mercado de verano, progresión y retiros. La continuidad jugable necesitará además reglas financieras para el nuevo año, atributos por temporada y consultas históricas independientes del año actual.
+`resolve_offseason_player_options` reutiliza la preparación protegida de `054` para autenticar al propietario, bloquear la partida y revalidar año, entrada y evidencia. Una acción explícita puede completar registros aún no preparados; nunca cambia las decisiones de equipo ya guardadas. La resolución de jugador tiene lectura del propietario mediante RLS y no admite escrituras directas del cliente. No modifica los contratos vigentes ni convierte rechazos en bajas inmediatas.
+
+**Fuera de alcance:** iniciar 2027–28, nuevo calendario, draft, renovaciones, decisiones de otros equipos, liberaciones, mercado de verano, expectativas de mercado, progresión y retiros. La continuidad jugable necesitará además reglas financieras para el nuevo año, atributos por temporada y consultas históricas independientes del año actual.
 
 ## Verificación local
 
 ```sh
 bun scripts/test-offseason-entry-postgres.ts
 bun scripts/test-offseason-contracts-postgres.ts
+bun scripts/test-offseason-player-options-postgres.ts
 bun run test
 bun run typecheck
 bun biome check
@@ -70,3 +89,7 @@ El runner PostgreSQL utiliza exclusivamente su contenedor desechable sin red ext
 **Aceptación manual de `054` (2026-10-25):** el usuario informó que aplicó la migración y mostró el registro con Nique Clifford y Maxime Raynaud como opciones de equipo pendientes, y Malik Monk como opción de jugador pendiente sin controles. Confirmó que los tres registros persisten al recargar y que abrir la opción de Clifford y cancelar la confirmación la deja pendiente. Después mostró ambas opciones de equipo ejercidas como planes guardados, sin botones para cambiarlas, y confirmó que siguen iguales tras recargar. Esto verifica lectura del registro, cancelación, confirmación y persistencia del ejercicio; no verifica manualmente rechazo, filas de vencimiento ni restricciones de otros equipos o datos inciertos. El agente no accedió al remoto ni avanzó la partida; las decisiones siguen siendo planes, no contratos materializados de 2027–28.
 
 **Verificación local de la nueva entrega (2026-10-25):** 819 tests en 119 archivos, TypeScript, Biome (403 archivos) y build de producción correctos. Los tests de interfaz comprueban preparación explícita, confirmación/cancelación, errores, bloqueo de duplicados y restricciones por equipo/evidencia; los de hooks comprueban la recuperación de decisiones guardadas y la cancelación de lecturas atrasadas. La forma objeto de la respuesta RPC compuesta se contrastó con la implementación de PostgREST; no se ejecutó una llamada HTTP contra Supabase ni una prueba E2E de navegador.
+
+**Verificación local de `055` (2026-10-25):** 871 tests en 122 archivos, TypeScript, Biome (412 archivos), build de producción y runner PostgreSQL aislado correctos. El runner comprueba igualdad y comparación salarial, cero conocido, datos inciertos, precedencia de fuentes, contratos traspasados y liberados, permisos/RLS, reintentos inmutables, rollback, espera concurrente del bloqueo y conservación de todas las tablas anteriores, incluidas las decisiones de equipo de `054`. La migración y su copia canónica son idénticas. Las pruebas de repositorio, hooks e interfaz comprueban validación, acción explícita, confirmación/cancelación, errores, protección de caché y recuperación de resultados guardados.
+
+**Aceptación manual de `055` (2026-10-25):** el usuario informó que instaló la migración y confirmó que abrir la resolución, cancelar y recargar mantiene a Malik Monk pendiente. Después mostró su opción ejercida como plan guardado: salario actual $20.190.035, salario siguiente $21.582.451, motivo de salario siguiente igual o mayor y política `salary-comparison-v1`. Confirmó que persiste al recargar. Las capturas conservan las opciones de equipo ejercidas de Clifford y Raynaud; el botón de resolver ya no aparece tras guardar a Monk. Esto verifica cancelación, ejercicio según la política y persistencia; no verifica manualmente rechazo ni datos inciertos. El agente no accedió al remoto ni inició 2027–28.

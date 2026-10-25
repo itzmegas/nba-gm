@@ -2,7 +2,7 @@ export const en = {
   offseason: {
     ledger: "Saved offseason plans",
     ledgerHelp:
-      "Record known expiries and team options separately. Current contracts and rosters remain unchanged. Player options stay pending; unknown or estimated contracts cannot be decided.",
+      "Record known expiries and options separately. Current contracts and rosters remain unchanged. Player options are resolved by the simulation, not the team; unknown or estimated contracts stay pending.",
     prepareLedger: "Record expiries and team options",
     savingLedger: "Saving…",
     ledgerFailed: "Unable to load or save offseason plans. Retry before deciding.",
@@ -13,6 +13,21 @@ export const en = {
     optionDeclined: "Team option declined · Planned departure",
     optionPending: "Team option pending",
     playerOptionPending: "Player option pending (not controlled by team)",
+    playerOptions: "Player-option simulation",
+    playerOptionsHelp:
+      "Initial salary-comparison heuristic, not a market valuation: the server exercises an option when its known next salary is at least the known current salary, and declines when lower. Unknown, estimated or conflicting data stays pending. The GM does not choose the outcome.",
+    resolvePlayerOptions: "Resolve player options",
+    confirmPlayerOptions:
+      "Run the salary-comparison heuristic for your team's pending player options? Eligible results are saved definitively for this offseason plan. Unknown, estimated or conflicting inputs remain pending. This does not change current contracts, rosters, history, or the season.",
+    playerOptionsFailed: "Unable to load or resolve player options. Retry before resolving.",
+    playerOptionExercised: "Player option exercised (saved plan)",
+    playerOptionDeclined: "Player option declined · Planned departure",
+    playerOptionUnresolved:
+      "No saved resolution. Unknown, estimated or conflicting salary inputs remain pending, including after resolution.",
+    currentSalary: "Current-season salary",
+    salary_not_lower: "Next salary is at least the current salary",
+    salary_lower: "Next salary is lower than the current salary",
+    playerOptionPolicy: "Policy",
     exercise: "Exercise team option",
     decline: "Decline team option",
     confirmLedger:
@@ -26,7 +41,7 @@ export const en = {
     preserved:
       "Open read-only planning without changing the current season, simulation date, roster, or history. The next season is not playable yet.",
     informational:
-      "Informational only: no options are exercised, contracts renewed, or players released. Known coverage does not imply guaranteed salary. Missing contract data is shown as unknown.",
+      "Read-only contract outlook: no options are exercised, contracts renewed, or players released by this table. Saved offseason plans are shown separately above. Known coverage does not imply guaranteed salary. Missing contract data is shown as unknown.",
     contractOutlook: "Selected team · Next-season contract outlook",
     player: "Player",
     contractStatus: "Contract status",
