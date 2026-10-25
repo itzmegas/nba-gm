@@ -1,5 +1,13 @@
 export const en = {
   offseason: {
+    projectedRoster: "Selected team · Projected roster",
+    projectionHelp:
+      "Read-only projection from known contract coverage and saved plans. Coverage is not a salary guarantee; exercised options are plans, not new contracts. Departures remain on the current roster. No budget or next season is created.",
+    projectedCoverage: "Continuity projected · Known contract coverage",
+    projectedExercise: "Continuity projected · Option exercised",
+    projectedDeparture: "Planned departure · Expiry or declined option",
+    projectedPending: "Pending option · Continuity not confirmed",
+    projectedUnknown: "Unknown · Continuity not established",
     ledger: "Saved offseason plans",
     ledgerHelp:
       "Record known expiries and options separately. Current contracts and rosters remain unchanged. Player options are resolved by the simulation, not the team; unknown or estimated contracts stay pending.",

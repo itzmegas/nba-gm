@@ -2,6 +2,14 @@ import type { Messages } from "../types";
 
 export const es: Messages = {
   offseason: {
+    projectedRoster: "Equipo seleccionado · Plantilla proyectada",
+    projectionHelp:
+      "Proyección de solo lectura basada en cobertura contractual conocida y planes guardados. La cobertura no garantiza el salario; las opciones ejercidas son planes, no contratos nuevos. Las salidas previstas siguen en la plantilla actual. No se crea un presupuesto ni otra temporada.",
+    projectedCoverage: "Continuidad prevista · Cobertura contractual conocida",
+    projectedExercise: "Continuidad prevista · Opción ejercida",
+    projectedDeparture: "Salida prevista · Vencimiento u opción rechazada",
+    projectedPending: "Opción pendiente · Continuidad no confirmada",
+    projectedUnknown: "Desconocido · Continuidad sin determinar",
     ledger: "Planes de entretemporada guardados",
     ledgerHelp:
       "Registra vencimientos y opciones conocidos por separado. Los contratos y las plantillas actuales no cambian. Las opciones de jugador las resuelve la simulación, no el equipo; los contratos desconocidos o estimados quedan pendientes.",

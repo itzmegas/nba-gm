@@ -4,20 +4,18 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/application/providers/I18nProvider";
 import { OffseasonContractLedger } from "@/components/offseason/OffseasonContractLedger";
 
-const { hook, mutate, prepare, outlook } = vi.hoisted(() => ({
+const { hook, mutate, prepare, outlook, playerOptions } = vi.hoisted(() => ({
   hook: vi.fn(),
   mutate: vi.fn(),
   prepare: vi.fn(),
   outlook: vi.fn(),
+  playerOptions: vi.fn(),
 }));
 vi.mock("@/application/hooks/offseason/useOffseasonContracts", () => ({
   useOffseasonContracts: hook,
 }));
 vi.mock("@/application/hooks/offseason/useOffseasonPlayerOptions", () => ({
-  useOffseasonPlayerOptions: () => ({
-    options: { data: [], isPending: false, isError: false },
-    resolve: { isPending: false },
-  }),
+  useOffseasonPlayerOptions: playerOptions,
 }));
 vi.mock("@/domain/services/OffseasonContractOutlook", () => ({
   getOffseasonContractOutlook: outlook,
@@ -67,6 +65,10 @@ function show(selectedTeamId = "owner") {
   );
 }
 beforeEach(() => {
+  playerOptions.mockReturnValue({
+    options: { data: [], isPending: false, isError: false },
+    resolve: { isPending: false },
+  });
   hook.mockReturnValue(state());
   outlook.mockReturnValue({ status: "team_option", estimated: false, nextSalary: 100 });
 });
@@ -179,4 +181,94 @@ it("does not allow unknown salaries or contradictory amounts", () => {
   outlook.mockReturnValue({ status: "team_option", estimated: false, nextSalary: 200 });
   show();
   expect(screen.queryByRole("button", { name: "Exercise team option" })).toBeNull();
+});
+
+it("projects saved team decisions on render and reload without writes", () => {
+  hook.mockReturnValue(
+    state({
+      ledger: { data: [{ ...row, decision: "exercise" }], isPending: false, isError: false },
+    })
+  );
+  const view = show();
+  const projection = () => screen.getByRole("region", { name: "Selected team · Projected roster" });
+  expect(projection().textContent).toContain(
+    "Test Player · Continuity projected · Option exercised"
+  );
+  view.unmount();
+  show();
+  expect(projection().textContent).toContain("Continuity projected · Option exercised");
+  expect(prepare).not.toHaveBeenCalled();
+  expect(mutate).not.toHaveBeenCalled();
+});
+
+it("does not reuse another team's saved decisions", () => {
+  hook.mockReturnValue(
+    state({
+      ledger: { data: [{ ...row, decision: "exercise" }], isPending: false, isError: false },
+    })
+  );
+  show("other");
+  const projection = screen.getByRole("region", { name: "Selected team · Projected roster" });
+  expect(projection.textContent).toContain("Pending option · Continuity not confirmed");
+});
+
+it.each([
+  { scope: {}, expected: "Continuity projected · Option exercised" },
+  { scope: { gameId: "other" }, expected: "Pending option · Continuity not confirmed" },
+  { scope: { seasonYear: 2025 }, expected: "Pending option · Continuity not confirmed" },
+  { scope: { teamId: "other" }, expected: "Pending option · Continuity not confirmed" },
+  { scope: { playerId: "other" }, expected: "Pending option · Continuity not confirmed" },
+])("scopes saved player projection: $scope", ({ scope, expected }) => {
+  const playerRow = { ...row, status: "player_option" };
+  hook.mockReturnValue(state({ ledger: { data: [playerRow], isPending: false, isError: false } }));
+  outlook.mockReturnValue({ status: "player_option", nextSalary: 100, estimated: false });
+  playerOptions.mockReturnValue({
+    options: {
+      data: [
+        {
+          ...playerRow,
+          gameId: "career",
+          currentSalary: 90,
+          decision: "exercise",
+          reason: "salary_not_lower",
+          policyVersion: "salary-comparison-v1",
+          ...scope,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    },
+    resolve: { isPending: false },
+  });
+  show();
+  expect(
+    screen.getByRole("region", { name: "Selected team · Projected roster" }).textContent
+  ).toContain(expected);
+});
+
+it.each(["loading", "error"])("withholds the projection on player decision %s", (status) => {
+  hook.mockReturnValue(
+    state({
+      ledger: { data: [{ ...row, status: "player_option" }], isPending: false, isError: false },
+    })
+  );
+  playerOptions.mockReturnValue({
+    options: {
+      data: [],
+      isPending: status === "loading",
+      isError: status === "error",
+      refetch: vi.fn(),
+    },
+    resolve: { isPending: false },
+  });
+  show();
+  const projection = screen.getByRole("region", { name: "Selected team · Projected roster" });
+  expect(within(projection).queryByRole("list")).toBeNull();
+  expect(
+    within(projection).getByText(
+      status === "loading"
+        ? "Loading..."
+        : "Unable to load or resolve player options. Retry before resolving."
+    )
+  ).toBeTruthy();
 });

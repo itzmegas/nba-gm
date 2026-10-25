@@ -83,7 +83,7 @@ Separarla de los playoffs: cambiar el año no alcanza. Hay que definir contratos
 - [x] Definir compatibilidad con partidas existentes: sin backfill y sin inventar resultados de partidos completados.
 - [x] Integrar en la función SQL diaria real; cambiar únicamente `SeasonSimulator.ts` no alcanzaba el flujo que usa el juego.
 
-**Estado entre temporadas:** entrada a offseason y registro de vencimientos/opciones de equipo implementados, conservando contratos originales, plantilla actual e historial. El usuario confirmó ejercicio y persistencia de sus dos opciones de equipo. Las opciones de jugador quedan pendientes; el siguiente bloque debe acordarse antes de editar, sin iniciar 2027–28. Mantener identificadas las comprobaciones visuales aún pendientes, sin confundirlas con errores confirmados.
+**Estado entre temporadas:** entrada a offseason, registro de vencimientos/opciones de equipo y resolución inicial de opciones de jugador implementados y aceptados manualmente dentro del alcance documentado, conservando contratos originales, plantilla actual e historial. El siguiente bloque acordado es una plantilla proyectada de solo lectura a partir de cobertura conocida y planes guardados, sin iniciar 2027–28 ni modelar expectativas de mercado. Mantener identificadas las comprobaciones visuales aún pendientes, sin confundirlas con errores confirmados.
 
 ## Avance del bloque 1
 
@@ -190,6 +190,10 @@ Política inicial de simulación aprobada e implementada localmente en `055`: co
 Una acción explícita con confirmación resuelve las opciones de jugador del equipo controlado, con resultado calculado en servidor y registro persistente de decisión, motivo, entradas y versión `salary-comparison-v1`. El GM no elige el resultado ni puede recalcularlo al recargar. Se conservan contratos originales, plantilla, decisiones de equipo e historial; no inicia 2027–28. El usuario confirmó la instalación de `055`, cancelación sin resolver y ejercicio de la opción de Malik Monk persistente tras recargar, con importes, motivo y versión visibles; las opciones de Clifford y Raynaud permanecen ejercidas. Rechazo y datos inciertos no se comprobaron manualmente. Detalle: [Resolver opciones de jugador](OFFSEASON.md#resolver-opciones-de-jugador-política-inicial).
 
 **Verificación local de `055`:** 871 tests en 122 archivos, TypeScript, Biome (412 archivos), build y runner PostgreSQL aislado correctos. Se verificaron la política y sus entradas inciertas, cero conocido, precedencia de fuentes, permisos, reintentos, concurrencia, rollback y conservación del historial y de las decisiones de equipo anteriores. La migración y su copia canónica son idénticas. No hubo operaciones remotas del agente.
+
+### Plantilla proyectada: bloque mínimo acordado
+
+Vista de solo lectura del equipo seleccionado: continuidad por cobertura conocida u opción ejercida, salidas previstas por vencimiento o rechazo y opciones pendientes/datos desconocidos explícitos. Reutiliza contratos y planes existentes, sin migraciones, presupuesto nuevo ni cambios de plantilla, contratos, fecha, temporada o historial. No convierte planes en contratos de 2027–28. El usuario mostró la proyección de Monk, Clifford y Raynaud por opción ejercida y confirmó que se conserva tras recargar; rechazo y opciones pendientes no se comprobaron manualmente. Detalle: [Plantilla proyectada](OFFSEASON.md#plantilla-proyectada-solo-lectura).
 
 ### Bloque futuro pendiente: modelar expectativas de mercado
 

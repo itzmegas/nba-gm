@@ -16,7 +16,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { OffseasonContract, OffseasonDecision } from "@/domain/entities/OffseasonContract";
+import { formatSeasonLabel } from "@/domain/entities/Season";
 import { getOffseasonContractOutlook } from "@/domain/services/OffseasonContractOutlook";
+import { getOffseasonRosterProjection } from "@/domain/services/OffseasonRosterProjection";
 
 interface Props {
   gameId: string;
@@ -161,6 +163,52 @@ export function OffseasonContractLedger({
             busy={busy || confirmation !== null}
             playerOptions={playerOptions}
           />
+          {roster.length > 0 && (
+            <section aria-label={t("offseason", "projectedRoster")} className="space-y-3">
+              <h3 className="font-semibold">
+                {t("offseason", "projectedRoster")} · {formatSeasonLabel(seasonYear + 1)}
+              </h3>
+              <p className="text-sm text-muted-foreground">{t("offseason", "projectionHelp")}</p>
+              {playerRows.length > 0 && playerOptions.options.isError ? (
+                <div role="alert">
+                  <p>{t("offseason", "playerOptionsFailed")}</p>
+                  <Button onClick={() => void playerOptions.options.refetch()}>
+                    {t("postseason", "retry")}
+                  </Button>
+                </div>
+              ) : playerRows.length > 0 && playerOptions.options.isPending ? (
+                <output>{t("common", "loading")}</output>
+              ) : (
+                <ul className="space-y-2">
+                  {roster.map(({ player, contract, gameContract }) => {
+                    const plan = ledger.data?.find(
+                      (row) =>
+                        row.playerId === player.id &&
+                        row.teamId === selectedTeamId &&
+                        row.seasonYear === seasonYear
+                    );
+                    const option = playerOptions.options.data?.find(
+                      (row) =>
+                        row.playerId === player.id &&
+                        row.teamId === selectedTeamId &&
+                        row.seasonYear === seasonYear &&
+                        row.gameId === gameId
+                    );
+                    const projection = getOffseasonRosterProjection(
+                      getOffseasonContractOutlook(contract, gameContract, seasonYear),
+                      plan,
+                      option
+                    );
+                    return (
+                      <li key={player.id}>
+                        {player.fullName} · {t("offseason", projection)}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
         </>
       )}
       {prepare.isError && <p role="alert">{t("offseason", "ledgerFailed")}</p>}

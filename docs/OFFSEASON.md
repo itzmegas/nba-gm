@@ -37,6 +37,26 @@ Esta es una heurística de simulación, no una regla NBA ni una predicción de p
 
 La instalación no avanza ninguna partida. La transición tampoco cambia la fecha de simulación: una partida cerrada el 10 de junio de 2027 permanece en esa fecha y en la temporada 2026–27. El año siguiente se muestra únicamente como contexto del resumen contractual.
 
+## Plantilla proyectada: solo lectura
+
+La planificación incorpora una proyección del equipo seleccionado que combina la cobertura contractual actual con las decisiones ya guardadas. No requiere otra migración ni ejecuta acciones al abrirla o recargarla.
+
+| Evidencia | Proyección |
+| --- | --- |
+| Cobertura contractual conocida | Continuidad prevista, sin garantizar el salario. |
+| Opción ejercida guardada | Continuidad prevista como plan, no contrato materializado. |
+| Vencimiento conocido u opción rechazada guardada | Salida prevista, sin quitar al jugador de la plantilla actual. |
+| Opción sin decisión verificable | Pendiente, sin confirmar continuidad ni salida. |
+| Datos desconocidos, estimados o discrepancias entre el plan y la cobertura actual | Continuidad sin determinar. |
+
+Las decisiones se filtran por jugador, equipo y temporada; las resoluciones de jugador también por partida. Si falla o sigue pendiente la lectura de los planes, no se presenta una proyección incompleta como definitiva. Los errores de lectura mantienen las acciones de reintento existentes.
+
+No calcula presupuesto, salarios garantizados ni expectativas de mercado; no firma, renueva, libera ni inicia 2027–28.
+
+**Aceptación manual (2026-10-25):** la captura del usuario muestra la plantilla proyectada 27–28 con Monk, Clifford y Raynaud en continuidad por opción ejercida, cobertura conocida diferenciada y datos desconocidos sin asumir continuidad ni salida. El usuario confirmó que sigue igual después de recargar. Esto verifica presentación y recuperación de los planes existentes; no audita todos los salarios ni verifica manualmente rechazo u opciones pendientes. El agente no accedió al remoto ni avanzó la partida.
+
+**Verificación local (2026-10-25):** 885 tests en 123 archivos, TypeScript, Biome (414 archivos), build de producción y `git diff --check` correctos. Las regresiones cubren cobertura, vencimiento, ejercicio/rechazo, opciones pendientes, datos inciertos, discrepancias, cero conocido, aislamiento de decisiones y lectura tras remontar sin escrituras. No se ejecutó E2E de navegador ni runner PostgreSQL: no hay cambios de persistencia ni SQL. El agente no accedió al remoto.
+
 ## Qué informa el resumen
 
 | Situación | Evidencia utilizada |
