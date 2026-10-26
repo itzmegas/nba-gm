@@ -16,7 +16,7 @@ export default function PostseasonPage({ params }: PostseasonPageProps) {
   if (game.isPending) return <output>{t("common", "loading")}</output>;
   if (game.isError || !game.data) return <p role="alert">{t("dashboard", "unableToLoadGame")}</p>;
   return (
-    <section aria-labelledby="postseason-title" className="space-y-6">
+    <section data-slot="postseason-screen" aria-labelledby="postseason-title" className="space-y-6">
       <h1 id="postseason-title" className="text-2xl font-bold">
         {t("postseason", "title")}
       </h1>

@@ -75,6 +75,7 @@ export const es: Messages = {
   },
   postseason: {
     title: "Postemporada",
+    bracket: "Cuadro de playoffs",
     eliminatedShort: "Tu equipo está eliminado",
     regular_season: "Temporada regular en curso",
     play_in: "Play-in en curso",

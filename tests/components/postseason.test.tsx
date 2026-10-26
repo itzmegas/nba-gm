@@ -69,6 +69,13 @@ describe("postseason phases and fixed visual bracket", () => {
     expect(screen.getByText(/Your team is eliminated/)).toBeTruthy();
     expect(screen.getByText(/#13/)).toBeTruthy();
     expect(container.querySelectorAll("[data-bracket-slot]")).toHaveLength(15);
+    expect(container.querySelector("[data-bracket-slot]")?.getAttribute("data-bracket-slot")).toBe(
+      "West-1-1"
+    );
+    expect(
+      screen.getByRole("button", { name: "Playoff bracket" }).getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(screen.queryByRole("button", { name: "Offseason" })).toBeNull();
     for (const [slot, pair] of [
       [1, [1, 8]],
       [2, [4, 5]],
@@ -108,6 +115,9 @@ describe("postseason phases and fixed visual bracket", () => {
       "es"
     );
     expect(screen.getByText("Play-in en curso")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Resultados del play-in" }).getAttribute("aria-pressed")
+    ).toBe("true");
     expect(screen.getByText(/7 vs 8 · El ganador obtiene el puesto 7/)).toBeTruthy();
     expect(screen.getByText("Programado")).toBeTruthy();
     expect(screen.queryByText(/Tu equipo está eliminado/)).toBeNull();
@@ -148,10 +158,53 @@ describe("postseason phases and fixed visual bracket", () => {
     expect(container.querySelector('[data-bracket-slot="East-2-2"]')?.textContent).not.toContain(
       "East Team 5"
     );
-    const details = slot.querySelector("details");
-    if (details) details.open = true;
-    fireEvent.click(within(slot).getByRole("button", { name: /Open box score/ }));
+    expect(slot.querySelector("details")).toBeNull();
+    fireEvent.click(within(slot).getByRole("button", { name: "Series games" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/Game 1/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Open box score/ }));
     expect(boxScore).toHaveBeenCalledWith(postseasonId(100), postseasonId(102));
+  });
+
+  it("uses uniform slots and aligns later rounds to the midpoint of their feeder pairs", () => {
+    const { container } = show(postseasonFixture());
+    for (const conference of ["East", "West"]) {
+      for (const [round, slots] of [
+        [1, 4],
+        [2, 2],
+        [3, 1],
+      ]) {
+        for (let slot = 1; slot <= slots; slot++) {
+          const card = container.querySelector(
+            `[data-bracket-slot="${conference}-${round}-${slot}"]`
+          );
+          expect(card?.classList.contains("h-28")).toBe(true);
+          expect(card?.parentElement?.style.gridRow).toBe(
+            `${(slot - 1) * 2 ** round + 1} / span ${2 ** round}`
+          );
+        }
+      }
+    }
+    const finals = container.querySelector('[data-bracket-slot="Finals-4-1"]');
+    expect(finals?.classList.contains("h-28")).toBe(true);
+    expect(finals?.parentElement?.className).toContain("@min-[72rem]:h-[32rem]");
+  });
+
+  it("shows team logos with an abbreviation fallback and accessible full names", () => {
+    const data = postseasonTeamsFixture();
+    const team = data[0];
+    team.logoUrl = "/team-logo.svg";
+    teams.mockReturnValue({ data, isPending: false, isError: false });
+    const { container } = show(postseasonFixture());
+    const card = container.querySelector('[data-bracket-slot="East-1-1"]');
+    if (!(card instanceof HTMLElement)) throw new Error("Missing series slot");
+    expect(within(card).getByText(team.name)).toBeTruthy();
+    const logo = card.querySelector("img");
+    expect(logo?.getAttribute("alt")).toBe("");
+    if (!logo) throw new Error("Missing team logo");
+    fireEvent.error(logo);
+    expect(card.querySelector("img")).toBeNull();
+    expect(within(card).getAllByText(team.abbreviation).length).toBeGreaterThan(0);
   });
 
   it("announces champion and runner-up with no season rollover", () => {
@@ -165,6 +218,16 @@ describe("postseason phases and fixed visual bracket", () => {
     );
     expect(screen.getByText("Champion: East Team 1")).toBeTruthy();
     expect(screen.getByText("Offseason planning panel")).toBeTruthy();
+    const planning = screen.getByText("Offseason planning panel");
+    expect(planning.closest("[hidden]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Offseason" }));
+    expect(planning.closest("[hidden]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Offseason" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Playoff bracket" }));
+    fireEvent.click(screen.getByRole("button", { name: "Offseason" }));
+    expect(screen.getByText("Offseason planning panel")).toBe(planning);
     expect(screen.getByText("Runner-up: West Team 1")).toBeTruthy();
     expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
     expect(screen.queryByText(/Your team is eliminated/)).toBeNull();

@@ -68,6 +68,7 @@ export const en = {
   },
   postseason: {
     title: "Postseason",
+    bracket: "Playoff bracket",
     eliminatedShort: "Your team is eliminated",
     regular_season: "Regular season in progress",
     play_in: "Play-in in progress",
