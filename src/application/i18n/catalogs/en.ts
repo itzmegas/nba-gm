@@ -1,5 +1,9 @@
 export const en = {
   offseason: {
+    planningOnly: "PLANNING · No contract execution",
+    simulationPolicy: "How the simulation decides",
+    playerOptionsSummary:
+      "The simulation decides, not the GM. Results are saved plans; uncertain salary data stays pending.",
     projectedRoster: "Selected team · Projected roster",
     projectionHelp:
       "Read-only projection from known contract coverage and saved plans. Coverage is not a salary guarantee; exercised options are plans, not new contracts. Departures remain on the current roster. No budget or next season is created.",

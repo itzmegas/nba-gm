@@ -66,9 +66,15 @@ export function OffseasonPlayerOptions({
 
   if (!rows.length) return null;
   return (
-    <section aria-label={t("offseason", "playerOptions")} className="space-y-3">
+    <section aria-label={t("offseason", "playerOptions")} className="space-y-3 border-t pt-4">
       <h4 className="font-semibold">{t("offseason", "playerOptions")}</h4>
-      <p>{t("offseason", "playerOptionsHelp")}</p>
+      <p className="text-sm text-muted-foreground">{t("offseason", "playerOptionsSummary")}</p>
+      <details className="rounded-lg border p-3 text-sm">
+        <summary className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-ring">
+          {t("offseason", "simulationPolicy")}
+        </summary>
+        <p className="pt-2 text-muted-foreground">{t("offseason", "playerOptionsHelp")}</p>
+      </details>
       {options.isError && (
         <div role="alert">
           <p>{t("offseason", "playerOptionsFailed")}</p>
@@ -81,6 +87,7 @@ export function OffseasonPlayerOptions({
         <>
           {ownerSelected && pending && !options.isError && (
             <Button
+              className="h-auto min-h-9 w-full whitespace-normal sm:w-auto"
               disabled={busy || resolve.isPending}
               onClick={() => {
                 resolve.reset();
@@ -94,7 +101,7 @@ export function OffseasonPlayerOptions({
             {rows.map((row) => {
               const saved = savedFor(row);
               return (
-                <li key={row.playerId} className="space-y-1">
+                <li key={row.playerId} className="space-y-1 rounded-lg bg-muted/40 p-3">
                   <span>
                     {roster.find((member) => member.player.id === row.playerId)?.player.fullName ??
                       row.playerId}

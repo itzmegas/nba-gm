@@ -85,9 +85,14 @@ function OffseasonPlanning({
 
   return (
     <Card>
-      <CardContent className="space-y-4">
-        <h2 className="text-lg font-bold">{t("offseason", "title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("offseason", "preserved")}</p>
+      <CardContent className="min-w-0 space-y-6">
+        <header className="space-y-2 border-b pb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-bold">{t("offseason", "title")}</h2>
+            <Badge variant="outline">{t("offseason", "planningOnly")}</Badge>
+          </div>
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("offseason", "preserved")}</p>
+        </header>
         {entry.isError ? (
           <div role="alert" className="space-y-3">
             <p>{t("offseason", "loadFailed")}</p>
@@ -108,7 +113,9 @@ function OffseasonPlanning({
           </div>
         ) : (
           <>
-            <output className="block font-semibold">{t("offseason", "entered")}</output>
+            <output className="block text-sm font-semibold text-primary">
+              {t("offseason", "entered")}
+            </output>
             <OffseasonContractLedger
               key={`${gameId}:${seasonYear}:${selectedTeamId}`}
               gameId={gameId}
@@ -117,53 +124,62 @@ function OffseasonPlanning({
               ownerTeamId={ownerTeamId}
               roster={roster.isError ? [] : (roster.data ?? [])}
             />
-            <h3 className="font-semibold">
-              {t("offseason", "contractOutlook")} · {formatSeasonLabel(seasonYear + 1)}
-            </h3>
-            <p className="text-sm text-muted-foreground">{t("offseason", "informational")}</p>
-            {roster.isError ? (
-              <div role="alert" className="space-y-3">
-                <p>{t("offseason", "rosterFailed")}</p>
-                <Button onClick={() => void roster.refetch()}>{t("postseason", "retry")}</Button>
-              </div>
-            ) : roster.isPending ? (
-              <output>{t("common", "loading")}</output>
-            ) : !roster.data?.length ? (
-              <p>{t("offseason", "empty")}</p>
-            ) : (
-              <AppTable aria-label={t("offseason", "contractOutlook")}>
-                <AppTableHeader>
-                  <AppTableRow>
-                    <AppTableHead>{t("offseason", "player")}</AppTableHead>
-                    <AppTableHead>{t("offseason", "contractStatus")}</AppTableHead>
-                    <AppTableHead>{t("offseason", "nextSalary")}</AppTableHead>
-                  </AppTableRow>
-                </AppTableHeader>
-                <tbody>
-                  {roster.data.map(({ player, contract, gameContract }) => {
-                    const outlook = getOffseasonContractOutlook(contract, gameContract, seasonYear);
-                    return (
-                      <AppTableRow key={player.id}>
-                        <AppTableCell>{player.fullName}</AppTableCell>
-                        <AppTableCell>
-                          {t("offseason", outlook.status)}
-                          {outlook.estimated && (
-                            <Badge variant="outline" className="ml-2">
-                              {t("offseason", "estimated")}
-                            </Badge>
-                          )}
-                        </AppTableCell>
-                        <AppTableCell className="tabular-nums">
-                          {outlook.nextSalary === null
-                            ? t("offseason", "unknownSalary")
-                            : formatCurrency(outlook.nextSalary)}
-                        </AppTableCell>
-                      </AppTableRow>
-                    );
-                  })}
-                </tbody>
-              </AppTable>
-            )}
+            <section
+              aria-label={t("offseason", "contractOutlook")}
+              className="min-w-0 space-y-4 rounded-xl border bg-muted/20 p-4 sm:p-6"
+            >
+              <h3 className="font-semibold">
+                {t("offseason", "contractOutlook")} · {formatSeasonLabel(seasonYear + 1)}
+              </h3>
+              <p className="text-sm text-muted-foreground">{t("offseason", "informational")}</p>
+              {roster.isError ? (
+                <div role="alert" className="space-y-3">
+                  <p>{t("offseason", "rosterFailed")}</p>
+                  <Button onClick={() => void roster.refetch()}>{t("postseason", "retry")}</Button>
+                </div>
+              ) : roster.isPending ? (
+                <output>{t("common", "loading")}</output>
+              ) : !roster.data?.length ? (
+                <p>{t("offseason", "empty")}</p>
+              ) : (
+                <AppTable aria-label={t("offseason", "contractOutlook")}>
+                  <AppTableHeader>
+                    <AppTableRow>
+                      <AppTableHead>{t("offseason", "player")}</AppTableHead>
+                      <AppTableHead>{t("offseason", "contractStatus")}</AppTableHead>
+                      <AppTableHead>{t("offseason", "nextSalary")}</AppTableHead>
+                    </AppTableRow>
+                  </AppTableHeader>
+                  <tbody>
+                    {roster.data.map(({ player, contract, gameContract }) => {
+                      const outlook = getOffseasonContractOutlook(
+                        contract,
+                        gameContract,
+                        seasonYear
+                      );
+                      return (
+                        <AppTableRow key={player.id}>
+                          <AppTableCell>{player.fullName}</AppTableCell>
+                          <AppTableCell>
+                            {t("offseason", outlook.status)}
+                            {outlook.estimated && (
+                              <Badge variant="outline" className="ml-2">
+                                {t("offseason", "estimated")}
+                              </Badge>
+                            )}
+                          </AppTableCell>
+                          <AppTableCell className="tabular-nums">
+                            {outlook.nextSalary === null
+                              ? t("offseason", "unknownSalary")
+                              : formatCurrency(outlook.nextSalary)}
+                          </AppTableCell>
+                        </AppTableRow>
+                      );
+                    })}
+                  </tbody>
+                </AppTable>
+              )}
+            </section>
           </>
         )}
       </CardContent>

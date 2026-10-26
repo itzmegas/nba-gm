@@ -84,9 +84,11 @@ export function OffseasonContractLedger({
     );
   };
   return (
-    <section aria-label={t("offseason", "ledger")} className="space-y-3">
-      <h3 className="font-semibold">{t("offseason", "ledger")}</h3>
-      <p>{t("offseason", "ledgerHelp")}</p>
+    <section aria-label={t("offseason", "ledger")} className="min-w-0 space-y-6">
+      <div className="space-y-2">
+        <h3 className="font-semibold">{t("offseason", "ledger")}</h3>
+        <p className="max-w-3xl text-sm text-muted-foreground">{t("offseason", "ledgerHelp")}</p>
+      </div>
       {ledger.isError ? (
         <div role="alert">
           <p>{t("offseason", "ledgerFailed")}</p>
@@ -95,76 +97,85 @@ export function OffseasonContractLedger({
       ) : ledger.isPending ? (
         <output>{t("common", "loading")}</output>
       ) : (
-        <>
-          {ownerSelected && (
-            <Button
-              disabled={busy}
-              onClick={() => {
-                if (!submitting.current && !busy) {
-                  submitting.current = true;
-                  prepare.mutate(undefined, {
-                    onSettled: () => {
-                      submitting.current = false;
-                    },
-                  });
-                }
-              }}
-            >
-              {t("offseason", busy ? "savingLedger" : "prepareLedger")}
-            </Button>
-          )}
-          {!ownerSelected && <p>{t("offseason", "otherTeamReadOnly")}</p>}
-          <ul className="space-y-2">
-            {ledger.data
-              ?.filter((row) => row.teamId === selectedTeamId && row.status !== "player_option")
-              .map((row) => {
-                const member = roster.find((member) => member.player.id === row.playerId);
-                const actionable = canDecide(row);
-                return (
-                  <li key={row.playerId} className="flex flex-wrap items-center gap-2">
-                    <span>{member?.player.fullName ?? row.playerId}</span>
-                    <span>
-                      {t(
-                        "offseason",
-                        row.status === "expiring"
-                          ? "plannedDeparture"
-                          : row.decision === "decline"
-                            ? "optionDeclined"
-                            : row.decision === "exercise"
-                              ? "optionExercised"
-                              : "optionPending"
-                      )}
-                    </span>
-                    {actionable &&
-                      (["exercise", "decline"] as const).map((decision) => (
-                        <Button
-                          key={decision}
-                          disabled={busy}
-                          onClick={() => {
-                            decide.reset();
-                            setConfirmation({
-                              playerId: row.playerId,
-                              name: member?.player.fullName ?? row.playerId,
-                              decision,
-                            });
-                          }}
-                        >
-                          {t("offseason", decision)}
-                        </Button>
-                      ))}
-                  </li>
-                );
-              })}
-          </ul>
-          <OffseasonPlayerOptions
-            rows={playerRows.filter((row) => row.teamId === selectedTeamId)}
-            roster={roster}
-            ownerSelected={ownerSelected}
-            busy={busy || confirmation !== null}
-            playerOptions={playerOptions}
-          />
+        <div className="space-y-6">
+          <div className="space-y-4 rounded-xl border p-4 sm:p-6">
+            {ownerSelected && (
+              <Button
+                className="h-auto min-h-9 w-full whitespace-normal sm:w-auto"
+                disabled={busy}
+                onClick={() => {
+                  if (!submitting.current && !busy) {
+                    submitting.current = true;
+                    prepare.mutate(undefined, {
+                      onSettled: () => {
+                        submitting.current = false;
+                      },
+                    });
+                  }
+                }}
+              >
+                {t("offseason", busy ? "savingLedger" : "prepareLedger")}
+              </Button>
+            )}
+            {!ownerSelected && <p>{t("offseason", "otherTeamReadOnly")}</p>}
+            <ul className="space-y-2">
+              {ledger.data
+                ?.filter((row) => row.teamId === selectedTeamId && row.status !== "player_option")
+                .map((row) => {
+                  const member = roster.find((member) => member.player.id === row.playerId);
+                  const actionable = canDecide(row);
+                  return (
+                    <li
+                      key={row.playerId}
+                      className="flex flex-wrap items-center gap-3 rounded-lg bg-muted/40 p-3"
+                    >
+                      <span className="font-medium">{member?.player.fullName ?? row.playerId}</span>
+                      <span className="mr-auto text-sm text-muted-foreground">
+                        {t(
+                          "offseason",
+                          row.status === "expiring"
+                            ? "plannedDeparture"
+                            : row.decision === "decline"
+                              ? "optionDeclined"
+                              : row.decision === "exercise"
+                                ? "optionExercised"
+                                : "optionPending"
+                        )}
+                      </span>
+                      {actionable &&
+                        (["exercise", "decline"] as const).map((decision) => (
+                          <Button
+                            key={decision}
+                            disabled={busy}
+                            onClick={() => {
+                              decide.reset();
+                              setConfirmation({
+                                playerId: row.playerId,
+                                name: member?.player.fullName ?? row.playerId,
+                                decision,
+                              });
+                            }}
+                          >
+                            {t("offseason", decision)}
+                          </Button>
+                        ))}
+                    </li>
+                  );
+                })}
+            </ul>
+            <OffseasonPlayerOptions
+              rows={playerRows.filter((row) => row.teamId === selectedTeamId)}
+              roster={roster}
+              ownerSelected={ownerSelected}
+              busy={busy || confirmation !== null}
+              playerOptions={playerOptions}
+            />
+          </div>
           {roster.length > 0 && (
-            <section aria-label={t("offseason", "projectedRoster")} className="space-y-3">
+            <section
+              aria-label={t("offseason", "projectedRoster")}
+              className="space-y-4 rounded-xl border bg-muted/20 p-4 sm:p-6"
+            >
               <h3 className="font-semibold">
                 {t("offseason", "projectedRoster")} · {formatSeasonLabel(seasonYear + 1)}
               </h3>
@@ -179,7 +190,7 @@ export function OffseasonContractLedger({
               ) : playerRows.length > 0 && playerOptions.options.isPending ? (
                 <output>{t("common", "loading")}</output>
               ) : (
-                <ul className="space-y-2">
+                <ul className="grid gap-2 lg:grid-cols-2">
                   {roster.map(({ player, contract, gameContract }) => {
                     const plan = ledger.data?.find(
                       (row) =>
@@ -200,8 +211,9 @@ export function OffseasonContractLedger({
                       option
                     );
                     return (
-                      <li key={player.id}>
-                        {player.fullName} · {t("offseason", projection)}
+                      <li key={player.id} className="rounded-lg border bg-card p-3 text-sm">
+                        <span className="font-medium">{player.fullName}</span> ·{" "}
+                        <span className="text-muted-foreground">{t("offseason", projection)}</span>
                       </li>
                     );
                   })}
@@ -209,7 +221,7 @@ export function OffseasonContractLedger({
               )}
             </section>
           )}
-        </>
+        </div>
       )}
       {prepare.isError && <p role="alert">{t("offseason", "ledgerFailed")}</p>}
       <AlertDialog

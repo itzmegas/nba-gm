@@ -2,6 +2,10 @@ import type { Messages } from "../types";
 
 export const es: Messages = {
   offseason: {
+    planningOnly: "PLANIFICACIÓN · Sin ejecutar contratos",
+    simulationPolicy: "Cómo decide la simulación",
+    playerOptionsSummary:
+      "Decide la simulación, no el gerente. Los resultados son planes guardados; los salarios inciertos quedan pendientes.",
     projectedRoster: "Equipo seleccionado · Plantilla proyectada",
     projectionHelp:
       "Proyección de solo lectura basada en cobertura contractual conocida y planes guardados. La cobertura no garantiza el salario; las opciones ejercidas son planes, no contratos nuevos. Las salidas previstas siguen en la plantilla actual. No se crea un presupuesto ni otra temporada.",

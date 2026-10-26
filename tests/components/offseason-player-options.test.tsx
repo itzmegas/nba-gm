@@ -94,6 +94,29 @@ it("reads saved results only once candidates exist and never writes on render", 
   expect(screen.getAllByText("Player option pending (not controlled by team)")).toHaveLength(1);
 });
 it.each([
+  "en",
+  "es",
+] as const)("keeps policy details expandable without hiding actions (%s)", (locale) => {
+  render(view("owner", locale));
+  const summary = screen.getByText(
+    locale === "en" ? "How the simulation decides" : "Cómo decide la simulación"
+  );
+  const details = summary.closest("details");
+  expect(details).not.toBeNull();
+  expect(details?.open).toBe(false);
+  expect(details?.textContent).toContain(
+    locale === "en" ? "not a market valuation" : "no una valoración de mercado"
+  );
+  expect(
+    screen.getByRole("button", {
+      name: locale === "en" ? "Resolve player options" : "Resolver opciones de jugador",
+    })
+  ).toBeTruthy();
+  fireEvent.click(summary);
+  expect(details?.open).toBe(true);
+  expect(resolve).not.toHaveBeenCalled();
+});
+it.each([
   { data: [], isPending: false, isError: false },
   { data: undefined, isPending: true, isError: false },
   { data: [playerRow], isPending: false, isError: true },

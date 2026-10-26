@@ -66,6 +66,38 @@ afterEach(() => {
 });
 
 describe("read-only offseason entry", () => {
+  it.each([
+    "en",
+    "es",
+  ] as const)("labels planning and separates the read-only outlook (%s)", (locale) => {
+    entry.mockReturnValue({ data: persistedEntry, isPending: false, isError: false });
+    show(locale);
+    expect(
+      screen.getByText(
+        locale === "en"
+          ? "PLANNING · No contract execution"
+          : "PLANIFICACIÓN · Sin ejecutar contratos"
+      )
+    ).toBeTruthy();
+    const region = screen.getByRole("region", {
+      name:
+        locale === "en"
+          ? "Selected team · Next-season contract outlook"
+          : "Equipo seleccionado · Perspectiva contractual para la siguiente temporada",
+    });
+    expect(within(region).getByRole("heading", { level: 3 })).toBeTruthy();
+    expect(region.textContent).toContain(
+      locale === "en" ? "no options are exercised" : "no ejerce opciones"
+    );
+    expect(
+      screen.getByText(
+        locale === "en"
+          ? /next season is not playable yet/
+          : /siguiente temporada todavía no se puede jugar/
+      )
+    ).toBeTruthy();
+    expect(mutate).not.toHaveBeenCalled();
+  });
   it("explains preservation, waits for entry before reading the roster, and submits the current career/year once", () => {
     show();
     expect(entry).toHaveBeenCalledWith("career", 2026);
