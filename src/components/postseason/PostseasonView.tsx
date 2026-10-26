@@ -48,11 +48,161 @@ interface SeriesSlotProps extends BracketProps {
   slot: number;
 }
 
+interface TeamRowProps {
+  team: Team | undefined;
+  id: string | null | undefined;
+  seed: number | undefined;
+  won: boolean;
+  score: number | string;
+  seriesWins?: boolean;
+}
+
+function TeamRow({ team, id, seed, won, score, seriesWins }: TeamRowProps) {
+  const t = useT();
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const name = team?.name ?? id ?? t("postseason", "tbd");
+  return (
+    <div className={`flex h-8 items-center gap-1.5 text-sm ${won ? "font-bold text-primary" : ""}`}>
+      <span className="w-5 shrink-0 text-xs text-muted-foreground">{seed ? `#${seed}` : ""}</span>
+      {team?.logoUrl && failedLogo !== team.logoUrl ? (
+        <Image
+          src={team.logoUrl}
+          alt=""
+          width={24}
+          height={24}
+          className="size-6 shrink-0 object-contain"
+          onError={() => setFailedLogo(team.logoUrl ?? null)}
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[9px] font-bold"
+        >
+          {team?.abbreviation ?? "—"}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate" title={name}>
+        <span aria-hidden="true">{team?.abbreviation ?? name}</span>
+        <span className="sr-only">{name}</span>
+      </span>
+      {won && (
+        <span title={t("postseason", "winner")}>
+          <span aria-hidden="true">✓</span>
+          <span className="sr-only">{t("postseason", "winner")}</span>
+        </span>
+      )}
+      <span className="font-mono font-bold tabular-nums">
+        {score}
+        {seriesWins && <span className="sr-only"> {t("postseason", "wins")}</span>}
+      </span>
+    </div>
+  );
+}
+
+function PlayInBracket({ state, teams, onSelectGame }: BracketProps) {
+  const t = useT();
+  return (
+    <div className="@container space-y-3">
+      <h2 className="text-lg font-bold">{t("postseason", "playIn")}</h2>
+      <div className="grid gap-6 @min-[64rem]:grid-cols-2">
+        {(["West", "East"] as const).map((conference) => (
+          <section
+            key={conference}
+            aria-label={`${t("postseason", "playIn")} · ${t("postseason", conference)}`}
+            className="min-w-0 space-y-3"
+          >
+            <h3 className="text-lg font-bold">{t("postseason", conference)}</h3>
+            <div className="grid gap-3 @min-[32rem]:grid-cols-2">
+              {(["seven_eight", "nine_ten", "eighth_seed"] as const).map((stage) => (
+                <section
+                  key={stage}
+                  aria-label={t("postseason", stage)}
+                  className={`min-w-0 space-y-2 ${stage === "eighth_seed" ? "@min-[32rem]:col-start-2 @min-[32rem]:row-start-1 @min-[32rem]:row-span-2 @min-[32rem]:self-center" : "@min-[32rem]:col-start-1"} ${conference === "East" ? (stage === "eighth_seed" ? "@min-[64rem]:col-start-1" : "@min-[64rem]:col-start-2") : ""}`}
+                >
+                  <h4 className="text-sm font-semibold">{t("postseason", stage)}</h4>
+                  {state.games
+                    .filter((game) => game.conference === conference && game.stage === stage)
+                    .map((game) => {
+                      const winner =
+                        game.status === "completed"
+                          ? (game.winnerTeamId ??
+                            (game.homeScore !== null &&
+                            game.awayScore !== null &&
+                            game.homeScore !== game.awayScore
+                              ? game.homeScore > game.awayScore
+                                ? game.homeTeamId
+                                : game.awayTeamId
+                              : null))
+                          : null;
+                      const name = (id: string) =>
+                        teams.find((team) => team.id === id)?.abbreviation ?? id;
+                      return (
+                        <Card
+                          key={game.id}
+                          className="w-full gap-0 py-2"
+                          data-play-in-game={game.id}
+                        >
+                          <CardContent className="space-y-1 px-2">
+                            <time
+                              className="text-xs text-muted-foreground"
+                              dateTime={game.gameDate}
+                            >
+                              {game.gameDate}
+                            </time>
+                            {[game.homeTeamId, game.awayTeamId].map((id, index) => (
+                              <TeamRow
+                                key={id}
+                                id={id}
+                                team={teams.find((team) => team.id === id)}
+                                seed={
+                                  state.qualification.find(
+                                    (entry) =>
+                                      entry.teamId === id && entry.conference === conference
+                                  )?.seed
+                                }
+                                won={winner === id}
+                                score={
+                                  game.status === "completed"
+                                    ? ((index === 0 ? game.homeScore : game.awayScore) ?? "—")
+                                    : "—"
+                                }
+                              />
+                            ))}
+                            {game.status === "completed" ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-full text-xs"
+                                aria-haspopup="dialog"
+                                aria-label={`${t("postseason", "boxScore")} · ${name(game.awayTeamId)} @ ${name(game.homeTeamId)} · ${game.gameDate}`}
+                                onClick={() => onSelectGame(game)}
+                              >
+                                {t("boxScore", "title")}
+                              </Button>
+                            ) : (
+                              <p className="h-6 text-center text-xs text-muted-foreground">
+                                {t("postseason", "scheduled")}
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </section>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SeriesSlot({ state, teams, onSelectGame, conference, round, slot }: SeriesSlotProps) {
   const t = useT();
   const [gamesOpen, setGamesOpen] = useState(false);
   const gamesButton = useRef<HTMLButtonElement>(null);
-  const [failedLogos, setFailedLogos] = useState<string[]>([]);
   const series = state.series.find(
     (series) =>
       series.conference === conference && series.round === round && series.bracketSlot === slot
@@ -93,47 +243,16 @@ function SeriesSlot({ state, teams, onSelectGame, conference, round, slot }: Ser
             state.playoffSeeds.find((seed) => seed.teamId === id)?.seed ?? seeds?.[index];
           const won = !!id && series?.winnerTeamId === id;
           const team = teams.find((team) => team.id === id);
-          const name = team?.name ?? id ?? t("postseason", "tbd");
           return (
-            <div
+            <TeamRow
               key={index === 0 ? "home" : "away"}
-              className={`flex h-8 items-center gap-1.5 text-sm ${won ? "font-bold text-primary" : ""}`}
-            >
-              <span className="w-5 shrink-0 text-xs text-muted-foreground">
-                {seed ? `#${seed}` : ""}
-              </span>
-              {team?.logoUrl && !failedLogos.includes(team.logoUrl) ? (
-                <Image
-                  src={team.logoUrl}
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="size-6 shrink-0 object-contain"
-                  onError={() => setFailedLogos((urls) => [...urls, team.logoUrl ?? ""])}
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[9px] font-bold"
-                >
-                  {team?.abbreviation ?? "—"}
-                </span>
-              )}
-              <span className="min-w-0 flex-1 truncate" title={name}>
-                <span aria-hidden="true">{team?.abbreviation ?? name}</span>
-                <span className="sr-only">{name}</span>
-              </span>
-              {won && (
-                <span title={t("postseason", "winner")}>
-                  <span aria-hidden="true">✓</span>
-                  <span className="sr-only">{t("postseason", "winner")}</span>
-                </span>
-              )}
-              <span className="font-mono font-bold tabular-nums">
-                {series ? (index === 0 ? series.homeWins : series.awayWins) : "—"}
-                <span className="sr-only"> {t("postseason", "wins")}</span>
-              </span>
-            </div>
+              team={team}
+              id={id}
+              seed={seed}
+              won={won}
+              score={series ? (index === 0 ? series.homeWins : series.awayWins) : "—"}
+              seriesWins
+            />
           );
         })}
         <Button
@@ -326,7 +445,7 @@ export function PostseasonView({ gameId, selectedTeamId }: PostseasonViewProps) 
   const name = (id: string) => teams.data.find((team) => team.id === id)?.name ?? id;
   return (
     <div className="space-y-6">
-      <PostseasonStatus state={state} selectedTeamId={selectedTeamId} teams={teams.data} />
+      <PostseasonStatus summary state={state} selectedTeamId={selectedTeamId} teams={teams.data} />
       {views.length > 0 && (
         <fieldset aria-label={t("postseason", "title")} className="flex flex-wrap gap-2">
           {views.map((view) => (
@@ -345,28 +464,7 @@ export function PostseasonView({ gameId, selectedTeamId }: PostseasonViewProps) 
       )}
       {hasPlayIn && (
         <div id="postseason-playIn" hidden={activeView !== "playIn"}>
-          <Card>
-            <CardContent className="space-y-3">
-              <h2 className="text-lg font-bold">{t("postseason", "playIn")}</h2>
-              <div className="grid gap-6 sm:grid-cols-2">
-                {(["East", "West"] as const).map((conference) => (
-                  <section
-                    key={conference}
-                    aria-label={`${t("postseason", "playIn")} · ${t("postseason", conference)}`}
-                  >
-                    <h3 className="font-semibold">{t("postseason", conference)}</h3>
-                    <GameResults
-                      games={state.games
-                        .filter((game) => game.stage !== null && game.conference === conference)
-                        .sort((a, b) => a.gameDate.localeCompare(b.gameDate))}
-                      teams={teams.data}
-                      onSelectGame={setSelectedGame}
-                    />
-                  </section>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <PlayInBracket state={state} teams={teams.data} onSelectGame={setSelectedGame} />
         </div>
       )}
       {state.phase !== "regular_season" && (

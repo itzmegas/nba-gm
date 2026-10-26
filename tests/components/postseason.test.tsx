@@ -50,6 +50,70 @@ function show(state: PostseasonState, selectedTeam = 13, locale: "en" | "es" = "
 }
 
 describe("postseason phases and fixed visual bracket", () => {
+  it("groups saved play-in stages in bracket order with qualification seeds and compact rows", () => {
+    const data = postseasonTeamsFixture();
+    data[6].logoUrl = "/play-in-logo.svg";
+    teams.mockReturnValue({ data, isPending: false, isError: false });
+    const first = postseasonGameFixture({
+      seriesId: null,
+      stage: "seven_eight",
+      homeTeamId: postseasonId(7),
+      winnerTeamId: null,
+    });
+    const final = postseasonGameFixture({
+      id: postseasonId(103),
+      seriesId: null,
+      stage: "eighth_seed",
+      homeTeamId: postseasonId(8),
+      awayTeamId: postseasonId(9),
+      status: "scheduled",
+      winnerTeamId: postseasonId(9),
+    });
+    const middle = postseasonGameFixture({
+      id: postseasonId(104),
+      seriesId: null,
+      stage: "nine_ten",
+      homeTeamId: postseasonId(9),
+      awayTeamId: postseasonId(10),
+    });
+    const { container } = show(
+      postseasonFixture({
+        phase: "play_in",
+        games: [final, middle, first],
+        playoffSeeds: [{ teamId: postseasonId(7), conference: "East", seed: 8 }],
+      })
+    );
+    const west = screen.getByRole("region", { name: "Play-in results · Western Conference" });
+    const east = screen.getByRole("region", { name: "Play-in results · Eastern Conference" });
+    expect(west.parentElement?.firstElementChild).toBe(west);
+    expect(west.querySelectorAll("[data-play-in-game]")).toHaveLength(0);
+    expect(
+      Array.from(east.querySelectorAll("[data-play-in-game]"), (card) =>
+        card.getAttribute("data-play-in-game")
+      )
+    ).toEqual([first.id, middle.id, final.id]);
+    expect(east.querySelector(".grid")?.className).toContain("@min-[32rem]:grid-cols-2");
+    expect(east.parentElement?.className).toContain("@min-[64rem]:grid-cols-2");
+    const card = container.querySelector(`[data-play-in-game="${first.id}"]`);
+    const scheduled = container.querySelector(`[data-play-in-game="${final.id}"]`);
+    if (!(card instanceof HTMLElement) || !(scheduled instanceof HTMLElement))
+      throw new Error("Missing saved game");
+    expect(within(card).getByText("#7")).toBeTruthy();
+    expect(within(card).getByText("100")).toBeTruthy();
+    expect(within(card).getByText("Winner").closest(".flex")?.textContent).toContain("East Team 7");
+    const logo = card.querySelector("img");
+    if (!logo) throw new Error("Missing logo");
+    fireEvent.error(logo);
+    expect(card.querySelector("img")).toBeNull();
+    expect(within(card).getAllByText("E7")).toHaveLength(2);
+    expect(within(scheduled).queryByRole("button")).toBeNull();
+    expect(within(scheduled).queryByText("Winner")).toBeNull();
+    expect(within(scheduled).queryByText("100")).toBeNull();
+    expect(within(scheduled).getAllByText("—")).toHaveLength(2);
+    fireEvent.click(within(card).getByRole("button"));
+    expect(boxScore).toHaveBeenCalledWith(postseasonId(100), first.id);
+  });
+
   it("explains the regular season without inventing a draw", () => {
     const { container } = show(
       postseasonFixture({ phase: "regular_season", qualification: [], playoffSeeds: [] })
@@ -118,7 +182,7 @@ describe("postseason phases and fixed visual bracket", () => {
     expect(
       screen.getByRole("button", { name: "Resultados del play-in" }).getAttribute("aria-pressed")
     ).toBe("true");
-    expect(screen.getByText(/7 vs 8 · El ganador obtiene el puesto 7/)).toBeTruthy();
+    expect(screen.getAllByText(/7 vs 8 · El ganador obtiene el puesto 7/)).toHaveLength(2);
     expect(screen.getByText("Programado")).toBeTruthy();
     expect(screen.queryByText(/Tu equipo está eliminado/)).toBeNull();
     expect(boxScore).not.toHaveBeenCalled();
@@ -216,7 +280,7 @@ describe("postseason phases and fixed visual bracket", () => {
       }),
       1
     );
-    expect(screen.getByText("Champion: East Team 1")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "East Team 1" })).toBeTruthy();
     expect(screen.getByText("Offseason planning panel")).toBeTruthy();
     const planning = screen.getByText("Offseason planning panel");
     expect(planning.closest("[hidden]")).not.toBeNull();
@@ -228,7 +292,7 @@ describe("postseason phases and fixed visual bracket", () => {
     fireEvent.click(screen.getByRole("button", { name: "Playoff bracket" }));
     fireEvent.click(screen.getByRole("button", { name: "Offseason" }));
     expect(screen.getByText("Offseason planning panel")).toBe(planning);
-    expect(screen.getByText("Runner-up: West Team 1")).toBeTruthy();
+    expect(screen.getByText(/Runner-up: West Team 1/)).toBeTruthy();
     expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
     expect(screen.queryByText(/Your team is eliminated/)).toBeNull();
   });

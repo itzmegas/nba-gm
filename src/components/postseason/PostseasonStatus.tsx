@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/application/providers/I18nProvider";
+import { PostseasonSummary } from "@/components/postseason/PostseasonSummary";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -16,13 +17,16 @@ interface PostseasonStatusProps {
   state: PostseasonState;
   selectedTeamId: string;
   teams: Team[];
+  summary?: boolean;
 }
 
-export function PostseasonStatus({ state, selectedTeamId, teams }: PostseasonStatusProps) {
+export function PostseasonStatus({ state, selectedTeamId, teams, summary }: PostseasonStatusProps) {
   const t = useT();
   const qualification = state.qualification.find((seed) => seed.teamId === selectedTeamId);
   const playoffSeed = state.playoffSeeds.find((seed) => seed.teamId === selectedTeamId);
   const teamName = (id: string) => teams.find((team) => team.id === id)?.name ?? id;
+  if (summary)
+    return <PostseasonSummary state={state} selectedTeamId={selectedTeamId} teams={teams} />;
   return (
     <Card>
       <CardContent className="space-y-3" aria-live="polite">
