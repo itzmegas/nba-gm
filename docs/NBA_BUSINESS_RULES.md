@@ -548,6 +548,12 @@ The simulator condenses the real calendar into a manageable progression. Below a
 | Game B | #9 seed vs #10 seed | Loser is eliminated |
 | Game C | Loser of A vs Winner of B | Winner gets 8th seed |
 
+**Implemented locally in migration 050:** games A and B are hosted by seeds 7 and 9. The loser of A hosts C. Each conference plays three single-elimination/last-chance fixtures as above; seeds 1–6 enter the playoff field directly. The persisted regular-season qualification is never rewritten: final playoff positions live separately in `postseason_playoff_seeds`.
+
+The simulator uses an abstract schedule: the first stage is two days after preparation and the last-chance stage is two days after the first, leaving one rest day between stages. The existing daily RPC prepares and advances the tournament atomically, including careers already stopped at regular-season completion. Modern careers use the same possession engine and persistent box scores; legacy careers retain score-only simulation. Play-in fixtures do not change regular-season standings or run the regular-season free-agency market.
+
+**Upgrade path:** migration 050 originally stopped at 16 playoff places. Local migration 052 replaces that intermediate stop with the series progression in §8.5. Existing completed play-in fixtures, box scores and final seeds are reused without recalculation. Daily and batch controls defer completion to the backend, not April 15 or the user's elimination.
+
 ### 8.5 Playoff Seeding
 
 - Seeds 1-6: Top 6 records in each conference
@@ -555,6 +561,34 @@ The simulator condenses the real calendar into a manageable progression. Below a
 - Bracket: 1v8, 2v7, 3v6, 4v5 in each conference
 - **Re-seeding**: The bracket is fixed (no re-seeding between rounds)
 - All series are **best of 7**, with 2-2-1-1-1 home court format
+
+**Local implementation (052):** first-round slots are 1v8, 4v5, 2v7, 3v6. Adjacent slots feed the next round without re-seeding. The lower playoff seed has home-court advantage in conference rounds. Finals home court follows regular-season winning percentage, then head-to-head wins between finalists, regular-season point differential and the frozen lottery order. This is an explicitly simplified Finals tie procedure, not the complete NBA rule.
+
+Each series schedules only its next necessary fixture, two days after the preceding game. The next round waits for the entire prior round; its first game is two days after preparation and no earlier than two days after the prior round ends. The calendar is abstract, not the official broadcast schedule. Four wins clinch a series; no remaining games are created. Playoffs and Finals reuse the existing possession/legacy engines and retain their own `playoffs` statistics phase.
+
+The daily transaction locks the career, checks the expected date and persists fixtures, box scores, series progression and champion atomically. `postseason_results` records champion, runner-up and completion date. Only that confirmed result sets `season_complete`; later advances do not change the date. Neither regular-season standings nor historical results are rewritten. No season rollover, draft or offseason is included. The owner-only read RPC `get_postseason_state` powers the dedicated bracket and competition-state explanation. See [postseason installation and acceptance](POSTSEASON.md).
+
+### 8.6 Simulator Qualification Tiebreakers [SIMPLIFIED]
+
+Approved postseason scope uses these criteria, in order. This is **not the complete NBA tiebreaker procedure**:
+
+1. Regular-season winning percentage (not raw wins).
+2. Winning percentage in games between the tied teams.
+3. Winning percentage against teams in the same conference.
+4. Point differential across all completed regular-season games.
+5. A unique lottery order, generated once and persisted for the career/season.
+
+Whenever a criterion separates a tied group, restart at head-to-head for each remaining subgroup. Compare percentages without rounding; a record with no appearances counts as zero. Missing historical player box scores do not prevent using stored team results. Never create missing results or regenerate the regular-season schedule to break a tie.
+
+**Implementation status (local migration 049):** `qualifyPostseason` defines the pure rules. The SQL counterpart is verified against it by deterministic parity tests. The daily transaction freezes all 30 seeds and records in `postseason_qualifications` once the actual regular-season fixtures are complete. It also persists a unique lottery order derived deterministically from career, season and team IDs, without changing stored results, standings or box scores. Clients can read only their own snapshots; they cannot write seeds or call the internal ranking/freezing functions.
+
+The migration itself does not advance or finalize any career. An existing career already at the regular-season boundary can finalize on its next authorized daily advance, without replaying matches. Stale retries never create a snapshot. Missing or inconsistent team results, standings or conference metadata cause an error rather than an automatic repair.
+
+**Legacy conference repair (051):** legacy team imports can have `conference = NULL` even while the interface shows conferences through its local abbreviation fallback. This blocks qualification with `Qualification requires 15 teams in each conference`, rolling back the final regular-season day. Migration 051 fills only NULL/blank conferences for known NBA abbreviations using the existing canonical mapping. It does not change non-empty metadata, guess unknown teams, weaken qualification validation, advance careers or rewrite fixtures, standings, seeds or box scores. After applying it, retry the pending day normally; do not reset or replay completed games. The isolated PostgreSQL runner reproduces and verifies this upgrade path.
+
+**Local continuation:** migration 050 continues from frozen qualification into the play-in described in §8.4; 052 continues into series and champion persistence. The April 15 boundary remains only inside the regular-season implementation, not the postseason path or frontend controls. No season rollover is implemented. Installing migrations alone never advances an existing career.
+
+**Verification:** `bun scripts/test-postseason-qualification-postgres.ts` uses a fresh network-isolated PostgreSQL container. It tests migration/history preservation, actual-calendar closure, terminal-career finalization, owner isolation, no client bypass, retries, concurrent closure, transaction rollback, incomplete schedules, phase filtering and SQL/domain parity. It also runs the complete legacy and modern play-in, verifies all six v2 box scores, correct last-chance participants/localities, concurrent stage progression and unchanged regular-season history/standings. No remote database or credentials are used.
 
 ---
 
@@ -596,8 +630,8 @@ This section maps every major rule to its implementation fidelity in the MVP and
 | Max contract length (4 vs 5 years) | **[FULL]** | Distinguish own-player vs new-team signings |
 | Annual raises (8% vs 5%) | **[SIMPLIFIED]** | Implement flat raises, skip compounding edge cases |
 | Supermax eligibility | **[DEFERRED]** | Requires awards tracking |
-| Player Options | **[DEFERRED]** | Adds decision complexity for AI; defer to post-MVP |
-| Team Options | **[DEFERRED]** | Same as above |
+| Player Options | **[SIMPLIFIED]** | Local offseason policy `055`: exercise if known option salary is at least the current salary, otherwise decline; uncertain inputs stay pending. A gameplay heuristic, not a market valuation or NBA rule. Saved plans only; no next-season contract materialization. See [offseason](OFFSEASON.md#resolver-opciones-de-jugador-política-inicial). |
+| Team Options | **[SIMPLIFIED]** | `054` records explicit, confirmed decisions for the controlled team only; saved plans do not change current contracts or rosters. |
 | Early Termination Options | **[DEFERRED]** | Rare; defer |
 | Guaranteed vs Non-Guaranteed | **[SIMPLIFIED]** | All contracts fully guaranteed in MVP |
 | Signing bonuses & incentives | **[DEFERRED]** | Rarely impacts macro decisions |

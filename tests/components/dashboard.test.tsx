@@ -10,8 +10,20 @@ import {
 import { DashboardSidebar } from "@/components/dashboard/layout-components";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  postseasonFixture,
+  postseasonId,
+} from "@/infrastructure/repositories/postseason.test-fixture";
 
-const { day, range } = vi.hoisted(() => ({ day: vi.fn(), range: vi.fn() }));
+const { day, range, postseason } = vi.hoisted(() => ({
+  day: vi.fn(),
+  range: vi.fn(),
+  postseason: vi.fn(),
+}));
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({ usePostseason: postseason }));
+vi.mock("@/application/hooks/offseason/useOffseason", () => ({
+  useOffseason: () => ({ data: null }),
+}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard" }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: [] }) }));
 vi.mock("@/application/hooks/simulation", () => ({
@@ -54,6 +66,7 @@ function renderSidebar(date = "2026-10-29", open = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  postseason.mockReturnValue({ data: undefined });
   useBatchSimulationStore.setState({
     isActive: false,
     stopRequested: false,
@@ -66,6 +79,45 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("dashboard simulation controls", () => {
+  it("links to postseason and disables advancement only for a confirmed champion", () => {
+    postseason.mockReturnValue({
+      data: postseasonFixture({ phase: "complete", championTeamId: postseasonId(1) }),
+    });
+    renderSidebar();
+    expect(screen.getByRole("link", { name: "Postseason" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/postseason"
+    );
+    expect(screen.getByRole("button", { name: "Simulate day" }).hasAttribute("disabled")).toBe(
+      true
+    );
+    expect(
+      screen.getByRole("button", { name: "More simulation options" }).hasAttribute("disabled")
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Simulate day" }));
+    expect(day).not.toHaveBeenCalled();
+    expect(screen.getByText(/Starting the next season is not available/)).toBeTruthy();
+  });
+
+  it.each([
+    "regular_season",
+    "play_in",
+    "playoffs",
+    "complete",
+  ] as const)("keeps advancement available in %s without a champion", (phase) => {
+    const data = postseasonFixture({ phase });
+    data.qualification.push({ teamId: "team", conference: "East", seed: 13 });
+    postseason.mockReturnValue({ data });
+    renderSidebar();
+    expect(screen.getByRole("button", { name: "Simulate day" }).hasAttribute("disabled")).toBe(
+      false
+    );
+    expect(
+      screen.getByRole("button", { name: "More simulation options" }).hasAttribute("disabled")
+    ).toBe(false);
+    if (phase !== "regular_season")
+      expect(screen.getByText("Your team is eliminated")).toBeTruthy();
+  });
+
   it("keeps daily advance visible and puts longer ranges in a keyboard-accessible menu", async () => {
     renderSidebar();
     expect(screen.queryByText("Simulate month")).toBeNull();
@@ -126,15 +178,15 @@ describe("dashboard simulation controls", () => {
     expect(screen.getByText(/Final 114-102/)).toBeDefined();
   });
 
-  it("disables all advance actions after the season endpoint", () => {
-    renderSidebar("2027-04-15");
+  it("keeps advance actions available for the play-in after April 15", () => {
+    renderSidebar("2027-04-16");
     expect(
       (screen.getByRole("button", { name: "Simulate day" }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    ).toBe(false);
     expect(
       (screen.getByRole("button", { name: "More simulation options" }) as HTMLButtonElement)
         .disabled
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("shows errors without fabricating completed progress", () => {

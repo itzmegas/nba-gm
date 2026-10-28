@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { SeasonStatistics } from "@/domain/entities/PlayerSeasonStatistics";
+import {
+  SEASON_STATISTICS_PHASE,
+  type SeasonStatistics,
+  type SeasonStatisticsPhase,
+} from "@/domain/entities/PlayerSeasonStatistics";
 import type { SeasonStatisticsRepository } from "@/domain/repositories/SeasonStatisticsRepository";
 
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -44,11 +48,15 @@ export const seasonStatisticsSchema = z
 export class SupabaseSeasonStatisticsRepository implements SeasonStatisticsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async getRegularSeason(gameId: string, seasonYear: number): Promise<SeasonStatistics> {
+  async getByPhase(
+    gameId: string,
+    seasonYear: number,
+    phase: SeasonStatisticsPhase = SEASON_STATISTICS_PHASE.REGULAR_SEASON
+  ): Promise<SeasonStatistics> {
     const { data, error } = await this.client.rpc("get_player_season_statistics", {
       p_game_id: z.uuid().parse(gameId),
       p_season_year: z.number().int().min(1900).max(3000).parse(seasonYear),
-      p_phase: "regular_season",
+      p_phase: z.enum(SEASON_STATISTICS_PHASE).parse(phase),
     });
     if (error) throw new Error("Failed to load season statistics");
     return seasonStatisticsSchema.parse(data);

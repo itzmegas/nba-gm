@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { z } from "zod";
 import { useSeasonStatistics } from "@/application/hooks/schedule/useSeasonStatistics";
 import { useT } from "@/application/providers/I18nProvider";
 import { playerStatisticsValues } from "@/application/statistics/playerStatisticsValues";
@@ -14,9 +15,26 @@ import {
   AppTableRow,
 } from "@/components/ui/app-table";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SortableTableHeader } from "@/components/ui/sortable-table-header";
 import type { Player } from "@/domain/entities/Player";
+import {
+  SEASON_STATISTICS_PHASE,
+  type SeasonStatisticsPhase,
+} from "@/domain/entities/PlayerSeasonStatistics";
 import { formatSeasonLabel } from "@/domain/entities/Season";
+
+const PHASE_LABELS = {
+  regular_season: "regularSeason",
+  play_in: "playIn",
+  playoffs: "playoffs",
+} as const;
 
 const COLUMNS = [
   ["gamesPlayed", "GP"],
@@ -60,7 +78,8 @@ export function SeasonStatistics({
   selectedPlayerId,
 }: SeasonStatisticsProps) {
   const t = useT();
-  const query = useSeasonStatistics(gameId, seasonYear);
+  const [phase, setPhase] = useState<SeasonStatisticsPhase>(SEASON_STATISTICS_PHASE.REGULAR_SEASON);
+  const query = useSeasonStatistics(gameId, seasonYear, phase);
   const [perGame, setPerGame] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("points");
   const [ascending, setAscending] = useState(false);
@@ -103,7 +122,22 @@ export function SeasonStatistics({
       <h2 className="text-xl font-bold">
         {t("seasonStats", "title")} · {formatSeasonLabel(seasonYear)}
       </h2>
-      <p>{t("seasonStats", players ? "rosterSeason" : "regularSeason")}</p>
+      <Select
+        value={phase}
+        onValueChange={(value) => setPhase(z.enum(SEASON_STATISTICS_PHASE).parse(value))}
+      >
+        <SelectTrigger aria-label={t("seasonStats", "phase")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {Object.values(SEASON_STATISTICS_PHASE).map((value) => (
+            <SelectItem key={value} value={value}>
+              {t("seasonStats", PHASE_LABELS[value])}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p>{t("seasonStats", players ? "rosterSeason" : "leagueSeason")}</p>
       {query.isPending ? (
         <output>{t("common", "loading")}</output>
       ) : query.isError ? (
@@ -143,7 +177,8 @@ export function SeasonStatistics({
             ) : (
               <AppTable>
                 <caption className="sr-only">
-                  {t("seasonStats", "title")} · {t("seasonStats", perGame ? "perGame" : "totals")}
+                  {t("seasonStats", "title")} · {t("seasonStats", PHASE_LABELS[phase])} ·{" "}
+                  {t("seasonStats", perGame ? "perGame" : "totals")}
                 </caption>
                 <AppTableHeader>
                   <AppTableRow>

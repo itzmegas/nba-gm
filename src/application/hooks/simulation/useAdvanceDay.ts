@@ -30,6 +30,7 @@ export function useAdvanceDay() {
         queryClient.invalidateQueries({ queryKey: ["schedule", "current", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["schedule", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["standings", gameId] }),
+        queryClient.invalidateQueries({ queryKey: ["postseason", gameId] }),
         queryClient.invalidateQueries({ queryKey: ["season-statistics", gameId] }),
       ]);
     },

@@ -2,7 +2,7 @@
 
 ## Qué incluye
 
-En **Plantilla** y **Liga**, el selector **Plantilla y atributos / Estadísticas** cambia la vista de la lista existente, sin otra ruta ni otra tabla de jugadores en paralelo. En Liga respeta el equipo seleccionado y la búsqueda. La vista de estadísticas se carga al abrirla y permite ordenar columnas y alternar totales/por partido: minutos, puntos, rebotes, asistencias, robos, tapones, pérdidas, faltas y tiros convertidos/intentos. Los porcentajes usan convertidos/intentos acumulados; sin intentos se muestra «—».
+En **Plantilla** y **Liga**, el selector **Plantilla y atributos / Estadísticas** cambia la vista de la lista existente, sin otra ruta ni otra tabla de jugadores en paralelo. En Liga respeta el equipo seleccionado y la búsqueda. La vista de estadísticas se carga al abrirla y permite seleccionar **temporada regular / play-in / playoffs**, ordenar columnas y alternar totales/por partido: minutos, puntos, rebotes, asistencias, robos, tapones, pérdidas, faltas y tiros convertidos/intentos. Los porcentajes usan convertidos/intentos acumulados; sin intentos se muestra «—». La fase inicial es temporada regular; las Finales forman parte de playoffs. Cambiar de fase consulta sus datos guardados y no simula partidos.
 
 Solo participan box scores persistidos (`possessions-v1` y `possessions-v2`). PJ requiere segundos jugados > 0: los DNP no reducen promedios. Los jugadores de la plantilla sin participaciones registradas siguen visibles con «—», nunca con actuaciones inventadas de cero. Se conserva el nombre actual de la plantilla y la selección del jugador o enlace a su ficha. Los totales siguen al ID del jugador e incluyen toda su temporada, independientemente de cambios de equipo; no representan únicamente su paso por el equipo seleccionado.
 
@@ -12,7 +12,7 @@ La cobertura indica encuentros de toda la liga completados con box score sobre e
 
 El usuario confirmó la aplicación de 048; el agente no consultó ni modificó Supabase. El selector de vistas no requiere otra migración. Para instalaciones pendientes, aplicar manualmente **solo** `scripts/migrations/048_player_season_statistics.sql`, después de 044–047. La migración añade metadatos al calendario y una consulta de solo lectura; no cambia marcadores, clasificación, payloads ni la fecha de simulación.
 
-Los encuentros existentes pertenecen a la única temporada de su partida y a temporada regular (la aplicación todavía no implementa postemporada ni cambio de temporada). La migración les asigna esos metadatos, no inventa actuaciones. Las inserciones futuras copian el año de la partida si no lo especifican. Una implementación futura de postemporada debe indicar `competition_phase`; una transición de temporada debe conservar los encuentros existentes y crear los nuevos con el año correspondiente.
+Los encuentros anteriores a 048 pertenecen a la única temporada de su partida y a temporada regular. La migración les asigna esos metadatos, no inventa actuaciones. Las inserciones futuras copian el año de la partida si no lo especifican. Las migraciones 050 y 052 crean encuentros nuevos con `competition_phase` explícita; no cambian los metadatos ni resultados de los partidos previos. Todavía no existe cambio de temporada.
 
 `scripts/schema.sql` incluye el espejo canónico. No ejecutar el esquema completo sobre una instalación existente.
 
