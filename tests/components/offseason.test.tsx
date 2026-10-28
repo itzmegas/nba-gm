@@ -189,6 +189,16 @@ describe("read-only offseason entry", () => {
     ]) {
       expect(within(table).getByText(label)).toBeTruthy();
     }
+    for (const label of ["Unknown contract outlook", "Known next-season coverage", "Estimated"]) {
+      const badge = within(table).getByText(label);
+      expect(badge.getAttribute("data-slot")).toBe("badge");
+      expect(badge.classList.contains("whitespace-normal")).toBe(true);
+    }
+    const salaryHeader = within(table).getAllByRole("columnheader")[2];
+    expect(salaryHeader.classList.contains("text-right")).toBe(true);
+    const salaryCell = within(table).getByText("$12,000,000");
+    expect(salaryCell.classList.contains("text-right")).toBe(true);
+    expect(salaryCell.classList.contains("tabular-nums")).toBe(true);
     const unknown = screen.getByRole("row", { name: /Unknown Player/ });
     expect(within(unknown).getByText("Unknown salary")).toBeTruthy();
     expect(unknown.textContent).not.toContain("$0");
@@ -196,6 +206,28 @@ describe("read-only offseason entry", () => {
     expect(screen.getByText(/no options are exercised/)).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("pairs the visible identity with house headshots and a missing/broken-photo fallback", () => {
+    entry.mockReturnValue({ data: persistedEntry, isPending: false, isError: false });
+    const known = playerRow("Known");
+    known.player.headshotUrl = "https://cdn.nba.com/headshots/nba/latest/260x190/1630567.png";
+    roster.mockReturnValue({
+      data: [known, playerRow("Missing")],
+      isPending: false,
+      isError: false,
+    });
+    show();
+    const knownRow = screen.getByRole("row", { name: /Known Player/ });
+    const missingRow = screen.getByRole("row", { name: /Missing Player/ });
+    const portrait = knownRow.querySelector("img");
+    expect(portrait?.getAttribute("src")).toBe(known.player.headshotUrl);
+    expect(portrait?.getAttribute("alt")).toBe("");
+    expect(missingRow.querySelector("img")?.getAttribute("src")).toBe("/player-silhouette.svg");
+    if (!portrait) throw new Error("Missing player portrait");
+    fireEvent.error(portrait);
+    expect(portrait.getAttribute("src")).toBe("/player-silhouette.svg");
+    expect(within(knownRow).getByText("Known Player")).toBeTruthy();
   });
 
   it("keeps persisted status visible while the roster is loading", () => {

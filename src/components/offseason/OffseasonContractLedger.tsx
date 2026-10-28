@@ -6,6 +6,7 @@ import { useOffseasonPlayerOptions } from "@/application/hooks/offseason/useOffs
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { useT } from "@/application/providers/I18nProvider";
 import { OffseasonPlayerOptions } from "@/components/offseason/OffseasonPlayerOptions";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -14,6 +15,7 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { OffseasonContract, OffseasonDecision } from "@/domain/entities/OffseasonContract";
 import { formatSeasonLabel } from "@/domain/entities/Season";
@@ -130,7 +132,10 @@ export function OffseasonContractLedger({
                       className="flex flex-wrap items-center gap-3 rounded-lg bg-muted/40 p-3"
                     >
                       <span className="font-medium">{member?.player.fullName ?? row.playerId}</span>
-                      <span className="mr-auto text-sm text-muted-foreground">
+                      <Badge
+                        variant="outline"
+                        className="mr-auto h-auto whitespace-normal text-left"
+                      >
                         {t(
                           "offseason",
                           row.status === "expiring"
@@ -141,7 +146,7 @@ export function OffseasonContractLedger({
                                 ? "optionExercised"
                                 : "optionPending"
                         )}
-                      </span>
+                      </Badge>
                       {actionable &&
                         (["exercise", "decline"] as const).map((decision) => (
                           <Button
@@ -211,9 +216,24 @@ export function OffseasonContractLedger({
                       option
                     );
                     return (
-                      <li key={player.id} className="rounded-lg border bg-card p-3 text-sm">
-                        <span className="font-medium">{player.fullName}</span> ·{" "}
-                        <span className="text-muted-foreground">{t("offseason", projection)}</span>
+                      <li
+                        key={player.id}
+                        className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm"
+                      >
+                        <PlayerHeadshot
+                          src={player.headshotUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-full bg-muted object-cover object-top"
+                        />
+                        <div className="min-w-0 space-y-2">
+                          <span className="block font-medium">{player.fullName}</span>
+                          <Badge
+                            variant="secondary"
+                            className="h-auto max-w-full whitespace-normal text-left"
+                          >
+                            {t("offseason", projection)}
+                          </Badge>
+                        </div>
                       </li>
                     );
                   })}

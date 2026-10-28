@@ -191,9 +191,13 @@ it("projects saved team decisions on render and reload without writes", () => {
   );
   const view = show();
   const projection = () => screen.getByRole("region", { name: "Selected team · Projected roster" });
-  expect(projection().textContent).toContain(
-    "Test Player · Continuity projected · Option exercised"
-  );
+  expect(within(projection()).getByText("Test Player")).toBeTruthy();
+  const badge = within(projection()).getByText("Continuity projected · Option exercised");
+  expect(badge.getAttribute("data-slot")).toBe("badge");
+  expect(badge.classList.contains("whitespace-normal")).toBe(true);
+  const portrait = projection().querySelector("img");
+  expect(portrait?.getAttribute("src")).toBe("/player-silhouette.svg");
+  expect(portrait?.getAttribute("alt")).toBe("");
   view.unmount();
   show();
   expect(projection().textContent).toContain("Continuity projected · Option exercised");

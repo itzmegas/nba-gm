@@ -7,6 +7,7 @@ import { useOffseason } from "@/application/hooks/offseason/useOffseason";
 import { useRoster } from "@/application/hooks/roster/useRoster";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
 import { OffseasonContractLedger } from "@/components/offseason/OffseasonContractLedger";
+import { PlayerHeadshot } from "@/components/players/player-headshot";
 import {
   AppTable,
   AppTableCell,
@@ -147,7 +148,9 @@ function OffseasonPlanning({
                     <AppTableRow>
                       <AppTableHead>{t("offseason", "player")}</AppTableHead>
                       <AppTableHead>{t("offseason", "contractStatus")}</AppTableHead>
-                      <AppTableHead>{t("offseason", "nextSalary")}</AppTableHead>
+                      <AppTableHead className="text-right tabular-nums">
+                        {t("offseason", "nextSalary")}
+                      </AppTableHead>
                     </AppTableRow>
                   </AppTableHeader>
                   <tbody>
@@ -159,16 +162,35 @@ function OffseasonPlanning({
                       );
                       return (
                         <AppTableRow key={player.id}>
-                          <AppTableCell>{player.fullName}</AppTableCell>
                           <AppTableCell>
-                            {t("offseason", outlook.status)}
-                            {outlook.estimated && (
-                              <Badge variant="outline" className="ml-2">
-                                {t("offseason", "estimated")}
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-3">
+                              <PlayerHeadshot
+                                src={player.headshotUrl}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-full bg-muted object-cover object-top"
+                              />
+                              <span className="font-medium">{player.fullName}</span>
+                            </div>
                           </AppTableCell>
-                          <AppTableCell className="tabular-nums">
+                          <AppTableCell>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge
+                                variant="secondary"
+                                className="h-auto whitespace-normal text-left"
+                              >
+                                {t("offseason", outlook.status)}
+                              </Badge>
+                              {outlook.estimated && (
+                                <Badge
+                                  variant="outline"
+                                  className="h-auto whitespace-normal text-left"
+                                >
+                                  {t("offseason", "estimated")}
+                                </Badge>
+                              )}
+                            </div>
+                          </AppTableCell>
+                          <AppTableCell className="text-right tabular-nums">
                             {outlook.nextSalary === null
                               ? t("offseason", "unknownSalary")
                               : formatCurrency(outlook.nextSalary)}
