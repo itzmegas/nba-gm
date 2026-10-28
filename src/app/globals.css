@@ -1130,6 +1130,44 @@ html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) :is(bu
   }
 }
 
+/* Production shell: direct surfaces only; never inherit preview tokens into screens. */
+.game-shell-frame {
+  background-color: #ececf0;
+}
+
+.game-shell-inset {
+  border: 1px solid #d3d5dd;
+  box-shadow: none;
+}
+
+.game-shell-sidebar {
+  background-color: #ececf0;
+}
+
+.game-shell-header {
+  background-color: #ffffff;
+  border-color: #d3d5dd;
+}
+
+.game-shell-sidebar [data-slot="button"],
+.game-shell-header [data-slot="button"] {
+  border-radius: 4px;
+}
+
+.dark .game-shell-frame,
+.dark .game-shell-sidebar {
+  background-color: #141518;
+}
+
+.dark .game-shell-header {
+  background-color: #191b1f;
+}
+
+.dark .game-shell-header,
+.dark .game-shell-inset {
+  border-color: #2d2f35;
+}
+
 /* Courtside is opt-in on html so body portals share the same tokens and typography. */
 html[data-ui-preview="courtside"] {
   --cs-body: var(--font-courtside-body), sans-serif;

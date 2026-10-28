@@ -20,6 +20,9 @@ const { day, range, postseason } = vi.hoisted(() => ({
   range: vi.fn(),
   postseason: vi.fn(),
 }));
+vi.mock("next/font/local", () => ({
+  default: () => ({ className: "courtside-font", variable: "courtside-variable" }),
+}));
 vi.mock("@/application/hooks/postseason/usePostseason", () => ({ usePostseason: postseason }));
 vi.mock("@/application/hooks/offseason/useOffseason", () => ({
   useOffseason: () => ({ data: null }),

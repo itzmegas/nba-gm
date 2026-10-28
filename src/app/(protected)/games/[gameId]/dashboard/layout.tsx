@@ -36,7 +36,7 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
   return (
     <GameIdProvider gameId={gameId}>
       <TeamThemeApplier teamAbbreviation={selectedTeam?.abbreviation} />
-      <SidebarProvider>
+      <SidebarProvider className="game-shell-frame">
         <DashboardSidebar
           gameId={gameId}
           selectedTeamId={game.selectedTeamId}
@@ -44,7 +44,7 @@ export default function GameDashboardLayout({ children, params }: GameDashboardL
           seasonYear={game.seasonYear}
         />
 
-        <SidebarInset>
+        <SidebarInset className="game-shell-inset">
           <DashboardHeader
             gameId={gameId}
             gameName={game.name}

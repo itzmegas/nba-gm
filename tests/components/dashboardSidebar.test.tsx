@@ -1,12 +1,20 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/application/providers/I18nProvider";
+import {
+  BATCH_SIMULATION_MODE,
+  useBatchSimulationStore,
+} from "@/application/stores/useBatchSimulationStore";
 import { DashboardSidebar } from "@/components/dashboard/layout-components";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { postseasonFixture } from "@/infrastructure/repositories/postseason.test-fixture";
+
+vi.mock("next/font/local", () => ({
+  default: () => ({ className: "courtside-font", variable: "courtside-variable" }),
+}));
 
 const { postseason, offseason } = vi.hoisted(() => ({ postseason: vi.fn(), offseason: vi.fn() }));
 
@@ -34,6 +42,14 @@ vi.mock("@/application/hooks/simulation/useCurrentTeamGame", () => ({
 }));
 
 beforeEach(() => {
+  useBatchSimulationStore.setState({
+    isActive: false,
+    stopRequested: false,
+    mode: null,
+    completedDays: 0,
+    totalDays: null,
+    error: null,
+  });
   postseason.mockReturnValue({ data: undefined });
   offseason.mockReturnValue({ data: null });
 });
@@ -60,6 +76,32 @@ function renderSidebar(defaultOpen = true) {
 }
 
 describe("game sidebar visual adjustments", () => {
+  it("preserves batch progress, exclusion and pause", () => {
+    useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.MONTH, 30);
+    useBatchSimulationStore.getState().updateProgress(12);
+    renderSidebar();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("12");
+    expect(screen.getByRole("button", { name: "Simulate day" }).hasAttribute("disabled")).toBe(
+      true
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause simulation" }));
+    expect(useBatchSimulationStore.getState().stopRequested).toBe(true);
+  });
+
+  it("keeps simulation errors visible", () => {
+    useBatchSimulationStore.getState().failBatch("Failed");
+    renderSidebar();
+    expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
+  it("limits production typography to sidebar surfaces without activating the preview", () => {
+    const { container } = renderSidebar();
+    expect(container.querySelectorAll(".game-shell-sidebar.courtside-font")).toHaveLength(3);
+    expect(document.documentElement.hasAttribute("data-ui-preview")).toBe(false);
+    expect(screen.queryByText("Courtside")).toBeNull();
+    expect(container.querySelector('[data-variant="inset"]')).toBeTruthy();
+  });
+
   it("shows persisted offseason planning without enabling simulation or changing the season", () => {
     postseason.mockReturnValue({
       data: postseasonFixture({ phase: "complete", championTeamId: "team" }),

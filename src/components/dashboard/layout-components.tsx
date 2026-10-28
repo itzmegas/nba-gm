@@ -19,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import { body, display } from "@/app/ui-preview/fonts";
 import { useOffseason } from "@/application/hooks/offseason/useOffseason";
 import { usePostseason } from "@/application/hooks/postseason/usePostseason";
 import { getMonthEnd, useAdvanceRange } from "@/application/hooks/simulation";
@@ -191,7 +192,9 @@ export function DashboardSidebar({
       : null;
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="px-4 py-2 group-data-[collapsible=icon]:px-0">
+      <SidebarHeader
+        className={`${body.className} game-shell-sidebar px-4 py-2 group-data-[collapsible=icon]:px-0`}
+      >
         <Link
           href={dashboardBasePath}
           aria-label={selectedTeam?.name || t("dashboard", "teamFallback")}
@@ -215,7 +218,7 @@ export function DashboardSidebar({
 
       <SidebarSeparator />
 
-      <SidebarContent>
+      <SidebarContent className={`${body.className} game-shell-sidebar`}>
         <SidebarMenu className="py-4">
           {NAV_ITEMS.map((item) => {
             const href = `${dashboardBasePath}${item.path}`;
@@ -249,12 +252,16 @@ export function DashboardSidebar({
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:px-1">
+      <SidebarFooter
+        className={`${body.className} game-shell-sidebar gap-3 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:px-1`}
+      >
         <div className="space-y-1 px-1 text-xs group-data-[collapsible=icon]:hidden">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {t("dashboard", "simulationDate")}
           </p>
-          <p className="text-sm font-semibold">{simulationDateFormatter.format(simulationDate)}</p>
+          <p className={`${display.className} text-xl font-semibold tabular-nums`}>
+            {simulationDateFormatter.format(simulationDate)}
+          </p>
           {postseason.data && (
             <div aria-live="polite" className="space-y-1">
               <Link
@@ -459,7 +466,9 @@ export function DashboardHeader({
   const isHome = activeItem?.path === "" || !activeItem;
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+    <header
+      className={`${body.className} game-shell-header flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12`}
+    >
       <div className="flex flex-1 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4 data-[orientation=vertical]:h-4" />

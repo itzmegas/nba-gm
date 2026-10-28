@@ -10,6 +10,10 @@ import { I18nProvider } from "@/application/providers/I18nProvider";
 import { Calendar } from "@/components/games/Calendar";
 import { GameList } from "@/components/games/GameList";
 
+vi.mock("next/font/local", () => ({
+  default: () => ({ className: "courtside-font", variable: "courtside-variable" }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children?: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
