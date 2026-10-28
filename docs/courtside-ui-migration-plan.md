@@ -2,17 +2,19 @@
 
 **Fecha del análisis:** 2026-10-28.
 
-**Estado:** catálogo híbrido, shell real y Dashboard revisados y aprobados por el usuario. Etapa de Dashboard completada; autorización explícita para registrar los commits correspondientes.
+**Estado:** catálogo híbrido, shell real, Dashboard y Roster aprobados por el usuario.
 
-**Alcance vigente:** ordenar y verificar los cambios existentes en unidades coherentes de catálogo, shell, Dashboard y documentación. Sin otras funcionalidades, cambios de procesos ni push.
+**Alcance vigente:** registrar la unidad visual de Roster en `feat/courtside-roster-player-profile`, con sus pruebas y documentación. Sin nuevas reglas, dependencias ni cambios de datos. El usuario realizará el push; no se abre PR.
 
 **Decisión:** conservar la estructura y los elementos útiles de la UI actual, incorporando selectivamente la tipografía, superficies, jerarquía y densidad de OpenDesign. La presentación se decide **pantalla por pantalla**: conservar, adaptar o reproducir la del prototipo cuando se apruebe para esa pantalla. Nunca reemplazar reglas ni datos reales por los del export.
 
-**Siguiente paso:** acordar el alcance de Roster en una nueva unidad; no iniciarlo automáticamente. La aprobación visual no sustituye las verificaciones técnicas o de navegador pendientes en la sección 10.
+**Siguiente paso:** continuar con Player Profile en una unidad separada. La aprobación humana no sustituye las comprobaciones de navegador pendientes en la sección 10.
 
 El análisis original se realizó sin modificar archivos ni instalar dependencias. Las rutas existentes mencionadas se verificaron en el repositorio. La implementación posterior de la fase 1 incorpora las condiciones de las secciones 6 y 9; sus verificaciones se registran al final de la sección 9. Las decisiones posteriores de esta sección prevalecen sobre las recomendaciones originales; no constituyen aprobación general de todas las pantallas o ampliaciones del roadmap.
 
 ## 0. Acuerdos vigentes y forma de trabajo
+
+**Continuación vigente (2026-10-28):** el usuario confirmó Roster y pidió una rama nueva para subir los cambios y probarlos después desde otro ordenador. Los límites anteriores se conservan como historial, no como bloqueo de esta unidad.
 
 **Aprobación vigente (2026-10-28):** el usuario aprobó el Dashboard actual y solicitó sus commits correspondientes. Quedan completadas las unidades visuales de catálogo, shell y Dashboard. Esta aprobación no acredita pruebas autenticadas de persistencia, auditoría de accesibilidad ni build productivo, y no autoriza implementar Roster ni otras pantallas en esta entrega. Los estados pendientes y límites anteriores se conservan abajo como registro histórico.
 
@@ -699,6 +701,19 @@ Durante la sesión, Turbopack sirvió CSS anterior pese a cambios en disco. Se r
 **Pendiente o fuera de alcance:** revisión humana final, zoom de escritorio al 200 %, lector de pantalla, otros navegadores, validación visual de todas las pantallas reales, build productivo y pruebas contra Supabase desplegado. El acceso fuera de desarrollo se cubre con la prueba de la ruta, no con un servidor de producción en esta sesión.
 
 ## 10. Verificación y siguiente paso
+
+### Roster híbrido autorizado — 2026-10-28
+
+**Implementado y aprobado por el usuario.** Los resultados técnicos siguientes pertenecen a la entrega de Roster; la aprobación humana no acredita por sí sola todas las comprobaciones de navegador pendientes.
+
+- Barlow y Barlow Condensed compartidas, resumen financiero compacto y paneles sobrios, sin activar tokens globales del catálogo.
+- Tabla existente a la izquierda e inspector de 20 rem desde `xl`; en anchos menores se apilan. Se elimina el hero sticky anterior. El ancho completo del main se habilita solo con `data-slot="roster-screen"`; los estilos de tabla quedan locales a esta página, sin alterar League ni las primitivas compartidas.
+- Se conservan selección, vistas de atributos/estadísticas, ordenamiento, contratos, cargos por cortes, clasificación standard/two-way y restricciones de corte. El inspector muestra el rating existente con su indicador de estimación y un enlace al perfil real; no incorpora métricas del export.
+- Pruebas de la unidad: `bun run test -- tests/components/rosterPage.test.tsx tests/components/rosterTableViews.test.tsx tests/components/rosterSorting.test.tsx tests/components/releasePlayer.test.tsx tests/components/i18n/roster-table.test.tsx tests/components/dashboard.test.tsx tests/components/gameTheme.test.tsx`: **65 pruebas correctas en siete archivos**. Hooks/tabla simulados en pruebas de página; las pruebas de tabla y corte mantienen su cobertura existente.
+- `bun run typecheck`, `bun run build`, Biome sobre los tres archivos TypeScript modificados y `git diff --check`: correctos.
+- **Límite del entorno Windows:** `bun biome check` completo informa errores de formato por CRLF en archivos no modificados. La suite completa ejecuta 940 pruebas: 899 correctas y 41 fallidas en comprobaciones SQL que esperan separadores LF sobre archivos CRLF. No se modificaron configuración, esquema ni migraciones para ocultar estos resultados.
+- **Pendiente:** navegador autenticado, responsive visual, teclado/zoom, modos claro/oscuro y persistencia de cortes contra Supabase. La compilación y las pruebas de componentes no acreditan esas comprobaciones; no se ejecutaron mutaciones reales ni se añadieron fixtures productivos.
+- **Rollback:** retirar la presentación/enlace/rating de `dashboard/roster/page.tsx`, el selector de ancho para Roster en `dashboard/layout.tsx` y sus pruebas/documentación. No requiere revertir datos, reglas, shell aprobado ni otras pantallas. Esta unidad se registra en su propio commit; sin push.
 
 ### Cierre aprobado y commits — 2026-10-28
 

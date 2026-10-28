@@ -1,7 +1,9 @@
 "use client";
 
 import { Users } from "lucide-react";
+import Link from "next/link";
 import { use, useState } from "react";
+import { body, display } from "@/app/ui-preview/fonts";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useReleaseCapCharge } from "@/application/hooks/roster/useReleasePlayer";
@@ -12,6 +14,7 @@ import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { formatRosterSalary, getContractStatus } from "@/components/roster/roster-table";
 import { RosterTableViews } from "@/components/roster/roster-table-views";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
 import { CONTRACT_CAP_TREATMENT } from "@/domain/contracts/ContractClassification";
@@ -80,25 +83,32 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div
+      data-slot="roster-screen"
+      className={`${body.className} min-w-0 space-y-5 animate-in fade-in duration-500`}
+    >
+      <div className="space-y-4 border-b border-border/60 pb-5">
         <div className="flex shrink-0 flex-col gap-1">
-          <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-            <Users className="h-8 w-8 text-primary" />
+          <h1
+            className={`${display.className} flex items-center gap-3 text-3xl font-semibold tracking-tight sm:text-4xl`}
+          >
+            <Users className="size-6 text-primary" />
             {t("dashboard", "roster")}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {team?.name} — {t("dashboard", "season")} {formatSeasonLabel(game.seasonYear)}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 xl:max-w-3xl flex-1 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0 [&_.text-2xl]:text-lg">
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="pt-4 pb-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 [&_[data-slot=card]]:min-w-0 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:rounded-md [&_[data-slot=card]]:border-border/60 [&_[data-slot=card]]:py-4 [&_[data-slot=card]]:shadow-none">
+          <Card>
+            <CardContent className="space-y-1 px-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 {t("dashboard", "standardPlayers")}
               </p>
-              <p className="text-2xl font-black mt-1">{standardPlayers}</p>
+              <p className={`${display.className} text-2xl font-semibold tabular-nums`}>
+                {standardPlayers}
+              </p>
               <p className="text-xs text-muted-foreground">{t("dashboard", "playersMax")}</p>
               <p className="text-xs text-muted-foreground">
                 {twoWayPlayers} {t("dashboard", "twoWayPlayers")}
@@ -106,12 +116,12 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="pt-4 pb-4">
+          <Card>
+            <CardContent className="space-y-1 px-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 {t("dashboard", "totalPayroll")}
               </p>
-              <p className="text-2xl font-black mt-1">
+              <p className={`${display.className} break-words text-2xl font-semibold tabular-nums`}>
                 {financials ? formatSalary(financials.totalSalary, locale) : "—"}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -125,13 +135,13 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="pt-4 pb-4">
+          <Card>
+            <CardContent className="space-y-1 px-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 {t("dashboard", "capSpace")}
               </p>
               <p
-                className={`text-2xl font-black mt-1 ${
+                className={`${display.className} break-words text-2xl font-semibold tabular-nums ${
                   financials?.isOverCap ? "text-destructive" : "text-green-500"
                 }`}
               >
@@ -147,12 +157,12 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="pt-4 pb-4">
+          <Card>
+            <CardContent className="space-y-1 px-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 {t("dashboard", "apronStatus")}
               </p>
-              <p className="text-2xl font-black mt-1">
+              <p className={`${display.className} text-2xl font-semibold`}>
                 {financials?.apronStatus === "None"
                   ? t("dashboard", "clean")
                   : (financials?.apronStatus ?? "—")}
@@ -173,109 +183,130 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
         </p>
       )}
 
-      {selectedPlayer && (
-        <section
-          aria-label={t("dashboard", "rosterPlayer")}
-          className="sticky top-0 z-20 flex flex-wrap items-center gap-5 rounded-xl border border-border/50 bg-card px-6 py-4 shadow-sm md:gap-8"
-          aria-live="polite"
-        >
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted/30 md:h-40 md:w-40">
-            <PlayerHeadshot
-              src={selectedPlayer.headshotUrl}
-              alt={selectedPlayer.fullName}
-              className="h-full w-full object-cover object-top"
-              loading="eager"
-            />
-          </div>
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <span className="font-mono text-muted-foreground">
-                {selectedPlayer.jerseyNumber != null ? `#${selectedPlayer.jerseyNumber}` : ""}
-              </span>
-              <h2 className="text-2xl font-black tracking-tight md:text-4xl">
-                {selectedPlayer.fullName}
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="px-3 py-1 text-lg font-bold">
-                {selectedPlayer.position ?? "—"}
-              </Badge>
-              <Badge variant="outline">
-                {t("dashboard", "playerAge")}: {playerAge ?? t("dashboard", "unknownValue")}
-              </Badge>
-              <Badge variant="outline">{selectedPlayer.height ?? "—"}</Badge>
-              <Badge variant="outline">{selectedPlayer.weight ?? "—"}</Badge>
-            </div>
-          </div>
-          <div className="w-full border-t border-border/50 pt-4 lg:ml-auto lg:w-auto lg:min-w-60 lg:border-t-0 lg:border-l lg:pl-6 lg:pt-0">
-            <h3 className="mb-3 text-sm font-semibold">{t("dashboard", "playerContract")}</h3>
-            {selectedContract ? (
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">
-                    {t("dashboard", "rosterSalary")} {formatSeasonLabel(game.seasonYear)}
-                  </dt>
-                  <dd className="text-lg font-bold">
-                    {formatRosterSalary(selectedContract.salaryY1, locale)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t("dashboard", "rosterDuration")}</dt>
-                  <dd className="text-lg font-bold">
-                    {getYearsRemaining(game.seasonYear, selectedContract.endYear)}
-                    {t("dashboard", "yearsShort")}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t("dashboard", "contractEndSeason")}</dt>
-                  <dd>{formatSeasonLabel(selectedContract.endYear)}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t("dashboard", "rosterStatus")}</dt>
-                  <dd>
-                    {selectedRosterPlayer &&
-                      getContractStatus(selectedRosterPlayer, game.seasonYear, locale).label}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("dashboard", "contractUnavailable")}
+      <div className="grid min-w-0 items-start gap-4 xl:has-[>section]:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card className="min-w-0 gap-4 overflow-hidden rounded-md border-border/60 bg-card py-4 shadow-none [&_[data-slot=button]]:rounded-sm [&_[data-slot=table-container]]:rounded-none [&_[data-slot=table-container]]:border-x-0 [&_[data-slot=table-container]]:border-b-0 [&_[data-slot=table-cell]]:py-2">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className={`${display.className} text-lg font-semibold`}>
+              {t("dashboard", "activeContracts")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="min-w-0 p-0">
+            {isRosterError ? (
+              <p role="alert" className="px-6 py-12 text-center text-destructive">
+                {t("dashboard", "rosterLoadFailed")}
               </p>
+            ) : rosterPlayers && rosterPlayers.length > 0 ? (
+              <RosterTableViews
+                gameId={gameId}
+                players={rosterPlayers}
+                seasonYear={game.seasonYear}
+                onSelectPlayer={setSelectedPlayerId}
+                selectedPlayerId={selectedPlayer?.id}
+                canRelease={
+                  game.status === "active" &&
+                  game.seasonEraId === "modern" &&
+                  game.seasonYear === 2026
+                }
+              />
+            ) : (
+              <div className="flex items-center justify-center py-16 text-muted-foreground">
+                {t("dashboard", "noPlayersRoster")}
+              </div>
             )}
-          </div>
-        </section>
-      )}
-
-      <Card className="border-border/50 bg-card/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{t("dashboard", "activeContracts")}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 pb-4">
-          {isRosterError ? (
-            <p role="alert" className="px-6 py-12 text-center text-destructive">
-              {t("dashboard", "rosterLoadFailed")}
-            </p>
-          ) : rosterPlayers && rosterPlayers.length > 0 ? (
-            <RosterTableViews
-              gameId={gameId}
-              players={rosterPlayers}
-              seasonYear={game.seasonYear}
-              onSelectPlayer={setSelectedPlayerId}
-              selectedPlayerId={selectedPlayer?.id}
-              canRelease={
-                game.status === "active" &&
-                game.seasonEraId === "modern" &&
-                game.seasonYear === 2026
-              }
-            />
-          ) : (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              {t("dashboard", "noPlayersRoster")}
+          </CardContent>
+        </Card>
+        {selectedPlayer && (
+          <section
+            aria-label={t("dashboard", "rosterPlayer")}
+            className="min-w-0 space-y-4 rounded-md border border-border/60 bg-card p-4 xl:sticky xl:top-4"
+            aria-live="polite"
+          >
+            <div className="mx-auto size-24 overflow-hidden rounded-md bg-muted/30">
+              <PlayerHeadshot
+                src={selectedPlayer.headshotUrl}
+                alt={selectedPlayer.fullName}
+                className="h-full w-full object-cover object-top"
+                loading="eager"
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <span className="font-mono text-muted-foreground">
+                  {selectedPlayer.jerseyNumber != null ? `#${selectedPlayer.jerseyNumber}` : ""}
+                </span>
+                <h2
+                  className={`${display.className} min-w-0 break-words text-2xl font-semibold tracking-tight`}
+                >
+                  {selectedPlayer.fullName}
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="rounded-sm">
+                  {selectedPlayer.position ?? "—"}
+                </Badge>
+                <Badge variant="outline">
+                  {t("dashboard", "playerAge")}: {playerAge ?? t("dashboard", "unknownValue")}
+                </Badge>
+                <Badge variant="outline">{selectedPlayer.height ?? "—"}</Badge>
+                <Badge variant="outline">{selectedPlayer.weight ?? "—"}</Badge>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+              <div>
+                <p className="text-xs text-muted-foreground">{t("playerAttributes", "overall")}</p>
+                <p className={`${display.className} text-3xl font-semibold tabular-nums`}>
+                  {selectedRosterPlayer?.ratings?.overall ?? "—"}
+                </p>
+              </div>
+              {selectedRosterPlayer?.ratings?.estimated && (
+                <Badge variant="outline">{t("playerAttributes", "estimated")}</Badge>
+              )}
+            </div>
+            <div className="border-t border-border/60 pt-4">
+              <h3 className="mb-3 text-sm font-semibold">{t("dashboard", "playerContract")}</h3>
+              {selectedContract ? (
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("dashboard", "rosterSalary")} {formatSeasonLabel(game.seasonYear)}
+                    </dt>
+                    <dd className="text-lg font-bold">
+                      {formatRosterSalary(selectedContract.salaryY1, locale)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("dashboard", "rosterDuration")}</dt>
+                    <dd className="text-lg font-bold">
+                      {getYearsRemaining(game.seasonYear, selectedContract.endYear)}
+                      {t("dashboard", "yearsShort")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("dashboard", "contractEndSeason")}</dt>
+                    <dd>{formatSeasonLabel(selectedContract.endYear)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("dashboard", "rosterStatus")}</dt>
+                    <dd>
+                      {selectedRosterPlayer &&
+                        getContractStatus(selectedRosterPlayer, game.seasonYear, locale).label}
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {t("dashboard", "contractUnavailable")}
+                </p>
+              )}
+            </div>
+            <Button asChild variant="outline" className="w-full rounded-sm">
+              <Link href={`/games/${gameId}/dashboard/player/${selectedPlayer.id}`}>
+                {t("dashboard", "viewPlayer")}
+              </Link>
+            </Button>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
