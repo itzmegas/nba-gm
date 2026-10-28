@@ -1,6 +1,7 @@
 "use client";
 
 import { Trophy } from "lucide-react";
+import { display } from "@/app/ui-preview/fonts";
 import { selectConferenceStandings } from "@/application/dashboard/selectConferenceStandings";
 import { useStandings } from "@/application/hooks/simulation";
 import { useTeams } from "@/application/hooks/teams/useTeams";
@@ -17,9 +18,9 @@ export function StandingsWidget({ gameId, teamId }: { gameId: string; teamId: st
   const selectedIndex = standings.findIndex((standing) => standing.teamId === teamId);
   const start = Math.max(0, Math.min(selectedIndex - 2, standings.length - 5));
   return (
-    <Card className="h-full bg-card shadow-sm">
+    <Card className="min-w-0 gap-4 rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="border-b border-border/60 pb-4">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+        <CardTitle className={`${display.className} flex items-center gap-2 text-lg font-semibold`}>
           <Trophy className="size-4 text-primary" />
           {t("dashboard", "conferenceStandings")}
         </CardTitle>

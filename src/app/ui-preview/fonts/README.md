@@ -1,7 +1,7 @@
 # Courtside preview fonts
 
 These fonts are shared by the development-only `/ui-preview` route and the
-production game shell through `next/font/local`, with preloading disabled.
+production game shell and Dashboard through `next/font/local`, with preloading disabled.
 The application root layout and its existing fonts are unchanged. The shared
 definition stays in `src/app/ui-preview/fonts.ts`; consumers do not duplicate binaries.
 

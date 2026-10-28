@@ -16,8 +16,14 @@ import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
 import type { Contract } from "@/domain/entities/Contract";
 import type { Game } from "@/domain/entities/Game";
 import type { LeagueStanding } from "@/domain/entities/LeagueStanding";
+import type { PostseasonState } from "@/domain/entities/Postseason";
 import type { ScheduledGame } from "@/domain/entities/ScheduledGame";
 import type { Team } from "@/domain/entities/Team";
+
+vi.mock("@/app/ui-preview/fonts", () => ({
+  body: { className: "barlow" },
+  display: { className: "barlow-condensed" },
+}));
 
 const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
 const game = {
@@ -51,13 +57,19 @@ let standings: { data: LeagueStanding[]; isPending: boolean; isError: boolean };
 let releases: { data: number | undefined; isError: boolean };
 let contracts: { data: Contract[]; isError: boolean };
 let injuredIds: string[];
+let advancePending = false;
+let advanceError = false;
+let postseason: { data: PostseasonState | undefined; isPending: boolean; isError: boolean };
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({
+  usePostseason: () => postseason,
+}));
 
 vi.mock("@/application/hooks/games/useGame", () => ({ useGame: () => ({ data: game }) }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: teams }) }));
 vi.mock("@/application/hooks/simulation", () => ({
   useNextGame: () => next,
   useStandings: () => standings,
-  useAdvanceRange: () => ({ isPending: false, isError: false, mutate }),
+  useAdvanceRange: () => ({ isPending: advancePending, isError: advanceError, mutate }),
 }));
 vi.mock("@/application/hooks/roster/useRoster", () => ({ useRoster: () => roster }));
 vi.mock("@/application/hooks/player-states/usePlayerStates", () => ({
@@ -86,6 +98,9 @@ function show(component: ReactElement, locale: Locale = "en") {
 }
 
 beforeEach(() => {
+  advancePending = false;
+  advanceError = false;
+  postseason = { data: undefined, isPending: false, isError: false };
   teams = [...baseTeams];
   mutate.mockReset();
   useBatchSimulationStore.setState({
@@ -125,6 +140,62 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("next game", () => {
+  it("keeps pending simulation locked and allows retry after an advance error", () => {
+    advancePending = true;
+    const view = show(<NextGameWidget game={game} />);
+    expect(
+      (screen.getByRole("button", { name: "Simulate next game" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    advancePending = false;
+    advanceError = true;
+    view.rerender(
+      <I18nProvider locale="en">
+        <NextGameWidget game={game} />
+      </I18nProvider>
+    );
+    expect(screen.getByRole("alert")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Simulate next game" }));
+    expect(mutate).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ["regular_season", null, false, false],
+    ["play_in", null, true, false],
+    ["playoffs", null, true, false],
+    ["complete", null, true, false],
+    ["complete", "chi", true, true],
+  ] as const)("links only to existing postseason states: %s / %s", (phase, championTeamId, visible, offseason) => {
+    next.data = null;
+    postseason.data = {
+      phase,
+      championTeamId,
+      runnerUpTeamId: null,
+      qualification: [],
+      playoffSeeds: [],
+      series: [],
+      games: [],
+    };
+    show(<NextGameWidget game={game} />);
+    const links = screen.getAllByRole("link");
+    const link = links.find((item) => item.getAttribute("href")?.endsWith("/postseason"));
+    expect(Boolean(link)).toBe(visible);
+    if (link) expect(link.textContent?.includes("Offseason")).toBe(offseason);
+    expect(screen.getByRole("link", { name: "Calendar" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/schedule"
+    );
+    expect(screen.queryByRole("button", { name: "Simulate next game" })).toBeNull();
+  });
+
+  it.each(["pending", "error"])("does not promote stale postseason data during %s", (state) => {
+    next.data = null;
+    postseason = {
+      data: { phase: "complete", championTeamId: "chi" } as PostseasonState,
+      isPending: state === "pending",
+      isError: state === "error",
+    };
+    show(<NextGameWidget game={game} />);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
+
   it("shows full logos and home/away order, and starts a bounded league simulation", () => {
     const { container } = show(<NextGameWidget game={game} />);
     expect(
@@ -281,6 +352,34 @@ describe("roster evidence", () => {
 });
 
 describe("financial truth", () => {
+  it("retains all thresholds and the computed bar including release charges", () => {
+    const { container } = show(<CapSpaceWidget gameId="game" teamId="chi" />);
+    const thresholds = getSalaryCapThresholds(game.seasonYear);
+    for (const value of [
+      thresholds.salaryCap,
+      thresholds.luxuryTax,
+      thresholds.firstApron,
+      thresholds.secondApron,
+    ]) {
+      expect(
+        screen.getByText(
+          new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          }).format(value)
+        )
+      ).toBeDefined();
+    }
+    const bar = container.querySelector<HTMLElement>('[aria-hidden="true"] > div');
+    expect(Number.parseFloat(bar?.style.width ?? "0")).toBeCloseTo(
+      (105_000_000 / thresholds.secondApron) * 100
+    );
+    expect(container.querySelectorAll('[aria-hidden="true"] > span')).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Roster" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/roster"
+    );
+  });
   it("includes released cap charges and uses the game's season thresholds", () => {
     show(<CapSpaceWidget gameId="game" teamId="chi" />);
     expect(screen.getByText("$105,000,000")).toBeDefined();

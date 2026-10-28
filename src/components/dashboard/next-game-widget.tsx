@@ -4,6 +4,8 @@ import { ArrowRight, CalendarDays, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { Fragment } from "react";
+import { display } from "@/app/ui-preview/fonts";
+import { usePostseason } from "@/application/hooks/postseason/usePostseason";
 import { useAdvanceRange, useNextGame } from "@/application/hooks/simulation";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
@@ -14,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GAME_STATUS, type Game } from "@/domain/entities/Game";
+import { hasPostseasonChampion, POSTSEASON_PHASE } from "@/domain/entities/Postseason";
 
 export function NextGameWidget({ game }: { game: Game }) {
   const t = useT();
@@ -21,6 +24,7 @@ export function NextGameWidget({ game }: { game: Game }) {
   const next = useNextGame(game.id, game.selectedTeamId, game.simulationDate);
   const { data: teams } = useTeams();
   const advance = useAdvanceRange();
+  const postseason = usePostseason(game.id);
   const active = useBatchSimulationStore((state) => state.isActive);
   const mode = useBatchSimulationStore((state) => state.mode);
   const fixture = next.data;
@@ -43,20 +47,20 @@ export function NextGameWidget({ game }: { game: Game }) {
   };
 
   return (
-    <Card className="h-full overflow-hidden border-primary/20 bg-card shadow-sm">
+    <Card className="min-w-0 gap-4 overflow-hidden rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+        <CardTitle className={`${display.className} flex items-center gap-2 text-lg font-semibold`}>
           <CalendarDays className="size-4 text-primary" />
           {t("dashboard", "nextGame")}
         </CardTitle>
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="ghost" size="sm" className="rounded-sm">
           <Link href={`/games/${game.id}/dashboard/schedule`}>
             {t("dashboard", "calendar")}
             <ArrowRight className="size-4" />
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="flex flex-col gap-6 pt-2">
+      <CardContent className="flex flex-col gap-4">
         {next.isPending ? (
           <output className="block py-12 text-center text-sm text-muted-foreground">
             {t("common", "loading")}
@@ -66,11 +70,23 @@ export function NextGameWidget({ game }: { game: Game }) {
             {t("dashboard", "unableToLoadGame")}
           </p>
         ) : !fixture ? (
-          <div className="py-12 text-center">
+          <div className="space-y-3 py-2">
             <p className="font-semibold">{t("dashboard", "noNextGame")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("dashboard", "noUpcomingFixtures")}
             </p>
+            {!postseason.isPending &&
+              !postseason.isError &&
+              postseason.data &&
+              postseason.data.phase !== POSTSEASON_PHASE.REGULAR_SEASON && (
+                <Button asChild variant="outline" size="sm" className="rounded-sm">
+                  <Link href={`/games/${game.id}/dashboard/postseason`}>
+                    {t("postseason", "title")}
+                    {hasPostseasonChampion(postseason.data) && ` · ${t("offseason", "title")}`}
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              )}
           </div>
         ) : (
           <>
@@ -100,7 +116,7 @@ export function NextGameWidget({ game }: { game: Game }) {
                         alt=""
                         width={112}
                         height={112}
-                        className="size-20 object-contain drop-shadow-sm sm:size-28"
+                        className="size-16 object-contain sm:size-20"
                       />
                     ) : (
                       <span className="flex size-20 items-center justify-center text-3xl font-black sm:size-28">
@@ -121,7 +137,7 @@ export function NextGameWidget({ game }: { game: Game }) {
             </div>
             <div className="flex flex-col items-center gap-3 border-t border-border/60 pt-5">
               <Button
-                className="min-h-11 w-full sm:w-auto sm:min-w-64"
+                className="min-h-11 w-full rounded-sm sm:w-auto sm:min-w-64"
                 onClick={simulate}
                 disabled={active || advance.isPending || game.status !== GAME_STATUS.ACTIVE}
               >

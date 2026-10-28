@@ -66,6 +66,10 @@ vi.mock("@/application/hooks/simulation", () => ({
   useAdvanceRange: () => ({ isPending: false, isError: false, mutate: () => undefined }),
 }));
 
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({
+  usePostseason: () => ({ data: null, isPending: false, isError: false }),
+}));
+
 vi.mock("@/components/dashboard/alerts-widget", () => ({
   AlertsWidget: () => <div>Alerts</div>,
 }));

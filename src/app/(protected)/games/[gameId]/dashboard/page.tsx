@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { body, display } from "@/app/ui-preview/fonts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
@@ -39,14 +40,14 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className={`${body.className} space-y-5 animate-in fade-in duration-500`}>
       <div className="flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-end">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {t("dashboard", "dashboard")} · {t("dashboard", "season")}{" "}
             {formatSeasonLabel(game.seasonYear)}
           </p>
-          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+          <h1 className={`${display.className} text-3xl font-semibold tracking-tight sm:text-4xl`}>
             {team?.name ?? t("dashboard", "teamFallback")}
           </h1>
         </div>
@@ -60,15 +61,15 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
           </p>
         </div>
       </div>
-      <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
+        <div className="min-w-0 space-y-4">
           <NextGameWidget game={game} />
-        </div>
-        <StandingsWidget gameId={gameId} teamId={game.selectedTeamId} />
-        <div className="min-w-0 lg:col-span-2">
           <CapSpaceWidget gameId={gameId} teamId={game.selectedTeamId} />
         </div>
-        <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
+        <div className="min-w-0 space-y-4">
+          <StandingsWidget gameId={gameId} teamId={game.selectedTeamId} />
+          <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
+        </div>
       </div>
     </div>
   );
