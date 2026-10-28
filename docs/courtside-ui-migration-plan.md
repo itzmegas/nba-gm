@@ -2,19 +2,19 @@
 
 **Fecha del análisis:** 2026-10-28.
 
-**Estado:** catálogo híbrido, shell real, Dashboard y Roster aprobados por el usuario.
+**Estado:** catálogo híbrido, shell real, Dashboard y Roster aprobados por el usuario. Player Profile implementado con alcance visual autorizado; pendiente de prueba y aprobación de su resultado.
 
-**Alcance vigente:** registrar la unidad visual de Roster en `feat/courtside-roster-player-profile`, con sus pruebas y documentación. Sin nuevas reglas, dependencias ni cambios de datos. El usuario realizará el push; no se abre PR.
+**Alcance vigente:** registrar Roster y Player Profile en commits separados sobre `feat/courtside-roster-player-profile`, con sus pruebas y documentación. Player Profile conserva identidad compacta, contrato y salarios por temporada como contenido principal, y regreso a Roster o League. Sin conectar estadísticas/scouting, nuevas reglas, dependencias ni cambios de datos. El usuario realizará el push; no se abre PR.
 
 **Decisión:** conservar la estructura y los elementos útiles de la UI actual, incorporando selectivamente la tipografía, superficies, jerarquía y densidad de OpenDesign. La presentación se decide **pantalla por pantalla**: conservar, adaptar o reproducir la del prototipo cuando se apruebe para esa pantalla. Nunca reemplazar reglas ni datos reales por los del export.
 
-**Siguiente paso:** continuar con Player Profile en una unidad separada. La aprobación humana no sustituye las comprobaciones de navegador pendientes en la sección 10.
+**Siguiente paso:** subir la rama y probar Player Profile desde el otro ordenador antes de acordar Teams. La autorización de implementación no equivale a aprobación del resultado ni sustituye las comprobaciones de navegador pendientes en la sección 10.
 
 El análisis original se realizó sin modificar archivos ni instalar dependencias. Las rutas existentes mencionadas se verificaron en el repositorio. La implementación posterior de la fase 1 incorpora las condiciones de las secciones 6 y 9; sus verificaciones se registran al final de la sección 9. Las decisiones posteriores de esta sección prevalecen sobre las recomendaciones originales; no constituyen aprobación general de todas las pantallas o ampliaciones del roadmap.
 
 ## 0. Acuerdos vigentes y forma de trabajo
 
-**Continuación vigente (2026-10-28):** el usuario confirmó Roster y pidió una rama nueva para subir los cambios y probarlos después desde otro ordenador. Los límites anteriores se conservan como historial, no como bloqueo de esta unidad.
+**Continuación vigente (2026-10-28):** el usuario confirmó Roster y luego aprobó expresamente el alcance visual propuesto de Player Profile. Se conserva la biografía existente, el contrato y sus salarios, con aviso secundario de estadísticas/scouting no disponibles en esta vista. No se autoriza una integración estadística ni avanzar automáticamente a Teams. Posteriormente pidió una rama nueva para subir los cambios y probarlos desde otro ordenador. Los límites anteriores se conservan como historial, no como bloqueo de estas unidades.
 
 **Aprobación vigente (2026-10-28):** el usuario aprobó el Dashboard actual y solicitó sus commits correspondientes. Quedan completadas las unidades visuales de catálogo, shell y Dashboard. Esta aprobación no acredita pruebas autenticadas de persistencia, auditoría de accesibilidad ni build productivo, y no autoriza implementar Roster ni otras pantallas en esta entrega. Los estados pendientes y límites anteriores se conservan abajo como registro histórico.
 
@@ -701,6 +701,24 @@ Durante la sesión, Turbopack sirvió CSS anterior pese a cambios en disco. Se r
 **Pendiente o fuera de alcance:** revisión humana final, zoom de escritorio al 200 %, lector de pantalla, otros navegadores, validación visual de todas las pantallas reales, build productivo y pruebas contra Supabase desplegado. El acceso fuera de desarrollo se cubre con la prueba de la ruta, no con un servidor de producción en esta sesión.
 
 ## 10. Verificación y siguiente paso
+
+### Player Profile autorizado — 2026-10-28
+
+**Implementado; pendiente de revisión del usuario.** Identidad con retrato compacto y fuentes compartidas; contrato a ancho completo, resumen semántico y tabla salarial sobre `AppTable`. No cambia el shell ni los componentes compartidos.
+
+- Se conservan las cuatro consultas existentes, temporadas, duración, opciones, estado activo, fallbacks de biografía e imagen y navegación con `leagueTeamId` validado. Los enlaces de regreso usan `Button asChild`, sin botón anidado en un enlace, y su etiqueta corresponde al destino real.
+- Se distingue salario cero de ausencia y garantía desconocida de «No», con regresiones específicas. Son correcciones de presentación de los valores recibidos, no nuevas reglas financieras.
+- El aviso secundario no afirma que el motor carece de estadísticas; solo indica que no están disponibles en esta vista. No se conectan datos estadísticos, scouting, nuevas consultas ni fixtures productivos.
+- **Pruebas:** `bun run test -- tests/components/playerProfile.test.tsx`: **15 correctas**. Cubren identidad, tabla y temporada actual, años sin salario/fuera del contrato, cero, garantía/opciones, navegación y estados de carga/ausencia. La ejecución con Roster, vistas, AppTable y temas pasó **39 pruebas en cinco archivos**.
+- **Controles técnicos:** `bun run typecheck`, `bun run build`, Biome sobre los dos archivos TypeScript de esta unidad y `git diff --check`: correctos. Suite completa durante la implementación: **955 pruebas, 914 correctas y los mismos 41 fallos SQL por CRLF** de la unidad anterior. Biome global: 417 errores de formato en archivos CRLF no modificados; no se altera la configuración para ocultarlos.
+- **Pendiente:** revisión en partida autenticada, móvil/escritorio, claro/oscuro y teclado/zoom. Comprobar entrada desde Roster y League, regreso al contexto correcto y jugador con/sin contrato. Las pruebas usan hooks simulados y no acreditan persistencia ni comportamiento contra Supabase desplegado.
+- **Rollback independiente:** retirar únicamente los cambios del perfil en `dashboard/player/[id]/page.tsx`, su nuevo `tests/components/playerProfile.test.tsx` y este registro documental; conservar Roster y su selector de ancho. Esta unidad se registra en su propio commit; sin cambios de datos ni push. Detenerse antes de Teams.
+
+### Traspaso para probar desde otro ordenador
+
+- Rama: `feat/courtside-roster-player-profile`, creada desde `feat/courtside-hybrid-preview` con catálogo, fuentes, shell y Dashboard ya incluidos en su historial. Roster se registra en `d9805e5`; el commit siguiente contiene Player Profile, sus pruebas y este traspaso.
+- El usuario realiza el push. En el otro ordenador, obtener esa rama, instalar con `bun install --frozen-lockfile` y usar la configuración local habitual de Supabase. `.env.local` no se versiona ni se transfiere dentro del commit.
+- Probar entrada al perfil desde Roster y League, navegación de regreso, contratos y modos claro/oscuro. No se da por aprobada la pantalla ni se inicia Teams al guardar los commits.
 
 ### Roster híbrido autorizado — 2026-10-28
 
