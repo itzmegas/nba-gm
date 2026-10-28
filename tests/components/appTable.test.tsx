@@ -27,12 +27,17 @@ it("applies the roster design by default and keeps native table semantics", () =
     </AppTable>
   );
   const table = screen.getByRole("table", { name: "Players" });
+  expect(table.getAttribute("data-slot")).toBe("table");
+  expect(table.parentElement?.getAttribute("data-slot")).toBe("table-container");
+  expect(screen.getByRole("columnheader").getAttribute("data-slot")).toBe("table-head");
+  expect(screen.getByRole("cell").getAttribute("data-slot")).toBe("table-cell");
   expect(table.className).toContain("text-sm");
   expect(table.parentElement?.className).toContain("overflow-x-auto");
   expect(table.parentElement?.className).toContain("border-border/50");
   expect(screen.getByRole("columnheader").className).toContain("py-3");
   expect(screen.getByRole("columnheader").className).toContain("text-muted-foreground");
   const row = screen.getByRole("cell").closest("tr");
+  expect(row?.getAttribute("data-slot")).toBe("table-row");
   expect(row?.className).toContain("even:bg-muted/10");
   expect(row?.className).toContain("hover:bg-muted/40");
   expect(row?.className).toContain("data-[state=selected]:bg-primary/10");

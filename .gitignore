@@ -46,3 +46,6 @@ next-env.d.ts
 .codegraph/
 __pycache__/
 *.pyc
+
+# new desing
+docs/NBA-Franchise-Management-Redesign
