@@ -2,7 +2,7 @@
 
 import { Users } from "lucide-react";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useRef, useState } from "react";
 import { body, display } from "@/app/ui-preview/fonts";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
@@ -39,6 +39,7 @@ interface GameRosterPageProps {
 export default function GameRosterPage({ params }: GameRosterPageProps) {
   const { gameId } = use(params);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const inspectorHeading = useRef<HTMLHeadingElement>(null);
   const { data: game, isLoading: isLoadingGame } = useGame(gameId);
   const selectedTeamId = game?.selectedTeamId ?? null;
 
@@ -73,6 +74,16 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
   const selectedContract = selectedRosterPlayer?.contract;
   const playerAge =
     selectedPlayer && game ? getPlayerAge(selectedPlayer, game.simulationDate) : undefined;
+
+  function selectPlayer(playerId: string) {
+    setSelectedPlayerId(playerId);
+    if (window.matchMedia("(min-width: 80rem)").matches) return;
+    // Wait for the selected player's name to render before moving focus.
+    window.requestAnimationFrame(() => {
+      inspectorHeading.current?.focus({ preventScroll: true });
+      inspectorHeading.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+  }
 
   if (isLoadingGame || isLoadingRoster || !game) {
     return (
@@ -200,7 +211,7 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
                 gameId={gameId}
                 players={rosterPlayers}
                 seasonYear={game.seasonYear}
-                onSelectPlayer={setSelectedPlayerId}
+                onSelectPlayer={selectPlayer}
                 selectedPlayerId={selectedPlayer?.id}
                 canRelease={
                   game.status === "active" &&
@@ -235,7 +246,9 @@ export default function GameRosterPage({ params }: GameRosterPageProps) {
                   {selectedPlayer.jerseyNumber != null ? `#${selectedPlayer.jerseyNumber}` : ""}
                 </span>
                 <h2
-                  className={`${display.className} min-w-0 break-words text-2xl font-semibold tracking-tight`}
+                  ref={inspectorHeading}
+                  tabIndex={-1}
+                  className={`${display.className} min-w-0 scroll-mt-4 break-words text-2xl font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-primary`}
                 >
                   {selectedPlayer.fullName}
                 </h2>

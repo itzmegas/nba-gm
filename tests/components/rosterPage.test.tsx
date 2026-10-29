@@ -76,6 +76,7 @@ vi.mock("@/components/roster/roster-table", async (importOriginal) => ({
 }));
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   rosterPlayers[0].contract = null;
   players = rosterPlayers;
   rosterLoading = false;
@@ -164,6 +165,40 @@ it("updates the inspector and profile link when a player is selected", async () 
   expect(within(inspector).getByText("Overall rating").nextElementSibling?.textContent).toBe("—");
   expect(document.querySelector('[data-slot="roster-screen"]')?.className).toContain("barlow");
   expect(document.documentElement.dataset.uiPreview).toBeUndefined();
+});
+
+it.each([
+  390, 1024, 1280, 1440,
+])("reveals explicit selections only below xl at %ipx", async (width) => {
+  vi.spyOn(window, "matchMedia").mockReturnValue({
+    ...window.matchMedia("(min-width: 80rem)"),
+    matches: width >= 1280,
+  });
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(0);
+  await showRoster();
+  const heading = within(screen.getByRole("region", { name: "Player" })).getByRole("heading", {
+    name: "Player 0",
+  });
+  const scroll = vi.spyOn(heading, "scrollIntoView").mockImplementation(() => {});
+  expect(frame).not.toHaveBeenCalled();
+  expect(document.activeElement).not.toBe(heading);
+
+  for (let selection = 0; selection < 2; selection++) {
+    const button = screen.getByRole("button", { name: "Player 1" });
+    button.focus();
+    fireEvent.click(button);
+    expect(heading.textContent).toBe("Player 1");
+    if (width < 1280) {
+      expect(frame).toHaveBeenCalledTimes(selection + 1);
+      act(() => frame.mock.calls[selection][0](0));
+      expect(document.activeElement).toBe(heading);
+      expect(scroll).toHaveBeenLastCalledWith({ block: "start", behavior: "instant" });
+    } else {
+      expect(frame).not.toHaveBeenCalled();
+      expect(scroll).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(button);
+    }
+  }
 });
 
 it("keeps release charges in the compact financial summary", async () => {
