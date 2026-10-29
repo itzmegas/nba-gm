@@ -209,11 +209,38 @@ afterEach(() => {
 });
 
 describe("franchise profile", () => {
+  it("composes the export hero, four-part snapshot and explicitly unscored scouting", () => {
+    view("q=Los&tag=one&tag=two&franchiseTab=overview");
+    const hero = screen.getByRole("region", { name: "Franchise scouting" });
+    expect(within(hero).getByText("12–8")).toBeTruthy();
+    expect(within(hero).getByText("80")).toBeTruthy();
+    expect(within(hero).getByText("Competitive direction · Not evaluated")).toBeTruthy();
+    expect(metric("Season record")).toBe("12–8");
+    expect(metric("Current roster")).toBe("2");
+    for (const area of [
+      "Offensive talent",
+      "Defensive talent",
+      "Shooting",
+      "Playmaking",
+      "Interior presence",
+      "Roster depth",
+    ]) {
+      expect(screen.getByText(area).parentElement?.textContent).toContain("Not evaluated");
+    }
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(screen.queryByText("POT")).toBeNull();
+    const href = linkQuery("View roster →");
+    expect(href.pathname).toBe(pathname);
+    expect(href.searchParams.get("franchiseTab")).toBe("roster");
+    expect(href.searchParams.getAll("tag")).toEqual(["one", "two"]);
+    expect(href.searchParams.get("q")).toBe("Los");
+  });
+
   it("loads the route franchise, not the managed team or a teamId query override", () => {
     view("teamId=bos");
     expect(screen.getByRole("heading", { name: "Los Angeles Lakers" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Boston Celtics" })).toBeNull();
-    expect(screen.getByText("12–8")).toBeTruthy();
+    expect(screen.getAllByText("12–8")).toHaveLength(2);
     expect(screen.queryByText("1–9")).toBeNull();
     expect(mocks.roster).toHaveBeenLastCalledWith("career", "lal", 2031);
     expect(mocks.game).toHaveBeenCalledWith("career");
@@ -228,7 +255,7 @@ describe("franchise profile", () => {
     expect(metric("Current roster")).toBe("2");
     expect(metric("Average age")).toBe("24.5");
     expect(metric("Mean team OVR")).toBe("80");
-    expect(screen.getAllByText("Estimated ratings")).toHaveLength(2);
+    expect(screen.getAllByText("Estimated ratings")).toHaveLength(3);
     expect(screen.getByRole("heading", { name: "Highest-rated available player" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Blake Player" })).toBeTruthy();
     expect(screen.getByText(/not a strategic designation/)).toBeTruthy();
@@ -255,7 +282,7 @@ describe("franchise profile", () => {
     view();
     expect(metric("Average age")).toBe("0");
     expect(metric("Mean team OVR")).toBe("0");
-    expect(screen.getByText("0–0")).toBeTruthy();
+    expect(screen.getAllByText("0–0")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Zero Player" })).toBeTruthy();
   });
 
