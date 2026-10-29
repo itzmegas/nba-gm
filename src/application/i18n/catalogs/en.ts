@@ -114,6 +114,13 @@ export const en = {
     comingSoon: "Coming soon",
     teamsDescription: "Explore the franchises in your save and open their organizational profiles.",
     directory: "Franchise directory",
+    directoryRank: "Conf. rank",
+    directoryOverall: "OVR",
+    directoryPayroll: "Payroll",
+    directoryDirection: "Direction",
+    directoryUnavailable: "Not available in this directory",
+    directoryLimitations:
+      "Conference rankings, team evaluations, payroll and competitive direction are not available in this directory. Open a franchise for its available details.",
     conference: "Conference",
     allConferences: "All conferences",
     division: "Division",

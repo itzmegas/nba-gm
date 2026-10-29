@@ -124,11 +124,19 @@ export default function TeamsPage({ params }: TeamsPageProps) {
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="space-y-1">
-        <h2 className={`${display.className} text-3xl font-semibold`}>{t("league", "teams")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {t("league", "teamsDescription")} · {formatSeasonLabel(game.seasonYear)}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-xs tracking-widest text-muted-foreground uppercase">
+            {t("dashboard", "league")} / {t("league", "teams")}
+          </p>
+          <h2 className={`${display.className} text-[34px] leading-none font-semibold uppercase`}>
+            {t("league", "teams")}
+          </h2>
+          <p className="pt-1 text-sm text-muted-foreground">{t("league", "teamsDescription")}</p>
+        </div>
+        <span className="rounded-sm border border-border px-3 py-1.5 text-xs tracking-wide text-muted-foreground tabular-nums">
+          {formatSeasonLabel(game.seasonYear)} · NBA
+        </span>
       </header>
       <Card className="min-w-0 gap-0 overflow-hidden rounded-md border-border/60 py-0 shadow-none [&_[data-slot=table-container]]:rounded-none [&_[data-slot=table-container]]:border-0">
         <search
@@ -227,16 +235,26 @@ export default function TeamsPage({ params }: TeamsPageProps) {
             </p>
           )
         )}
-        <AppTable>
+        <AppTable className="min-w-[1000px] table-fixed">
           <caption className="sr-only">{t("league", "directory")}</caption>
           <AppTableHeader>
             <AppTableRow>
-              <AppTableHead>{t("league", "franchise")}</AppTableHead>
-              <AppTableHead>
+              <AppTableHead className="w-[25%]">{t("league", "franchise")}</AppTableHead>
+              <AppTableHead className="w-[17%]">
                 {t("league", "conference")} / {t("league", "division")}
               </AppTableHead>
-              <AppTableHead className="text-right">{t("league", "winsLosses")}</AppTableHead>
-              <AppTableHead className="text-right">{t("league", "action")}</AppTableHead>
+              <AppTableHead className="w-[7%] text-right">{t("league", "winsLosses")}</AppTableHead>
+              <AppTableHead className="w-[8%] text-right">
+                {t("league", "directoryRank")}
+              </AppTableHead>
+              <AppTableHead className="w-[6%] text-right">
+                {t("league", "directoryOverall")}
+              </AppTableHead>
+              <AppTableHead className="w-[10%] text-right">
+                {t("league", "directoryPayroll")}
+              </AppTableHead>
+              <AppTableHead className="w-[13%]">{t("league", "directoryDirection")}</AppTableHead>
+              <AppTableHead className="w-[14%] text-right">{t("league", "action")}</AppTableHead>
             </AppTableRow>
           </AppTableHeader>
           <tbody>
@@ -244,24 +262,37 @@ export default function TeamsPage({ params }: TeamsPageProps) {
               const record = records.get(team.id);
               const selected = team.id === selectedTeam?.id;
               return (
-                <AppTableRow key={team.id} data-state={selected ? "selected" : undefined}>
-                  <AppTableCell className="min-w-52">
+                <AppTableRow
+                  key={team.id}
+                  data-state={selected ? "selected" : undefined}
+                  className={
+                    team.id === game.selectedTeamId
+                      ? "bg-primary/10 [&>td:first-child]:border-l-2 [&>td:first-child]:border-l-primary"
+                      : undefined
+                  }
+                >
+                  <AppTableCell className="py-3">
                     <div className="flex items-center gap-3">
                       {team.logoUrl ? (
                         <Image
                           src={team.logoUrl}
                           alt=""
-                          width={40}
-                          height={40}
-                          className="size-10 shrink-0 object-contain"
+                          width={30}
+                          height={30}
+                          className="size-[30px] shrink-0 object-contain"
                         />
                       ) : (
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-semibold">
+                        <span className="flex size-[30px] shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-semibold">
                           {team.abbreviation}
                         </span>
                       )}
                       <div className="space-y-1">
-                        <p className="font-semibold">{team.name}</p>
+                        <Link
+                          href={franchiseHref(gameId, team.id, searchParams.toString())}
+                          className="font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          {team.name}
+                        </Link>
                         <div className="flex flex-wrap gap-1">
                           {team.id === game.selectedTeamId && (
                             <Badge variant="outline" className="rounded-sm">
@@ -298,8 +329,26 @@ export default function TeamsPage({ params }: TeamsPageProps) {
                       "—"
                     )}
                   </AppTableCell>
+                  {["rank", "overall", "payroll", "direction"].map((metric) => (
+                    <AppTableCell
+                      key={metric}
+                      className={
+                        metric === "direction"
+                          ? "text-muted-foreground"
+                          : "text-right text-muted-foreground"
+                      }
+                    >
+                      <span aria-hidden="true">—</span>
+                      <span className="sr-only">{t("league", "directoryUnavailable")}</span>
+                    </AppTableCell>
+                  ))}
                   <AppTableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm" className="rounded-sm">
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto max-w-full whitespace-normal rounded-sm text-right"
+                    >
                       <Link
                         href={franchiseHref(gameId, team.id, searchParams.toString())}
                         aria-label={`${t("league", "viewFranchise")} · ${team.name}`}
@@ -313,13 +362,16 @@ export default function TeamsPage({ params }: TeamsPageProps) {
             })}
             {!filteredTeams.length && (
               <AppTableRow>
-                <AppTableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                <AppTableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                   {teams.length ? t("dashboard", "noMatchingTeams") : t("league", "empty")}
                 </AppTableCell>
               </AppTableRow>
             )}
           </tbody>
         </AppTable>
+        <p className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+          {t("league", "directoryLimitations")}
+        </p>
       </Card>
     </div>
   );

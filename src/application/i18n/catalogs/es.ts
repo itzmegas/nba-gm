@@ -120,6 +120,13 @@ export const es: Messages = {
     comingSoon: "Próximamente",
     teamsDescription: "Explora las franquicias de tu partida y abre sus perfiles organizativos.",
     directory: "Directorio de franquicias",
+    directoryRank: "Pos. conf.",
+    directoryOverall: "OVR",
+    directoryPayroll: "Masa salarial",
+    directoryDirection: "Rumbo",
+    directoryUnavailable: "No disponible en este directorio",
+    directoryLimitations:
+      "Las posiciones de conferencia, evaluaciones de equipo, masa salarial y rumbo competitivo no están disponibles en este directorio. Abre una franquicia para consultar sus datos disponibles.",
     conference: "Conferencia",
     allConferences: "Todas las conferencias",
     division: "División",

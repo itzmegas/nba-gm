@@ -149,6 +149,7 @@ function row(name: string) {
 function names() {
   return within(directory())
     .queryAllByRole("link")
+    .filter((link) => link.hasAttribute("aria-label"))
     .map((link) => link.getAttribute("aria-label")?.split(" · ")[1]);
 }
 function select(label: string, option: string) {
@@ -183,6 +184,34 @@ afterEach(() => {
 });
 
 describe("Teams directory", () => {
+  it("keeps the export's eight-column composition without fabricated evaluations or finances", () => {
+    view();
+    expect(
+      within(directory())
+        .getAllByRole("columnheader")
+        .map((head) => head.textContent)
+    ).toEqual([
+      "Franchise",
+      "Conference / Division",
+      "W–L",
+      "Conf. rank",
+      "OVR",
+      "Payroll",
+      "Direction",
+      "Action",
+    ]);
+    const boston = row("Boston Celtics");
+    expect(within(boston).getAllByText("Not available in this directory")).toHaveLength(4);
+    expect(boston.className).toContain("bg-primary/10");
+    expect(within(boston).getByRole("link", { name: "Boston Celtics" }).getAttribute("href")).toBe(
+      within(boston)
+        .getByRole("link", { name: "View Franchise · Boston Celtics" })
+        .getAttribute("href")
+    );
+    expect(screen.getByText(/Conference rankings, team evaluations/)).toBeTruthy();
+    expect(screen.getByText("31-32 · NBA")).toBeTruthy();
+  });
+
   it("uses real metadata and W–L, leaving missing records unavailable rather than 0–0", () => {
     view();
     expect(mocks.game).toHaveBeenCalledWith("career");

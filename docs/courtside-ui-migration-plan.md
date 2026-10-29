@@ -4,15 +4,17 @@
 
 **Decisión vigente — 2026-10-29:** adoptar íntegramente la presentación de `docs/NBA-Franchise-Management-Redesign/`, con las excepciones de la sección 0. Se abandona el enfoque híbrido: el objetivo es la identidad de un juego de gestión, no el aspecto predeterminado de shadcn con otra tipografía o paleta.
 
-**Alcance de la entrega actual:** Player Profile (fase 4B) aprobado visualmente; el usuario autorizó su commit con tests y documentación. Se conservan rutas, contexto de franquicia, datos reales y el resto de las pantallas. Sin cambios en shell/layout, Dashboard, Roster, backend ni dependencias.
+**Alcance de la entrega actual:** directorio Teams (fase 5A), realineado con el export completo sobre sus datos existentes y aprobado visualmente. El usuario solicitó su commit y continuar. Sin cambios en ficha de franquicia, Standings, shell/layout, Dashboard, Roster, backend ni dependencias en esta unidad.
 
 **Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings mantienen sus alcances funcionales acordados y su revisión visual pendiente.
 
-**Siguiente paso:** continuar con Teams (fase 5A), tras la aprobación visual de Player Profile y la solicitud de avanzar a la siguiente unidad. No volver a negociar un híbrido por pantalla. La aprobación no acredita las comprobaciones de navegador, persistencia autenticada ni build que siguen pendientes.
+**Siguiente paso:** continuar con la ficha de franquicia, tras la aprobación de Teams y la solicitud de avanzar. No volver a negociar un híbrido por pantalla. La aprobación no acredita comprobaciones de navegador, persistencia autenticada ni build.
 
 La sección 0 prevalece sobre recomendaciones y aprobaciones anteriores. Las secciones 1–8 orientan la migración; la sección 9 y las entregas anteriores de la sección 10 conservan evidencia histórica, no acreditan la nueva implementación. Adoptar todo el diseño no autoriza implementar todas sus funcionalidades.
 
 ## 0. Acuerdos vigentes y forma de trabajo
+
+**Aprobación posterior — Teams completo (2026-10-29):** el usuario aprobó la entrega («Bien»), solicitó commitear y continuar. Se cierra la revisión visual del directorio, sin acreditar las comprobaciones técnicas pendientes. La siguiente unidad es la ficha de franquicia; no se solicitó push.
 
 ### Dirección completa y excepciones
 
@@ -39,6 +41,12 @@ shadcn/Radix pueden seguir como infraestructura de componentes y accesibilidad: 
 5. **Revisar y aprobar:** mostrar el resultado y ajustar antes de pasar a la siguiente unidad. Una aprobación histórica del híbrido no acredita esta realineación.
 
 ### Historial de autorizaciones funcionales y entregas híbridas
+
+**Unidad implementada — Teams, directorio completo (fase 5A, 2026-10-29), pendiente de aprobación visual:** se inspeccionaron `teams.html`, `renderTeams` en `franchise.js` y `franchise.css`, no la cuadrícula alternativa de `league.js`. Se adopta encabezado editorial con contexto y temporada, panel único con filtros, tabla densa de ocho columnas con proporciones del export, escudos de 30 px, identidad enlazada y acento de franquicia propia. Se mantienen indicadores separados de equipo propio/seleccionado. La tabla tiene ancho mínimo local para conservar legibilidad; los filtros se apilan en móvil. Se emplean tokens semánticos y traducciones EN/ES, sin CSS global ni modificaciones del layout compartido.
+
+**Datos y límites de Teams:** se conservan consultas, búsqueda por ciudad/nombre/abreviatura, filtros URL `q`/`conference`/`division`/`sort`/`teamId`, orden por porcentaje, carga/error/reintento de registros y ausencia explícita de resultados. Tanto nombre como acción abren `franchiseHref` preservando contexto repetido y ajeno al directorio. Las columnas de posición de conferencia, OVR, masa salarial y rumbo quedan explícitamente no disponibles en este directorio, con explicación accesible y nota visible; no se agregan consultas por equipo, rankings nuevos, evaluaciones ni fixtures para completarlas. La ficha existente conserva sus datos disponibles.
+
+**Verificación de Teams:** `bun biome check`, `bun run typecheck` y `git diff --check` pasan. Suite completa con `bun run test --maxWorkers=2`: **1059 tests en 135 archivos**, incluidos los **22 tests** de Teams y helpers de navegación. La primera ejecución enfocada detectó únicamente una expectativa nueva con formato de temporada incorrecto; se corrigió al formato real del helper existente. Regresiones verifican composición de ocho columnas, datos no disponibles, identidad enlazada, temporada real, filtros, errores y navegación. Happy DOM conserva su advertencia sobre el elemento HTML nativo `search`; no falla tests. No se verificaron capturas, geometría de navegador, contraste completo, zoom nativo, persistencia autenticada ni build productivo. Pendiente aprobación humana; no avanzar a ficha de franquicia ni Standings.
 
 **Aprobación posterior — Player Profile completo (2026-10-29):** el usuario aprobó visualmente el perfil («Aprobado») y solicitó commitear y continuar con la siguiente unidad. Cierra la revisión visual de la fase 4B, sin convertir en realizadas las verificaciones técnicas pendientes documentadas debajo. El commit incluye presentación, traducciones, tests y este registro; no se solicitó push.
 
@@ -475,7 +483,7 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 
 ### Fase 4B — Player Profile
 
-**Estado actual:** realineación implementada; pendiente de revisión visual humana. Resultados técnicos y límites en la sección 0. No habilita otras pantallas.
+**Estado actual:** realineación implementada y aprobada visualmente el 2026-10-29; commit previo a Teams. Resultados técnicos y límites en la sección 0.
 
 - **Archivos:** página de Player Profile y componentes de identidad reutilizados.
 - **Trabajo:** hero, biografía y contrato.
@@ -484,6 +492,8 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 - **Aceptación/verificación:** conservar navegación de regreso y `leagueTeamId`. Conectar estadísticas existentes sería una subunidad funcional explícita; scouting no se inventa.
 
 ### Fase 5 — League existente: Teams → Standings → Players
+
+**Estado actual 5A:** directorio Teams realineado con el export completo, pendiente de aprobación visual; ficha de franquicia y Standings no modificados en esta unidad. Detalles y verificaciones en la sección 0.
 
 Después de realinear Roster (4A) y Player Profile (4B), dividir en tres entregas con alcance funcional acotado y la presentación completa como referencia común:
 
