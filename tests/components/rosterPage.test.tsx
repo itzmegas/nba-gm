@@ -33,6 +33,7 @@ let players = rosterPlayers;
 let rosterLoading = false;
 let rosterError = false;
 let releaseCharge = 0;
+let financialError = false;
 vi.mock("@/application/hooks/games/useGame", () => ({
   useGame: () => ({
     data: game,
@@ -46,7 +47,7 @@ vi.mock("@/application/hooks/roster/useRoster", () => ({
   useRoster: () => ({ data: players, isLoading: rosterLoading, isError: rosterError }),
 }));
 vi.mock("@/application/hooks/contracts/useTeamContracts", () => ({
-  useTeamContracts: () => ({ data: [{ salaryY1: 160_247_370 }] }),
+  useTeamContracts: () => ({ data: [{ salaryY1: 160_247_370 }], isError: financialError }),
 }));
 vi.mock("@/application/hooks/roster/useReleasePlayer", () => ({
   useReleaseCapCharge: () => ({ data: releaseCharge }),
@@ -82,6 +83,7 @@ afterEach(() => {
   rosterLoading = false;
   rosterError = false;
   releaseCharge = 0;
+  financialError = false;
   game.status = "active";
   game.seasonEraId = "modern";
   game.seasonYear = 2026;
@@ -110,7 +112,8 @@ it("shows 15 standard slots plus two-way players separately and uses the market'
     );
   });
   await screen.findByText("Standard roster");
-  expect(screen.getByText(/^Milwaukee Bucks —/)).toBeTruthy();
+  expect(screen.getByText("Milwaukee Bucks")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Roster management" })).toBeTruthy();
   expect(screen.getByText("15")).toBeTruthy();
   expect(screen.getByText("2 two-way players (separate roster slots)")).toBeTruthy();
   expect(screen.getByText("17 roster entries")).toBeTruthy();
@@ -257,7 +260,7 @@ it.each([
 it("retains loading, error and empty roster states", async () => {
   rosterLoading = true;
   await showRoster();
-  expect(screen.queryByRole("heading", { name: "Roster" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Roster management" })).toBeNull();
   cleanup();
   rosterLoading = false;
   rosterError = true;
@@ -267,6 +270,57 @@ it("retains loading, error and empty roster states", async () => {
   expect(screen.queryByTestId("roster-table")).toBeNull();
   cleanup();
   rosterError = false;
+  await showRoster();
+  expect(screen.getByText("No players on the roster.")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Player" })).toBeNull();
+});
+
+it("filters the table without falsifying roster totals or losing the inspector selection", async () => {
+  await showRoster();
+  fireEvent.change(screen.getByRole("searchbox", { name: "Search players" }), {
+    target: { value: "Player 16" },
+  });
+  expect(screen.getByText("1 roster entries")).toBeTruthy();
+  expect(screen.getByText("15")).toBeTruthy();
+  expect(
+    within(screen.getByRole("region", { name: "Player" })).getByRole("heading", {
+      name: "Player 0",
+    })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Expiring" }));
+  expect(screen.getByText("0 roster entries")).toBeTruthy();
+  expect(screen.getByText(/No players match/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "All players" }));
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Pos" }), { target: { value: "G" } });
+  expect(screen.getByText("17 roster entries")).toBeTruthy();
+});
+
+it("cycles the selected player and wraps without changing the table or navigation context", async () => {
+  await showRoster();
+  fireEvent.click(screen.getByRole("button", { name: "Select previous player" }));
+  const inspector = within(screen.getByRole("region", { name: "Player" }));
+  expect(inspector.getByRole("heading", { name: "Player 16" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Select next player" }));
+  expect(inspector.getByRole("heading", { name: "Player 0" })).toBeTruthy();
+});
+
+it("does not show healthy finances from stale contracts after a query error", async () => {
+  financialError = true;
+  await showRoster();
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(screen.queryByText("$160.2M")).toBeNull();
+  expect(screen.queryByText("Below tax")).toBeNull();
+  expect(screen.queryByText("Available")).toBeNull();
+});
+
+it("keeps inactive excluded players out of both roster counts and the inspector", async () => {
+  players = [
+    {
+      ...rosterPlayers[0],
+      gameContract: { resolutionStatus: "inactive-excluded" },
+    } as RosterPlayer,
+  ];
   await showRoster();
   expect(screen.getByText("No players on the roster.")).toBeTruthy();
   expect(screen.queryByRole("region", { name: "Player" })).toBeNull();

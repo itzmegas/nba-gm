@@ -94,7 +94,7 @@ it.each([
   expect(salaryHeader.classList.contains("whitespace-nowrap")).toBe(true);
   expect(salaryHeader.nextElementSibling?.textContent).toBe("OVR");
   expect(salaryHeader.nextElementSibling?.classList.contains("bg-primary/10")).toBe(true);
-  expect(screen.getByText("94").closest("td")?.classList.contains("bg-primary/10")).toBe(true);
+  expect(screen.getByText("94").classList.contains("bg-primary/10")).toBe(true);
   expect(screen.queryByText(copy.guarantee)).toBeNull();
   expect(screen.queryByText(copy.guaranteed)).toBeNull();
   expect(screen.queryByText(copy.nonGuaranteed)).toBeNull();
