@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarDays, Play } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { Fragment } from "react";
@@ -25,13 +25,25 @@ export function NextGameWidget({ game }: { game: Game }) {
   const { data: teams } = useTeams();
   const advance = useAdvanceRange();
   const postseason = usePostseason(game.id);
+  const seasonComplete =
+    !postseason.isPending &&
+    !postseason.isError &&
+    !!postseason.data &&
+    hasPostseasonChampion(postseason.data);
   const active = useBatchSimulationStore((state) => state.isActive);
   const mode = useBatchSimulationStore((state) => state.mode);
   const fixture = next.data;
   const home = teams?.find((team) => team.id === fixture?.homeTeamId);
   const away = teams?.find((team) => team.id === fixture?.awayTeamId);
   const simulate = () => {
-    if (!fixture || active || advance.isPending || game.status !== GAME_STATUS.ACTIVE) return;
+    if (
+      !fixture ||
+      active ||
+      advance.isPending ||
+      seasonComplete ||
+      game.status !== GAME_STATUS.ACTIVE
+    )
+      return;
     const days = Math.round(
       (Date.parse(`${fixture.date}T00:00:00Z`) - game.simulationDate.getTime()) / 86_400_000
     );
@@ -49,9 +61,11 @@ export function NextGameWidget({ game }: { game: Game }) {
   return (
     <Card className="min-w-0 gap-4 overflow-hidden rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <CardTitle className={`${display.className} flex items-center gap-2 text-lg font-semibold`}>
-          <CalendarDays className="size-4 text-primary" />
-          {t("dashboard", "nextGame")}
+        <CardTitle className="text-base font-semibold">
+          {t(
+            "dashboard",
+            !next.isPending && !next.isError && !fixture ? "nextChapter" : "nextGame"
+          )}
         </CardTitle>
         <Button asChild variant="ghost" size="sm" className="rounded-sm">
           <Link href={`/games/${game.id}/dashboard/schedule`}>
@@ -70,9 +84,16 @@ export function NextGameWidget({ game }: { game: Game }) {
             {t("dashboard", "unableToLoadGame")}
           </p>
         ) : !fixture ? (
-          <div className="space-y-3 py-2">
-            <p className="font-semibold">{t("dashboard", "noNextGame")}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
+          <div className="space-y-4 py-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {t("dashboard", "noNextGame")}
+            </p>
+            <h3
+              className={`${display.className} max-w-xs text-4xl font-semibold uppercase leading-tight`}
+            >
+              {t("dashboard", "reviewYourFranchise")}
+            </h3>
+            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
               {t("dashboard", "noUpcomingFixtures")}
             </p>
             {!postseason.isPending &&
@@ -139,7 +160,12 @@ export function NextGameWidget({ game }: { game: Game }) {
               <Button
                 className="min-h-11 w-full rounded-sm sm:w-auto sm:min-w-64"
                 onClick={simulate}
-                disabled={active || advance.isPending || game.status !== GAME_STATUS.ACTIVE}
+                disabled={
+                  active ||
+                  advance.isPending ||
+                  seasonComplete ||
+                  game.status !== GAME_STATUS.ACTIVE
+                }
               >
                 <Play className="size-4" />
                 {active && mode === BATCH_SIMULATION_MODE.NEXT_GAME

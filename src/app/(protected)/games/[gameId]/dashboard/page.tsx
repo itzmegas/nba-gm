@@ -4,9 +4,10 @@ import { use } from "react";
 import { body, display } from "@/app/ui-preview/fonts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useTeams } from "@/application/hooks/teams/useTeams";
-import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { useT } from "@/application/providers/I18nProvider";
 import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 import { CapSpaceWidget } from "@/components/dashboard/cap-space-widget";
+import { FranchiseOverview } from "@/components/dashboard/franchise-overview";
 import { NextGameWidget } from "@/components/dashboard/next-game-widget";
 import { StandingsWidget } from "@/components/dashboard/standings-widget";
 import { formatSeasonLabel } from "@/domain/entities/Season";
@@ -20,9 +21,7 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
   const gameQuery = useGame(gameId);
   const teamsQuery = useTeams();
   const t = useT();
-  const locale = useLocale();
   const game = gameQuery.data;
-  const team = teamsQuery.data?.find((candidate) => candidate.id === game?.selectedTeamId);
 
   if (gameQuery.isError || teamsQuery.isError) {
     return (
@@ -41,35 +40,28 @@ export default function GameDashboardPage({ params }: GameDashboardPageProps) {
 
   return (
     <div className={`${body.className} space-y-5 animate-in fade-in duration-500`}>
-      <div className="flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-end">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {t("dashboard", "dashboard")} · {t("dashboard", "season")}{" "}
-            {formatSeasonLabel(game.seasonYear)}
+            {t("dashboard", "myFranchise")} / {t("dashboard", "overview")}
           </p>
-          <h1 className={`${display.className} text-3xl font-semibold tracking-tight sm:text-4xl`}>
-            {team?.name ?? t("dashboard", "teamFallback")}
+          <h1
+            className={`${display.className} text-3xl font-semibold uppercase tracking-tight sm:text-4xl`}
+          >
+            {t("dashboard", "franchiseDashboard")}
           </h1>
+          <p className="text-sm text-muted-foreground">{t("dashboard", "dashboardDescription")}</p>
         </div>
-        <div className="text-sm sm:text-right">
-          <p className="text-xs text-muted-foreground">{t("dashboard", "simulationDate")}</p>
-          <p className="mt-1 font-semibold">
-            {new Intl.DateTimeFormat(locale === "es" ? "es-AR" : "en-US", {
-              dateStyle: "long",
-              timeZone: "UTC",
-            }).format(game.simulationDate)}
-          </p>
+        <div className="w-fit rounded-sm border border-border px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+          {formatSeasonLabel(game.seasonYear)} · {t("dashboard", "season")}
         </div>
       </div>
-      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
-        <div className="min-w-0 space-y-4">
-          <NextGameWidget game={game} />
-          <CapSpaceWidget gameId={gameId} teamId={game.selectedTeamId} />
-        </div>
-        <div className="min-w-0 space-y-4">
-          <StandingsWidget gameId={gameId} teamId={game.selectedTeamId} />
-          <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
-        </div>
+      <FranchiseOverview game={game} teams={teamsQuery.data ?? []} />
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <NextGameWidget game={game} />
+        <CapSpaceWidget gameId={gameId} teamId={game.selectedTeamId} />
+        <StandingsWidget gameId={gameId} teamId={game.selectedTeamId} />
+        <AlertsWidget gameId={gameId} teamId={game.selectedTeamId} seasonYear={game.seasonYear} />
       </div>
     </div>
   );

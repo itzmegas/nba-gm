@@ -173,7 +173,8 @@ describe("game and dashboard internationalization", () => {
     expect(english).toContain("Simulate next game");
     expect(spanish).toContain("Los Angeles Lakers");
     expect(spanish).toContain("Simular próximo partido");
-    expect(spanish).toContain("Fecha de simulación");
+    expect(spanish).toContain("Panel de franquicia");
+    expect(spanish).toContain("Temporada de un vistazo");
     expect(spanish).not.toContain("Simulate next game");
     expect(english).not.toContain("Joel Embiid");
     expect(english).not.toContain("Zach LaVine");

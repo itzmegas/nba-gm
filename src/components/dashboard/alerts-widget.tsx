@@ -1,8 +1,7 @@
 "use client";
 
-import { AlertCircle, ArrowUpRight, Bandage, CheckCircle, Clock } from "lucide-react";
+import { ArrowUpRight, Bandage, CheckCircle, Clock } from "lucide-react";
 import Link from "next/link";
-import { display } from "@/app/ui-preview/fonts";
 import { usePlayerStates } from "@/application/hooks/player-states/usePlayerStates";
 import { type RosterPlayer, useRoster } from "@/application/hooks/roster/useRoster";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
@@ -59,10 +58,7 @@ export function AlertsWidget({ gameId, teamId, seasonYear }: AlertsWidgetProps) 
   return (
     <Card className="min-w-0 gap-4 rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <CardTitle className={`${display.className} flex items-center gap-2 text-lg font-semibold`}>
-          <AlertCircle className="size-4 text-primary" />
-          {t("dashboard", "rosterAlerts")}
-        </CardTitle>
+        <CardTitle className="text-base font-semibold">{t("dashboard", "priorities")}</CardTitle>
         {!roster.isPending &&
           !states.isPending &&
           !roster.isError &&

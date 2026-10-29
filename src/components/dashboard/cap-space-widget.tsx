@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, DollarSign } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { display } from "@/app/ui-preview/fonts";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
@@ -46,10 +46,7 @@ export function CapSpaceWidget({ gameId, teamId, rosterHref }: CapSpaceWidgetPro
   return (
     <Card className="min-w-0 gap-4 rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <CardTitle className={`${display.className} flex items-center gap-2 text-lg font-semibold`}>
-          <DollarSign className="size-4 text-primary" />
-          {t("dashboard", "finances")}
-        </CardTitle>
+        <CardTitle className="text-base font-semibold">{t("dashboard", "finances")}</CardTitle>
         <Button asChild variant="ghost" size="sm" className="rounded-sm">
           <Link href={rosterHref ?? `/games/${gameId}/dashboard/roster`}>
             {t("dashboard", "roster")}
@@ -121,7 +118,7 @@ export function CapSpaceWidget({ gameId, teamId, rosterHref }: CapSpaceWidgetPro
                 )}
               </p>
             </div>
-            <dl className="grid grid-cols-2 gap-4 border-t border-border/60 pt-4 xl:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-4 border-t border-border/60 pt-4">
               {limits.map((limit) => (
                 <div key={limit.label}>
                   <dt className="text-xs text-muted-foreground">{limit.label}</dt>
