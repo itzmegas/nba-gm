@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import GamePlayerDetailPage from "@/app/(protected)/games/[gameId]/dashboard/player/[id]/page";
 import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts";
+import type { Locale } from "@/application/i18n/types";
+import { I18nProvider } from "@/application/providers/I18nProvider";
 import type { Contract } from "@/domain/entities/Contract";
 import type { Player } from "@/domain/entities/Player";
 
@@ -75,12 +77,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function showProfile() {
+async function showProfile(locale: Locale = "es") {
   await act(async () => {
     render(
-      <Suspense fallback="Loading">
-        <GamePlayerDetailPage params={Promise.resolve({ gameId: "game", id: "player" })} />
-      </Suspense>
+      <I18nProvider locale={locale}>
+        <Suspense fallback="Loading">
+          <GamePlayerDetailPage params={Promise.resolve({ gameId: "game", id: "player" })} />
+        </Suspense>
+      </I18nProvider>
     );
   });
 }
@@ -106,6 +110,33 @@ it("shows real identity, remaining contract years and salaries with the current 
   expect(useContractsByPlayer).toHaveBeenCalledWith("game", "player");
   expect(document.querySelector("a button")).toBeNull();
   expect(document.documentElement.dataset.uiPreview).toBeUndefined();
+});
+
+it("uses accessible section tabs without losing the salary schedule when returning", async () => {
+  await showProfile();
+  const biography = screen.getByRole("tab", { name: "Biografía" });
+  fireEvent.mouseDown(biography, { button: 0, ctrlKey: false });
+  fireEvent.click(biography);
+  expect(biography.getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tabpanel").textContent).toContain("Dorsal0");
+  expect(screen.queryByRole("table")).toBeNull();
+  const details = screen.getByRole("tab", { name: "Detalles del Contrato" });
+  fireEvent.mouseDown(details, { button: 0, ctrlKey: false });
+  fireEvent.click(details);
+  expect(screen.getByRole("table", { name: "Salarios por temporada" })).toBeTruthy();
+  expect(screen.queryByText("POT")).toBeNull();
+});
+
+it("translates the profile, return link, salary schedule and unavailable notice into English", async () => {
+  await showProfile("en");
+  expect(screen.getByRole("link", { name: "Back to roster" }).getAttribute("href")).toBe(
+    "/games/game/dashboard/roster"
+  );
+  expect(screen.getByRole("tab", { name: "Biography" })).toBeTruthy();
+  expect(screen.getByRole("table", { name: "Salaries by season" })).toBeTruthy();
+  expect(screen.getByText("Current")).toBeTruthy();
+  expect(screen.getByText("Statistics and scouting are not available in this view.")).toBeTruthy();
+  expect(screen.queryByText("Actual")).toBeNull();
 });
 
 it.each([

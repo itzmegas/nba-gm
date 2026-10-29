@@ -4,11 +4,11 @@
 
 **Decisión vigente — 2026-10-29:** adoptar íntegramente la presentación de `docs/NBA-Franchise-Management-Redesign/`, con las excepciones de la sección 0. Se abandona el enfoque híbrido: el objetivo es la identidad de un juego de gestión, no el aspecto predeterminado de shadcn con otra tipografía o paleta.
 
-**Alcance de la entrega actual:** realineación de Roster (fase 4A) sobre el shell y Dashboard aprobados, sin modificar shell/layout, Dashboard, backend, dependencias ni crear commits. Se conservan League, Teams, perfiles, Standings y contención del scroll. Los cambios pendientes del Dashboard permanecen intactos.
+**Alcance de la entrega actual:** Player Profile (fase 4B) aprobado visualmente; el usuario autorizó su commit con tests y documentación. Se conservan rutas, contexto de franquicia, datos reales y el resto de las pantallas. Sin cambios en shell/layout, Dashboard, Roster, backend ni dependencias.
 
 **Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings mantienen sus alcances funcionales acordados y su revisión visual pendiente.
 
-**Siguiente paso:** revisar visualmente Roster realineado antes de continuar con Player Profile (fase 4B). El usuario aprobó visualmente el Dashboard completo el 2026-10-29 («Se ve bien, aprobemosla y pasamos a la siguiente»), después de la aprobación de base visual y shell. Esa aprobación autoriza esta unidad de Roster, no acredita su resultado ni habilita avanzar automáticamente. No volver a negociar un híbrido por pantalla.
+**Siguiente paso:** continuar con Teams (fase 5A), tras la aprobación visual de Player Profile y la solicitud de avanzar a la siguiente unidad. No volver a negociar un híbrido por pantalla. La aprobación no acredita las comprobaciones de navegador, persistencia autenticada ni build que siguen pendientes.
 
 La sección 0 prevalece sobre recomendaciones y aprobaciones anteriores. Las secciones 1–8 orientan la migración; la sección 9 y las entregas anteriores de la sección 10 conservan evidencia histórica, no acreditan la nueva implementación. Adoptar todo el diseño no autoriza implementar todas sus funcionalidades.
 
@@ -39,6 +39,16 @@ shadcn/Radix pueden seguir como infraestructura de componentes y accesibilidad: 
 5. **Revisar y aprobar:** mostrar el resultado y ajustar antes de pasar a la siguiente unidad. Una aprobación histórica del híbrido no acredita esta realineación.
 
 ### Historial de autorizaciones funcionales y entregas híbridas
+
+**Aprobación posterior — Player Profile completo (2026-10-29):** el usuario aprobó visualmente el perfil («Aprobado») y solicitó commitear y continuar con la siguiente unidad. Cierra la revisión visual de la fase 4B, sin convertir en realizadas las verificaciones técnicas pendientes documentadas debajo. El commit incluye presentación, traducciones, tests y este registro; no se solicitó push.
+
+**Aprobación posterior — Roster completo (2026-10-29):** el usuario aprobó visualmente Roster y autorizó continuar únicamente con Player Profile. Supera el bloqueo histórico de avance registrado en la entrega de Roster; no convierte en realizadas sus verificaciones pendientes.
+
+**Unidad implementada — Player Profile completo sobre datos existentes (2026-10-29), pendiente de aprobación visual:** se inspeccionaron `players.html`, `players.css` y `pdProfile` en `players.js`. Se adopta encabezado editorial, toolbar de regreso/solo lectura, hero tintado con retrato de 190 px en escritorio, título condensado de 43 px, metadatos reales y plazo contractual. Debajo se reproducen navegación segmentada y cuadrícula 2:1 de panel principal/aviso secundario, apilada antes de perder legibilidad. Las pestañas Biografía y Contrato usan Radix con foco y teclado; Contrato abre por defecto para conservar el acceso inicial a salarios. El hero conserva dorsal cero, posición, altura, peso e inactividad; la biografía los presenta también como datos etiquetados.
+
+**Conservación y diferencias funcionales:** mismas consultas, contrato real, salarios conocidos (incluido cero), límite de fin contractual, temporada actual, garantías desconocidas y opciones. Sin POT, ratings, estadísticas nuevas, scouting, comparación, shortlist, notas locales ni acciones ficticias. No se incorporan pestañas vacías para esas capacidades. El aviso secundario conserva explícitamente su indisponibilidad. Los enlaces mantienen `leagueTeamId`, filtros repetidos y `leagueReturnQuery` de la franquicia validada; el regreso inválido conserva Roster como destino. Se agregan mensajes EN/ES y se emplean tokens semánticos existentes para claro/oscuro/franquicia, sin CSS global ni cambios en el shell.
+
+**Verificación de Player Profile:** `bun biome check`, `bun run typecheck` y `git diff --check` pasan; prueba enfocada: **22 tests**. La suite completa pasa con `bun run test --maxWorkers=2`: **1058 tests en 135 archivos**, incluidos consumidores de franquicia/Roster y navegación. La primera ejecución con paralelismo predeterminado tuvo 16 timeouts ajenos al perfil; la repetición limitada pasa sin cambiar tests ni configuración. Nuevas regresiones: cambio accesible de pestañas y recuperación de salarios, ausencia de POT y mensajes EN. No se verificaron capturas ni geometría propia del perfil en navegador, contraste completo, zoom nativo, persistencia autenticada ni build productivo. Pendiente la aprobación visual humana; no avanzar a otra pantalla.
 
 **Unidad implementada — Roster completo sobre datos existentes (2026-10-29), pendiente de aprobación visual:** se compararon `index.html`, `app.js`, `styles.css` y la composición dedicada `roster.html`/`roster.css`/`roster.js`. Se adopta la segunda: encabezado editorial, franja única de identidad y finanzas, panel de tabla densa con controles y un inspector de 296 px en escritorio, apilado en móvil. El inspector incorpora retrato destacado, dorsal decorativo, navegación anterior/siguiente, biografía, clasificación/procedencia contractual, OVR, tres atributos existentes y contrato; mantiene el enlace al perfil y el foco al seleccionar desde pantallas pequeñas.
 
@@ -454,7 +464,7 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 
 ### Fase 4A — Roster
 
-**Estado actual:** realineación completa entregada; controles técnicos y comparación de componentes en Chrome realizados, aprobación visual humana pendiente. Detalle y límites en la unidad Roster de la sección 0. No avanzar a 4B sin esa aprobación.
+**Estado actual:** realineación completa entregada y aprobación visual humana recibida el 2026-10-29; Player Profile autorizado como siguiente unidad. Detalle y límites en la sección 0.
 
 - **Archivos:** página de Roster, `src/components/roster/` y `src/components/players/player-headshot.tsx`.
 - **Trabajo:** tabla, resumen, selección e inspector.
@@ -464,6 +474,8 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 - **Aceptación/verificación:** misma composición de plantilla, salarios, ordenamiento y restricciones; conservar valores desconocidos/estimados.
 
 ### Fase 4B — Player Profile
+
+**Estado actual:** realineación implementada; pendiente de revisión visual humana. Resultados técnicos y límites en la sección 0. No habilita otras pantallas.
 
 - **Archivos:** página de Player Profile y componentes de identidad reutilizados.
 - **Trabajo:** hero, biografía y contrato.
