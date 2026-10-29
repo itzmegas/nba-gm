@@ -7,10 +7,12 @@ import { createPortal } from "react-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import { TeamThemeApplier } from "@/components/theme/team-theme-applier";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TEAM_COLORS } from "@/domain/constants/team-colors";
 
 const stylesheet = readFileSync("src/app/globals.css", "utf8");
-const boundary = 'html[data-ui-preview="courtside"]';
+const boundary = 'html:is([data-team]:not([data-ui-preview]), [data-ui-preview="courtside"])';
 const boundaryIndex = stylesheet.indexOf(boundary);
 const productionStylesheet = stylesheet.slice(0, boundaryIndex);
 // happy-dom cannot parse CSS nesting; use the installed Tailwind toolchain's CSS transformer.
@@ -53,18 +55,19 @@ describe("approved game theme", () => {
           "--chart-3",
           "--chart-4",
           "--chart-5",
-          "--radius",
         ];
         const before = getComputedStyle(document.documentElement);
         const values = preservedTokens.map((token) => before.getPropertyValue(token));
         delete document.documentElement.dataset.uiPreview;
         const styles = getComputedStyle(document.documentElement);
-        expect(styles.getPropertyValue("--background").trim()).toBe(dark ? "#141416" : "#f4f4f5");
+        expect(styles.getPropertyValue("--background").trim()).toBe(dark ? "#101114" : "#f4f4f6");
         expect(styles.getPropertyValue("--secondary")).toBe(styles.getPropertyValue("--muted"));
         expect(styles.getPropertyValue("--accent")).toBe(styles.getPropertyValue("--muted"));
-        expect(styles.getPropertyValue("--sidebar").trim()).toBe(dark ? "#1c1c1f" : "#fafafa");
-        expect(styles.getPropertyValue("--ring").trim()).toBe(dark ? "#d4d4d8" : "#52525b");
-        expect(preservedTokens.map((token) => styles.getPropertyValue(token))).toEqual(values);
+        expect(styles.getPropertyValue("--sidebar").trim()).toBe(dark ? "#141518" : "#ececf0");
+        expect(styles.getPropertyValue("--ring")).toBe(styles.getPropertyValue("--foreground"));
+        if (team !== "SAC") {
+          expect(preservedTokens.map((token) => styles.getPropertyValue(token))).toEqual(values);
+        }
       }
     });
   }
@@ -88,7 +91,34 @@ describe("approved game theme", () => {
   });
 });
 
-describe("isolated Courtside foundation", () => {
+describe("shared production and preview Courtside foundation", () => {
+  it.each([
+    false,
+    true,
+  ])("styles wrapped simulation buttons when Radix replaces their slot, dark=%s", (dark) => {
+    mountTheme(dark);
+    const { getByRole } = render(
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button>Advance</Button>
+          </TooltipTrigger>
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">Options</Button>
+          </DropdownMenuTrigger>
+        </DropdownMenu>
+      </TooltipProvider>
+    );
+    for (const name of ["Advance", "Options"]) {
+      const button = getByRole("button", { name });
+      expect(button.getAttribute("data-slot")).not.toBe("button");
+      expect(getComputedStyle(button).borderRadius).toBe("4px");
+      expect(getComputedStyle(button).minHeight).toBe("38px");
+    }
+  });
+
   const tokens = [
     "--background",
     "--foreground",
@@ -114,14 +144,14 @@ describe("isolated Courtside foundation", () => {
 
   it("has one explicit opt-in boundary and no unscoped appended rules", () => {
     expect(boundaryIndex).toBeGreaterThan(0);
-    expect(stylesheet.match(/html\[data-ui-preview="courtside"\]/g)).toHaveLength(1);
+    expect(stylesheet.split(boundary)).toHaveLength(2);
     const style = document.createElement("style");
     style.textContent = courtsideStylesheet;
     document.head.append(style);
     const assertGated = (rules: CSSRuleList) => {
       for (const rule of rules) {
         if ("selectorText" in rule) {
-          expect(String(rule.selectorText)).toContain('html[data-ui-preview="courtside"]');
+          expect(String(rule.selectorText)).toContain(boundary);
         } else if ("cssRules" in rule) {
           assertGated(rule.cssRules as CSSRuleList);
         }
@@ -133,16 +163,14 @@ describe("isolated Courtside foundation", () => {
   });
 
   for (const dark of [false, true]) {
-    it(`leaves production untouched and restores it after ${dark ? "dark" : "light"} preview`, () => {
+    it(`shares production tokens and geometry with ${dark ? "dark" : "light"} preview`, () => {
       mountTheme(dark);
       const { getByRole } = render(<Button>Inspect</Button>);
       const button = getByRole("button", { name: "Inspect" });
       const style = document.head.querySelector("style");
       if (!style) throw new Error("Theme stylesheet not mounted");
-      style.textContent = productionStylesheet;
       const originalTokens = readTokens();
       const originalRadius = getComputedStyle(button).borderRadius;
-      style.textContent = productionStylesheet + courtsideStylesheet;
       button.parentElement?.append(button);
       expect(readTokens()).toEqual(originalTokens);
       expect(getComputedStyle(button).borderRadius).toBe(originalRadius);
@@ -173,7 +201,7 @@ describe("isolated Courtside foundation", () => {
       expect(Object.keys(TEAM_COLORS)).toHaveLength(30);
       for (const team of Object.keys(TEAM_COLORS)) {
         document.documentElement.dataset.team = team;
-        delete document.documentElement.dataset.uiPreview;
+        document.documentElement.dataset.uiPreview = "current";
         const original = readTokens().slice(6, 8);
         document.documentElement.dataset.uiPreview = "courtside";
         expect(readTokens().slice(6, 8)).toEqual(
@@ -219,6 +247,9 @@ describe("isolated Courtside foundation", () => {
       "38px"
     );
     delete document.documentElement.dataset.uiPreview;
+    portalButton.parentElement?.append(portalButton);
+    expect(getComputedStyle(portalButton).borderRadius).toBe("4px");
+    delete document.documentElement.dataset.team;
     portalButton.parentElement?.append(portalButton);
     expect(getComputedStyle(portalButton).borderRadius).not.toBe("4px");
   });

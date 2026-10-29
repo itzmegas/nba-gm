@@ -2,17 +2,59 @@
 
 **Fecha del análisis:** 2026-10-28.
 
-**Estado:** catálogo híbrido, shell real, Dashboard y Roster aprobados por el usuario. Player Profile implementado con alcance visual autorizado; pendiente de prueba y aprobación de su resultado.
+**Decisión vigente — 2026-10-29:** adoptar íntegramente la presentación de `docs/NBA-Franchise-Management-Redesign/`, con las excepciones de la sección 0. Se abandona el enfoque híbrido: el objetivo es la identidad de un juego de gestión, no el aspecto predeterminado de shadcn con otra tipografía o paleta.
 
-**Alcance vigente:** registrar Roster y Player Profile en commits separados sobre `feat/courtside-roster-player-profile`, con sus pruebas y documentación. Player Profile conserva identidad compacta, contrato y salarios por temporada como contenido principal, y regreso a Roster o League. Sin conectar estadísticas/scouting, nuevas reglas, dependencias ni cambios de datos. El usuario realizará el push; no se abre PR.
+**Alcance de esta actualización:** registrar la nueva dirección y ajustar el plan. Sin implementar UI, modificar backend, agregar dependencias, levantar servidores, crear commits ni hacer push. Se conservan los cambios en curso de League, Teams, perfiles, Standings y contención del scroll.
 
-**Decisión:** conservar la estructura y los elementos útiles de la UI actual, incorporando selectivamente la tipografía, superficies, jerarquía y densidad de OpenDesign. La presentación se decide **pantalla por pantalla**: conservar, adaptar o reproducir la del prototipo cuando se apruebe para esa pantalla. Nunca reemplazar reglas ni datos reales por los del export.
+**Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings mantienen sus alcances funcionales acordados y su revisión visual pendiente.
 
-**Siguiente paso:** subir la rama y probar Player Profile desde el otro ordenador antes de acordar Teams. La autorización de implementación no equivale a aprobación del resultado ni sustituye las comprobaciones de navegador pendientes en la sección 10.
+**Siguiente paso:** base visual compartida y shell completo aprobados visualmente por el usuario el 2026-10-29. La próxima sesión comienza con la realineación del Dashboard; esta sesión solo guarda las unidades pendientes en commits. Continuar después con las pantallas existentes antes de ampliar League. Entregar unidades acotadas con comparación contra el export y aprobación del resultado; no volver a negociar un híbrido por pantalla.
 
-El análisis original se realizó sin modificar archivos ni instalar dependencias. Las rutas existentes mencionadas se verificaron en el repositorio. La implementación posterior de la fase 1 incorpora las condiciones de las secciones 6 y 9; sus verificaciones se registran al final de la sección 9. Las decisiones posteriores de esta sección prevalecen sobre las recomendaciones originales; no constituyen aprobación general de todas las pantallas o ampliaciones del roadmap.
+La sección 0 prevalece sobre recomendaciones y aprobaciones anteriores. Las secciones 1–8 orientan la migración; la sección 9 y las entregas anteriores de la sección 10 conservan evidencia histórica, no acreditan la nueva implementación. Adoptar todo el diseño no autoriza implementar todas sus funcionalidades.
 
 ## 0. Acuerdos vigentes y forma de trabajo
+
+### Dirección completa y excepciones
+
+La referencia visual es el export original, no el catálogo híbrido ni la UI actual. Reproducir su composición, geometría de shell, jerarquía, tipografía, densidad, superficies, tablas, filtros, inspectores y estados visuales. No conservar el marco inset, los radios Maia ni la disposición actual del Dashboard por decisiones históricas del híbrido.
+
+| Área | Acuerdo vigente |
+|---|---|
+| Marca de sidebar | No mostrar «Courtside», su monograma ni el bloque de marca «Franchise Manager» del export. |
+| Identidad de franquicia | Mostrar escudo, nombre del equipo y conferencia como en la captura aportada por el usuario; no reducir la identidad al escudo aislado. |
+| Avance de simulación | No trasladarlo al header. Conservar su ubicación actual en el pie de la sidebar, con avances, progreso, pausa, errores, restricciones y salvaguardas existentes; adaptar su aspecto al nuevo sistema. |
+| Colapso de sidebar | Mantener el icono actual en la zona superior del header. No sustituirlo por «Collapse sidebar» al pie del prototipo. |
+| Resto de la presentación | Adoptar el diseño completo, también en pantallas previamente aprobadas como híbridas. |
+
+**Límites funcionales:** mantener datos reales, rutas y contexto de navegación, acciones existentes, validaciones, seguridad y persistencia. No importar fixtures ni mecánicas del prototipo; métricas sin fuente y funciones no implementadas se señalan o se separan como trabajo funcional. Conservar temas de franquicia, claro/oscuro/sistema, EN/ES, accesibilidad y responsive; corregir texto ilegible y navegación móvil incompleta del export. Son requisitos de producto, no motivos para recuperar la estética híbrida.
+
+shadcn/Radix pueden seguir como infraestructura de componentes y accesibilidad: se reemplaza su apariencia predeterminada, no se reescriben sus mecanismos. La fidelidad se evalúa por composición y lenguaje visual completos, no solo por colores o fuentes.
+
+### Ciclo obligatorio por unidad
+
+1. **Inventariar:** comparar la pantalla y su referencia; identificar datos, acciones, estados, enlaces y consumidores compartidos que deben sobrevivir.
+2. **Delimitar:** registrar la unidad de implementación y las carencias funcionales. El diseño completo ya es la dirección acordada; solo requieren decisión adicional los conflictos reales o capacidades nuevas.
+3. **Implementar:** reproducir la presentación del export sobre componentes y flujos reales, respetando las excepciones anteriores.
+4. **Verificar:** comprobar fidelidad visual, datos, navegación, estados, responsive, accesibilidad y persistencia según corresponda, además de los controles técnicos de la sección 10.
+5. **Revisar y aprobar:** mostrar el resultado y ajustar antes de pasar a la siguiente unidad. Una aprobación histórica del híbrido no acredita esta realineación.
+
+### Historial de autorizaciones funcionales y entregas híbridas
+
+**Aprobación posterior — 2026-10-29:** el usuario aprobó el resultado de la base visual y el shell completo («me gusta como quedó») y autorizó guardar todos los cambios pendientes mediante commits por unidad. Esta aprobación cierra la revisión visual indicada como pendiente en el registro de entrega siguiente; no acredita verificaciones autenticadas, build productivo ni una auditoría completa de accesibilidad. El Dashboard queda explícitamente para otra sesión.
+
+**Unidad implementada — base visual compartida y shell completo (2026-10-29), pendiente de aprobación visual:** los tokens y primitivas del diseño completo se comparten entre la partida y el catálogo Courtside, incluidos portales. El shell productivo deja de usar la variante inset: sidebar de 216 px (56 px colapsada), header de al menos 88 px y contenido de hasta 1840 px. La identidad muestra escudo, nombre y conferencia; la navegación se agrupa en Franquicia y Dirección deportiva, conserva rutas y cierra el drawer móvil al navegar. El header muestra temporada, fecha real de simulación y rol según espacio disponible. El icono superior de colapso, menú de partida, tema y controles de simulación del pie conservan sus mecanismos. Las variables de las fuentes locales alcanzan `<html>` durante la partida y se limpian al salir.
+
+**Límite de esta unidad:** no se modifica la composición del Dashboard ni se realinean todavía Roster, perfiles, Teams o Standings. Estas vistas heredan las primitivas compartidas, pero no se consideran migradas al diseño completo. Se preservan los cambios funcionales en curso y la contención del scroll. Claro/oscuro/sistema y EN/ES siguen disponibles; la adaptación clara y la revisión de una partida autenticada requieren aprobación visual. No se agregan dependencias, datos del prototipo, backend ni commits.
+
+**Verificación de la unidad:** `bun biome check`, `bun run typecheck` y 1039 tests en 135 archivos pasan. Chrome comprueba geometría y scroll en 360/768/1024/1440/1920 px, alturas cortas y zoom equivalente al 200 %. Una comprobación visual del shell real con hooks simulados verifica claro/oscuro, fuentes locales, superficies, identidad y controles rectangulares; no acredita datos autenticados ni la composición del Dashboard. Los tests interactivos cubren cierre del drawer al navegar, limpieza de variables tipográficas, avance, exclusión, pausa, errores y bloqueo tras campeón. Capturas temporales: `/tmp/opencode/courtside-shell-1440.png`, `/tmp/opencode/courtside-shell-360.png` y `/tmp/opencode/courtside-shell-1440-light.png`. Pendientes: aprobación humana en una partida real, build productivo y auditoría completa de accesibilidad/contraste. No avanzar al Dashboard antes de esa revisión.
+
+Los acuerdos siguientes conservan sus límites funcionales; las indicaciones de conservar la presentación híbrida, el marco inset o decidir cuánto copiar por pantalla quedan sustituidas por la dirección anterior.
+
+**Standings autorizado (2026-10-29):** implementar `/league/standings` y habilitar su pestaña. Tabla ordenable RK, franquicia, W, L, PCT y GB; filtros East/West/Both y agrupación por conferencia, división o liga completa. Inspector con identidad, registro, posición de conferencia, porcentaje y enlace a la ficha existente, conservando selección y filtros al regresar. Tabla e inspector en columnas en escritorio, apilados en móvil y scroll horizontal contenido. Solo datos reales: registros ausentes y partidos aún no jugados se indican sin inventar resultados. Se conserva el orden simplificado PCT, victorias y abreviatura; los desempates oficiales NBA quedan explícitamente diferidos, sin afirmar seeds ni clasificación asegurada. Fuera de alcance: HOME/AWAY/L10/racha/diferencial, comparación, backend, dependencias y commits. La verificación visual autenticada sigue pendiente; esta autorización no habilita otras pantallas.
+
+**Perfil de franquicia autorizado (2026-10-29):** durante la revisión de Teams, el usuario observó scroll sobre todo el documento y pidió el flujo del export `Teams → View Franchise → franchise.html`. Aprobó una ficha independiente en `/league/teams/[teamId]` con cuatro vistas internas. Se retira el plantel debajo del directorio; el perfil conserva sus consultas y seguridad de solo lectura. El regreso desde Player Profile lleva a la franquicia consultada, conservando filtros y vista interna; «Back to Teams» restaura filtros y equipo destacado. El perfil no habilita scouting inventado, seeds oficiales, historial unificado ni reglas de dirección deportiva.
+
+**Continuación autorizada (2026-10-29):** tras comparar Teams con League actual, el usuario solicitó agregar la barra completa de secciones y aprobó rutas anidadas. El layout compartido mantiene Overview, Standings, Teams, Players, League Leaders y Transactions visibles; las secciones aún no implementadas no enlazan a páginas vacías. `/league` queda reservado para Overview y, temporalmente, redirige a Teams conservando todos los parámetros anteriores. El regreso desde Player Profile apunta directamente a `/league/teams?teamId=…`. Esta autorización no permite avanzar a las otras pantallas.
 
 **Continuación vigente (2026-10-28):** el usuario confirmó Roster y luego aprobó expresamente el alcance visual propuesto de Player Profile. Se conserva la biografía existente, el contrato y sus salarios, con aviso secundario de estadísticas/scouting no disponibles en esta vista. No se autoriza una integración estadística ni avanzar automáticamente a Teams. Posteriormente pidió una rama nueva para subir los cambios y probarlos desde otro ordenador. Los límites anteriores se conservan como historial, no como bloqueo de estas unidades.
 
@@ -21,30 +63,6 @@ El análisis original se realizó sin modificar archivos ni instalar dependencia
 **Continuación autorizada (2026-10-28):** tras revisar la captura del shell real, el usuario indicó continuar con la unidad híbrida de Dashboard acordada abajo. Esta autorización posterior supera el límite histórico de «solo shell», pero no autoriza otras pantallas ni sustituye la aprobación humana del Dashboard resultante.
 
 **Aprobación posterior del usuario (2026-10-28):** aprobó visualmente el catálogo híbrido y autorizó únicamente la implementación del shell productivo: fuentes, superficies y jerarquía, conservando marco inset, escudo sin wordmark, Lucide, ubicación de controles y todos los comportamientos de simulación. No autorizó composición del Dashboard ni otras pantallas. Los tokens y overrides globales del preview no se activan en la partida. Esta autorización de alcance no sustituye la aprobación humana del shell resultante.
-
-### Base híbrida acordada
-
-| Área | Decisión |
-|---|---|
-| Shell | Conservar el layout actual enmarcado/inset: sidebar y main como superficies diferenciadas, con su borde y separación. No sustituirlo por la composición plana del prototipo. |
-| Identidad y navegación | Mantener los iconos Lucide actuales y el escudo de la franquicia. No mostrar el nombre «Courtside» en la sidebar de la partida. |
-| Dashboard | Conservar próximo partido, posiciones, finanzas y alertas; posiciones cercanas con la franquicia resaltada y enlaces directos a Calendar y Roster. |
-| Resumen financiero | Mantener la barra salarial con datos reales, cargos por cortes y umbrales de cap/tax/aprons, aunque posteriormente exista una página de Finanzas. No crear esa página en esta unidad. |
-| Fin de temporada | Compactar el vacío de «No next game» y dar jerarquía a los accesos existentes a Postseason/offseason, sin inventar acciones ni habilitar una siguiente temporada. |
-| Pie de sidebar | Ordenar la jerarquía de fecha, estado y simulación; conservar acciones, progreso, pausa, restricciones y salvaguardas. |
-| Lenguaje visual | Usar OpenDesign para mejorar fuentes, superficies, jerarquía y densidad; no imponer sus dimensiones o composiciones a todos los elementos. Mantener temas de franquicia y modo claro. |
-
-La sidebar productiva ya muestra el escudo sin el wordmark Courtside: debe conservarse. El ajuste pendiente corresponde a la muestra del catálogo y a la dirección visual, no a eliminar una marca que ya no existe en producción.
-
-### Ciclo obligatorio por pantalla
-
-1. **Comparar:** revisar la pantalla actual y su referencia, inventariando datos, acciones, estados y enlaces que deben sobrevivir.
-2. **Acordar la presentación:** elegir con el usuario qué se conserva, qué se adapta y qué se reproduce del prototipo. Registrar la decisión para esa pantalla; no extrapolarla a las siguientes.
-3. **Implementar una unidad acotada:** modificar presentación sobre componentes y flujos reales. Si falta una capacidad o fuente de datos, separarla como trabajo funcional explícito.
-4. **Verificar:** comprobar datos, navegación, estados, responsive, accesibilidad y persistencia según corresponda, además de las pruebas técnicas de la sección 10.
-5. **Revisar y aprobar:** mostrar el resultado y ajustar con el usuario antes de pasar a la siguiente pantalla.
-
-Una pantalla puede adoptar de forma completa la **presentación** del prototipo dentro del shell acordado, pero no sus fixtures, negociaciones simuladas, métricas sin fuente ni lógica de negocio. Se mantienen las correcciones de legibilidad, accesibilidad y modo claro. Todavía no se ha decidido cuáles de las demás pantallas seguirán esa opción.
 
 ## 1. Arquitectura actual relevante para la UI
 
@@ -233,9 +251,9 @@ Las entradas abreviadas de la primera columna pertenecen al mismo directorio ind
 | Base actual verificada | Tratamiento recomendado |
 |---|---|
 | `src/components/ui/button.tsx`, `input.tsx`, `select.tsx`, `combobox.tsx` | Conservar APIs y comportamiento; adaptar tipografía, radios, superficies y estados. |
-| `src/components/ui/card.tsx`, `badge.tsx` | Conservar APIs; adaptar superficies y densidad donde aporte valor, sin eliminar por sistema los bordes y formas actuales. |
+| `src/components/ui/card.tsx`, `badge.tsx` | Conservar APIs; reproducir superficies, densidad, bordes y radios del nuevo diseño. |
 | `src/components/ui/dialog.tsx`, `alert-dialog.tsx`, `sheet.tsx` | Conservar primitivas y gestión de foco. Adaptar apariencia y dimensiones. |
-| `src/components/ui/sidebar.tsx` | Conservar colapso, navegación móvil, contexto y composición enmarcada actual; adaptar estilo y jerarquía sin reemplazar el shell. |
+| `src/components/ui/sidebar.tsx` | Conservar mecanismos de colapso, navegación móvil y contexto; sustituir la composición visual enmarcada por el shell del export con las excepciones de la sección 0. |
 | `src/components/ui/app-table.tsx` | Convertirlo en la base visual de las tablas del rediseño. |
 | `src/components/ui/sortable-table-header.tsx`, `table-actions.tsx` | Conservar ordenamiento accesible y acciones. |
 | `src/components/players/player-headshot.tsx` | Conservar fuente dinámica, carga y fallback. |
@@ -245,10 +263,10 @@ Las entradas abreviadas de la primera columna pertenecen al mismo directorio ind
 
 ### Qué adaptar según cada pantalla
 
-Revisar **composiciones de presentación**, no sustituir mecanismos funcionales. Estos son candidatos, no reemplazos obligatorios:
+Reproducir las **composiciones de presentación**, sin sustituir mecanismos funcionales:
 
-- Jerarquía de sidebar y header, conservando el marco, el escudo y los iconos actuales.
-- Jerarquía y distribución del Dashboard, conservando sus módulos útiles y barra financiera.
+- Sidebar y header completos, sin marco inset heredado y con las excepciones de identidad, simulación y colapso acordadas.
+- Dashboard completo, incluido hero y distribución del export cuando haya datos reales; preservar información y acciones útiles sin imponer sus cuatro widgets como composición fija.
 - Presentación de identidad de jugadores.
 - Encabezados, filtros y paneles de inspección.
 - Clases visuales heredadas del estilo Maia que contradigan la dirección acordada.
@@ -265,7 +283,7 @@ Crearlos cuando aparezca su uso real, no todos por adelantado:
 - Badge de rating con valor, significado y estado estimado.
 - Inspector de jugador reutilizable entre listados.
 - Navegación de League mediante enlaces reales.
-- Controles de simulación extraídos de la sidebar, si se trasladan al header.
+- Composición visual de los controles de simulación en el pie de la sidebar, reutilizando sus handlers; no trasladarlos al header.
 
 Cards, barras y filtros simples pueden componerse con lo existente: no necesitan automáticamente otra abstracción.
 
@@ -290,19 +308,19 @@ En cambio, `src/domain/entities/LeagueStanding.ts` solo expone victorias y derro
 
 ## 5. Propuesta del Design System
 
-**Es la primera fase y ya tiene una implementación aislada.** Su siguiente iteración debe reflejar los acuerdos híbridos de la sección 0, sin migrar inmediatamente las pantallas.
+**Existe una implementación aislada previa.** Realinear sus tokens y componentes con el diseño completo de la sección 0; el catálogo híbrido no es la referencia visual definitiva. No es necesario rehacer toda la muestra para volver a decidir una dirección ya aprobada.
 
 ### Dirección visual
 
-- Superficies oscuras inspiradas en OpenDesign sobre el layout enmarcado actual.
+- Superficies y composición del export, incluido su shell, en lugar del layout enmarcado actual.
 - Barlow para lectura y Barlow Condensed para personalidad deportiva.
 - Tipografía condensada en títulos y cifras importantes, sin convertir todos los textos y controles en mayúsculas.
 - Bordes y contraste de superficies antes que sombras.
 - Números tabulares para estadísticas y dinero.
 - Acentos de franquicia sobre una estructura neutral consistente.
-- Conservar iconos, escudo y barra salarial; la identidad nueva no exige sustituirlos.
+- Reutilizar Lucide como implementación de iconos; conservar identidad de franquicia y datos de la barra salarial dentro de la nueva composición.
 
-Las medidas de la sección 3 describen el prototipo, y las de tokens son una base para evaluar: no obligan a cambiar la geometría del shell actual ni el radio de todos sus contenedores. La evidencia de la fase 1 documenta la primera muestra, no una geometría aprobada para producción.
+Las medidas de la sección 3 son la referencia de geometría y proporciones, no una sugerencia opcional para mantener el shell anterior. Ajustar lo necesario para legibilidad, responsive y las excepciones acordadas; documentar diferencias justificadas. La evidencia de la fase 1 no acredita esta nueva implementación.
 
 Se recomienda mantener los colores por equipo: fijar el morado para todas las franquicias simplificaría las capturas, pero perdería una capacidad existente. Sacramento puede reproducir la referencia; las demás franquicias conservarían su identidad.
 
@@ -329,7 +347,7 @@ La escala tipográfica propuesta **corrige deliberadamente** el texto demasiado 
 
 - **Botones:** mantener variantes actuales; primario, secundario, outline, ghost y destructivo.
 - **Inputs/selects:** mismas validaciones y estados; superficies propias de control.
-- **Cards:** compactar cuando mejore la lectura; conservar bordes y separación útiles del layout actual, sin aplicar un reemplazo uniforme.
+- **Cards:** reproducir radios, bordes, densidad y proporciones del export; retirar las formas predeterminadas que contradigan esa identidad.
 - **Tablas:** encabezados consistentes, números alineados, selección visible y ordenamiento accesible.
 - **Badges:** estado explícito, sin depender únicamente del color.
 - **Modales/drawers:** Radix/Dialog/Sheet, contenido desplazable y foco conservado.
@@ -358,9 +376,9 @@ Mantener los aliases de Tailwind mediante `@theme inline` y agregar solo los tok
 ### Migración controlada de estilos
 
 1. Incorporar la nueva apariencia con activación explícita exclusivamente en el preview, bajo `html[data-ui-preview="courtside"]` en el `src/app/globals.css` existente.
-2. Alinear el catálogo con la dirección híbrida y verificar componentes y portales.
-3. Revisar y aprobar el alcance del shell de partida antes de activar su apariencia; conservar su layout enmarcado.
-4. Migrar las composiciones de cada pantalla mediante el ciclo de comparación y aprobación de la sección 0.
+2. Realinear la base compartida con el diseño completo y verificar componentes y portales; no usar el catálogo híbrido como referencia definitiva.
+3. Implementar el shell del export con las excepciones de la sección 0, retirando el marco inset heredado y comprobando contención del scroll y controles.
+4. Realinear también las pantallas ya migradas y continuar por unidades mediante el ciclo de comparación y aprobación de la sección 0.
 5. Retirar los overrides sustituidos cuando dejen de tener consumidores.
 
 No importar `styles.css` ni las hojas de cada página. Sus selectores globales, resets y nombres genéricos podrían competir con Tailwind y los componentes actuales.
@@ -386,27 +404,27 @@ En la fase 1 no se distribuyen escudos ni retratos NBA del export: las muestras 
 
 Cada unidad termina con revisión visual y funcional. Las subfases se entregan por separado, no como un cambio acumulado.
 
-**Dirección aprobada, ejecución gradual:** el usuario aceptó el enfoque híbrido y la revisión pantalla por pantalla. Esta sesión solo actualiza el plan; la implementación se retoma en una nueva sesión con el catálogo. La recepción favorable inicial no cierra su revisión ni autoriza automáticamente todas las fases. Acordar el alcance de cada unidad antes de implementarla y aprobar su resultado antes de avanzar. Las ampliaciones funcionales siguen separadas del reskin. Después de Roster y Player Profile, el orden solicitado es **Teams → Standings → Players**, reutilizando tablas, identidades e inspectores compartidos.
+**Dirección completa aprobada, ejecución gradual:** esta actualización solo cambia el plan. Al retomar: **base visual y shell → Dashboard → realineación de Roster y Player Profile → Teams y ficha de franquicia → Standings → Players**. No descartar los flujos ni cambios funcionales en curso. Cada unidad tiene alcance acotado y aprobación de resultado; no se vuelve a elegir entre híbrido y prototipo. Las ampliaciones funcionales siguen separadas del reskin.
 
 ### Fase 1 — Design System aislado
 
-**Objetivo:** cerrar la identidad híbrida antes de tocar pantallas productivas. La primera muestra está implementada; resta alinearla con los acuerdos posteriores y revisarla.
+**Objetivo:** reutilizar fuentes, tokens y primitivas ya implementados y realinearlos con el export completo. La muestra híbrida es antecedente, no una aprobación pendiente que bloquee la nueva dirección.
 
 Se detalla en la sección 9. No depende de cambios de backend.
 
 ### Fase 2 — Shell global de la partida
 
 - **Archivos:** `src/components/dashboard/layout-components.tsx`, `src/components/ui/sidebar.tsx` y `src/app/(protected)/games/[gameId]/dashboard/layout.tsx`.
-- **Trabajo:** adaptar superficies, tipografía y jerarquía sobre el layout enmarcado actual. Mantener escudo e iconos, sin wordmark Courtside; ordenar el pie de estado/simulación. Cualquier cambio de agrupación o ubicación de controles se revisa antes, no se hereda automáticamente del prototipo.
+- **Trabajo:** adoptar geometría, superficies, separación y jerarquía del shell del export, sin conservar el marco inset. Sidebar sin bloque Courtside, con escudo/nombre/conferencia; simulación en el pie y el icono actual de colapso arriba.
 - **Reutilización:** Sidebar, Sheet, menús, tooltips, tema y hooks actuales. No trasladar ni extraer controles de simulación sin necesidad acordada.
-- **Dependencia:** catálogo alineado y aprobado; revisar el alcance concreto del shell con el usuario antes de implementarlo.
+- **Dependencia:** base visual compartida realineada; delimitar la unidad del shell sin reabrir la dirección completa ya acordada.
 - **Riesgo:** duplicar controladores o perder acciones al colapsar.
-- **Aceptación/verificación:** conservar marco y separación sidebar/main, escudo e iconos; mismas rutas, avances por día/mes/temporada, pausa, errores y bloqueo tras campeón; navegación completa con teclado y móvil.
+- **Aceptación/verificación:** composición del export y cuatro excepciones de la sección 0; mismas rutas, avances por día/mes/temporada, pausa, errores y bloqueo tras campeón; navegación completa con teclado y móvil. Mantener scroll local sin recortes ni desbordamiento del documento al cambiar la geometría.
 
 ### Fase 3 — Dashboard
 
 - **Archivos:** página de Dashboard y `src/components/dashboard/`.
-- **Trabajo:** conservar los cuatro módulos útiles y mejorar su jerarquía con el lenguaje de OpenDesign. Mantener barra salarial, posiciones cercanas con franquicia resaltada y enlaces directos. Compactar el vacío de fin de temporada y destacar los accesos existentes a Postseason/offseason. No imponer el hero ni la composición completa del prototipo.
+- **Trabajo:** reproducir el Dashboard completo del export: encabezado, hero de franquicia, resumen de métricas y distribución de paneles según el estado real. Reubicar información y acciones existentes, incluida la barra salarial, sin conservar obligatoriamente la cuadrícula de cuatro widgets. No inventar rachas, rankings, fechas ni acciones de offseason para completar la maqueta.
 - **Reutilización:** `NextGameWidget`, `StandingsWidget`, `CapSpaceWidget`, `AlertsWidget`.
 - **Dependencia:** shell y paneles aprobados.
 - **Riesgo:** introducir métricas del prototipo sin respaldo.
@@ -433,15 +451,16 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 
 ### Fase 5 — League existente: Teams → Standings → Players
 
-Después de Roster (4A) y Player Profile (4B), dividir en tres entregas cuyo alcance y presentación se acuerdan individualmente:
+Después de realinear Roster (4A) y Player Profile (4B), dividir en tres entregas con alcance funcional acotado y la presentación completa como referencia común:
 
 1. **Teams:** rediseñar la exploración por equipo actual y componer el directorio sobre datos existentes.
 2. **Standings:** añadir la clasificación completa, sin inventar estadísticas no disponibles.
 3. **Players:** listado global específico de la partida, filtros y enlaces al perfil canónico; no esperar a la fase 11.
 
 - **Archivos existentes:** página de League, `src/application/hooks/simulation/useStandings.ts`, hooks de equipos y roster.
-- **Nuevos:** componentes y páginas de Teams, Standings y Players, con rutas por aprobar.
+- **Rutas aprobadas (2026-10-29):** `/league` para Overview y subrutas `/league/teams`, `/league/standings`, `/league/players`, `/league/leaders` y `/league/transactions`, siempre bajo `/games/[gameId]/dashboard`. Un `league/layout.tsx` comparte el encabezado y la navegación mediante enlaces con apariencia de tabs. Las vistas internas de atributos/estadísticas siguen siendo estado local; el equipo y los filtros del directorio usan parámetros de consulta.
 - **Reutilización:** tablas compartidas, identidades de equipo/jugador, vistas de solo lectura e inspector de Roster y Player Profile.
+- **Ampliación autorizada de Teams:** perfil de franquicia en `/league/teams/[teamId]`. Sus cuatro vistas internas usan Radix Tabs ya instalado; `franchiseTab` conserva el contexto al abrir jugadores. Finanzas reutiliza `CapSpaceWidget` para el equipo consultado y su enlace vuelve al Roster de esa misma ficha, nunca al plantel propio por defecto.
 - **Dependencias:** fases 2 y 4.
 - **Riesgo:** romper enlaces con `?teamId`, mostrar clasificación como seeding oficial o mezclar el equipo canónico de un jugador con su pertenencia en la partida.
 - **Aceptación/verificación:** equipos/records reales, contexto conservado, filtros y navegación al perfil, y ninguna acción de corte sobre equipos ajenos. Datos no disponibles permanecen explícitos; comprobar pertenencia después de trades, fichajes y cortes.
@@ -547,7 +566,9 @@ Las rutas nuevas deben permanecer bajo la partida. Mantener `/player/[id]` como 
 | Imágenes rotas o derechos insuficientes | Mantener providers/fallbacks y revisar licencias antes de publicar assets. |
 | Migración difícil de revertir | Una unidad revisable con pruebas; no mezclar reskin y nuevas reglas de negocio. |
 
-## 9. Primera fase detallada
+## 9. Primera fase detallada — registro histórico
+
+**No usar como dirección vigente:** lo que sigue describe la muestra inicial y su iteración híbrida del 2026-10-28. Sus restricciones de conservar el marco y sus casilleros pendientes no bloquean ni definen la nueva migración completa. Se conserva para trazabilidad de implementación y pruebas.
 
 ### Entregable
 
@@ -702,6 +723,41 @@ Durante la sesión, Turbopack sirvió CSS anterior pese a cambios en disco. Se r
 
 ## 10. Verificación y siguiente paso
 
+### Cambio de dirección a diseño completo — 2026-10-29
+
+- Se actualizaron decisión, excepciones, criterios visuales, roadmap y punto de entrada; los acuerdos híbridos anteriores quedan como historial.
+- Único archivo modificado en esta unidad: este plan. Se preservaron sus cambios previos y los cambios de aplicación en curso; el export no se modificó.
+- `bun biome check`: correcto, **435 archivos**, sin correcciones. `git diff --check`: correcto. Biome no valida el contenido de este Markdown; se revisó su coherencia documental por separado.
+- Sin UI nueva, servidores, commits ni push. No se ejecutaron tests, typecheck, build ni navegador: no hay cambios de runtime en esta unidad. Las verificaciones anteriores no acreditan la futura migración completa.
+
+### Perfil de franquicia y contención del scroll — 2026-10-29
+
+**Implementación autorizada; pendiente de revisión visual.** Este ajuste sustituye la composición inicial de directorio más plantel de la unidad inferior, sin avanzar a Standings.
+
+- **Flujo:** Teams queda como directorio sin consulta de plantel. «View Franchise» abre la ficha del equipo por ID. Los helpers de navegación mantienen filtros, parámetros repetidos y contexto de la vista interna; el destino de regreso se construye desde rutas fijas y equipo validado, no desde una URL arbitraria.
+- **Resumen:** identidad, conferencia/división, balance real, tamaño del plantel y medias de edad/OVR solo cuando existe cobertura completa. Los ratings estimados conservan su indicador. El jugador mejor valorado disponible se identifica como una comparación de ratings conocidos, no como una designación estratégica.
+- **Vistas internas:** Overview y Roster conservan carga/error/reintento/vacío; Roster reutiliza atributos/estadísticas y deshabilita cortes. Finances reutiliza las finanzas actuales y los cargos por cortes del equipo consultado. Front Office y las perspectivas de scouting/futuro indican expresamente la ausencia de información, sin inventar historial ni comportamiento de un GM.
+- **Contención:** wrapper de altura `h-dvh` con `min-h-0`, inset y región de contenido con mínimos de flex corregidos; el contenido mantiene su altura natural y el scroller admite foco por teclado. Sin ocultar desbordamientos para recortar contenido ni cambiar las primitivas del catálogo. Los filtros del directorio usan columnas contraíbles y controles que pueden reorganizarse.
+- **Harness de Chrome:** `tests/components/dashboardLayout.test.tsx` monta el layout y las primitivas reales con datos/header/sidebar de juego simulados y CSS generado por Tailwind, en modo estándar. Pasaron **22 escenarios**: anchos 360/768/1024/1440/1920, alturas 900/320 y sidebar expandida/colapsada; además 720×450 con DPR 2 como reflow equivalente al 200 %, no zoom real de la UI del navegador. Documento del tamaño del viewport, scroll local de contenido/tabla, header/sidebar/footer del harness visibles, última acción accesible y PageDown/ArrowRight funcionales. Restituir las clases antiguas reproduce el fallo original. Se omite explícitamente si no existe Chrome en la ruta local comprobada; no usa servidor, sesión ni perfil del usuario.
+- **Verificación técnica:** `bun biome check` correcto (**433 archivos**), typecheck, build productivo y `git diff --check` correctos. Recorrido enfocado de layout/widgets/directorio/helpers/perfil/vistas/cortes con **82 pruebas correctas en siete archivos**. Suite completa: `bun x vitest run --maxWorkers=2`, **1017 pruebas correctas en 132 archivos**, incluidas **20 pruebas nuevas de la ficha de franquicia**. La revisión independiente de navegación/datos no encontró defectos accionables; las cifras de la entrega anterior no acreditan estos cambios.
+- **Revisión pendiente:** directorio → ficha → Roster/estadísticas → jugador → misma ficha/vista → Teams con filtros. Probar claro/oscuro, móvil/escritorio, teclado, zoom y alturas cortas; verificar que header y simulación sigan accesibles. Los datos/harness simulados no acreditan una partida autenticada ni persistencia real.
+- **Rollback:** retirar la nueva ficha y helpers/contexto de navegación, restaurar el plantel inline y sus regresiones anteriores, revertir únicamente la contención del shell de esta unidad y el nuevo destino opcional del widget financiero. No requiere revertir datos, contratos ni el rediseño previo.
+
+### League y Teams autorizados — 2026-10-29
+
+**Unidad implementada; pendiente de aprobación visual.** La tabla de `franchise.js` es la referencia de Teams: no se utiliza el directorio alternativo de tarjetas de `league.js` ni se copia el perfil completo de franquicia del export.
+
+- **Navegación:** layout compartido con seis secciones, Teams enlazada y activa según la ruta, y las otras cinco marcadas como próximas. Los enlaces antiguos a `/league` redirigen a `/league/teams`, conservando valores vacíos, repetidos y parámetros ajenos. Player Profile regresa directamente al equipo consultado.
+- **Directorio:** escudo/abreviatura, nombre canónico, conferencia, división, balance real y acceso al plantel. Tu franquicia y el equipo seleccionado tienen indicadores distintos. Búsqueda por nombre/ciudad/abreviatura, filtros de conferencia/división, limpieza y orden por nombre o porcentaje de victorias. Los filtros usan la History API integrada de Next sin navegación al servidor por cada tecla.
+- **Datos:** se reutilizan `useTeams`, `useGame`, `useStandings` y una consulta `useRoster` para el equipo seleccionado. Los balances ausentes/error se muestran como desconocidos, nunca como 0–0 inventado. El orden del directorio no representa seeds oficiales. No se consultan los 30 planteles ni se calculan OVR/nómina globales.
+- **Plantel:** conserva búsqueda, vistas de atributos/estadísticas y enlaces con `leagueTeamId`; `canRelease` permanece deshabilitado. La selección explícita revela y enfoca el encabezado del equipo; la selección inicial no desplaza el foco. Se mantienen carga, error, reintento y vacío, sin mostrar un contador cero durante la carga.
+- **Presentación:** fuentes y componentes compartidos, clases locales de densidad/radios y ancho extendido limitado a `data-slot="league-screen"`. No se activan los tokens del preview ni se modifican primitivas, reglas o datos.
+- **Verificación técnica:** `bun biome check` correcto (**428 archivos**), `bun run typecheck`, `bun run build` y `git diff --check` correctos. Suite completa: `bun x vitest run --maxWorkers=2`, **991 pruebas correctas en 129 archivos**. Recorrido enfocado de Teams/navegación/nombres/perfil/vistas/cortes: **59 pruebas correctas en seis archivos**, incluidas 25 de Teams y siete del shell/redirect. Revisión independiente de código: sin defectos accionables detectados; no sustituye la revisión visual.
+- **Aviso del entorno de pruebas:** happy-dom muestra una advertencia de React porque no reconoce `<search>`; las pruebas pasan y se conserva el elemento semántico estándar. No se modifica producción ni se silencia el aviso para acomodar el DOM simulado.
+- **Acceso local:** se inició únicamente este proyecto en `http://127.0.0.1:3001/`. El puerto 3000 pertenece a otro proyecto y no se alteró. Chrome headless sin sesión llegó al formulario de ingreso, no a Teams; evidencia temporal en `/tmp/opencode/nba-gm-league-browser.html`. No hay aprobación visual ni comprobación autenticada de datos derivada de ese intento.
+- **Revisión pendiente:** entrar por League, filtrar equipos, abrir el plantel y un perfil, volver al mismo equipo y recargar. Probar móvil/escritorio, claro/oscuro, teclado y zoom. Las pruebas con hooks simulados no acreditan Supabase desplegado ni revisión visual autenticada.
+- **Rollback:** retirar layout/shell/Teams nuevos y sus pruebas, restaurar la página anterior de League y su enlace de regreso en Player Profile, y retirar únicamente el selector de ancho de League y sus mensajes. No requiere revertir datos ni las unidades previas de Roster/Dashboard.
+
 ### Player Profile autorizado — 2026-10-28
 
 **Implementado; pendiente de revisión del usuario.** Identidad con retrato compacto y fuentes compartidas; contrato a ancho completo, resumen semántico y tabla salarial sobre `AppTable`. No cambia el shell ni los componentes compartidos.
@@ -828,15 +884,15 @@ Resultados registrados el 2026-10-28, antes de guardar este documento:
 
 ### Punto de entrada para la próxima sesión
 
-**Actualización posterior:** el catálogo, shell y Dashboard ya están implementados y aprobados. Los pasos 1–4 siguientes describen el traspaso histórico, no trabajo pendiente. Retomar desde el paso 5, acordando primero el alcance de Roster; no repetir ni ampliar automáticamente las unidades aprobadas.
+**Actualización vigente — 2026-10-29:** la dirección híbrida queda sustituida por el diseño completo. Las aprobaciones anteriores no obligan a conservar su presentación; sí deben sobrevivir datos, navegación y comportamientos reales.
 
-1. Leer los acuerdos vigentes de la sección 0 y comprobar el estado del working tree. La fase 1, fuentes y documentación permanecen sin commit; no descartar esos cambios ni modificar el export original.
-2. Retomar con una unidad limitada al catálogo: alinear la muestra con el marco actual, iconos y escudo/identidad de franquicia sin Courtside en la sidebar; permitir revisar barra salarial y estados del Dashboard sin datos conectados.
-3. Verificar y revisar visualmente esa iteración con el usuario antes de activar estilos en la partida. No presentar las pruebas de la primera muestra como evidencia de cambios nuevos.
-4. Acordar e implementar el shell preservado y luego el Dashboard, como unidades separadas. Aprobar cada resultado antes de continuar.
-5. Continuar **Roster → Player Profile → Teams → Standings → Players**, decidiendo en cada pantalla cuánto conservar y cuánto reproducir del prototipo; después seguir el roadmap restante.
+1. Leer la sección 0, comprobar el working tree y preservar todos los cambios en curso. No modificar el export original; confirmar su disponibilidad local porque está excluido de Git.
+2. Retomar con base visual compartida y shell: diseño del export sin inset heredado, identidad escudo/nombre/conferencia sin Courtside, simulación en el pie y colapso con el icono actual arriba.
+3. Verificar y aprobar ese resultado; después realinear Dashboard como unidad separada con hero y composición del export sobre datos reales. No reutilizar pruebas históricas como evidencia nueva.
+4. Realinear **Roster → Player Profile → Teams y ficha de franquicia → Standings** antes de continuar con Players. Conservar filtros, regreso, vistas, seguridad de solo lectura y correcciones de scroll ya construidas.
+5. Continuar el roadmap restante con el diseño completo como base, separando capacidades nuevas o datos ausentes de la implementación visual.
 
-**Límite del acuerdo:** está aprobada la dirección híbrida y el proceso de trabajo, no una copia general del prototipo ni todas las funcionalidades propuestas. No avanzar automáticamente entre pantallas ni implementar mecánicas nuevas como parte de una decisión estética.
+**Límite del acuerdo:** está aprobada la adopción completa de la presentación con las excepciones de la sección 0, no todas las funcionalidades del prototipo ni su lógica de negocio. Esta entrega solo registra la decisión; no inicia la implementación ni aprueba resultados aún no revisados.
 
 ### Traspaso de esta actualización
 

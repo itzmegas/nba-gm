@@ -1052,8 +1052,8 @@
   --sidebar-border: color-mix(in oklch, var(--primary) 28%, var(--background));
 }
 
-/* Approved game foundation, including portaled menus; keep the historical preview unchanged. */
-html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
+/* Historical proposed preview; production shares the complete Courtside foundation below. */
+html[data-ui-preview="proposed"] {
   --background: #f4f4f5;
   --card: #ffffff;
   --muted: #ededf0;
@@ -1073,7 +1073,7 @@ html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
   --selection: color-mix(in srgb, var(--primary) 10%, var(--card));
 }
 
-html.dark:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
+html.dark[data-ui-preview="proposed"] {
   --background: #141416;
   --card: #1c1c1f;
   --muted: #29292e;
@@ -1085,17 +1085,17 @@ html.dark:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) {
 }
 
 /* Alpha hovers reduce contrast for otherwise readable franchise color pairs. */
-html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="button"][data-variant="default"]:hover {
+html[data-ui-preview="proposed"] [data-slot="button"][data-variant="default"]:hover {
   background: var(--primary);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
-html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="button"]:active:not(:disabled) {
+html[data-ui-preview="proposed"] [data-slot="button"]:active:not(:disabled) {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
-html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) [data-slot="sidebar-menu-button"][data-active="true"] {
+html[data-ui-preview="proposed"] [data-slot="sidebar-menu-button"][data-active="true"] {
   background: var(--selection);
   box-shadow: inset 3px 0 var(--primary);
   font-weight: 700;
@@ -1115,64 +1115,56 @@ html[data-ui-preview="proposed"] [data-slot="preview-row"][data-selected="true"]
   box-shadow: inset 3px 0 var(--primary);
 }
 
-html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) :is(button, a, input, select):focus-visible {
+html[data-ui-preview="proposed"] :is(button, a, input, select):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *,
-  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *::before,
-  html:is([data-team]:not([data-ui-preview]), [data-ui-preview="proposed"]) *::after {
+  html[data-ui-preview="proposed"] *,
+  html[data-ui-preview="proposed"] *::before,
+  html[data-ui-preview="proposed"] *::after {
     transition: none;
     animation: none;
   }
 }
 
-/* Production shell: direct surfaces only; never inherit preview tokens into screens. */
+/* Flat production shell; sidebar width is supplied by the layout's SidebarProvider. */
 .game-shell-frame {
-  background-color: #ececf0;
+  background-color: var(--background);
 }
 
 .game-shell-inset {
-  border: 1px solid #d3d5dd;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: var(--background);
   box-shadow: none;
 }
 
 .game-shell-sidebar {
-  background-color: #ececf0;
+  background-color: var(--sidebar);
+  border-color: var(--sidebar-border);
 }
 
 .game-shell-header {
-  background-color: #ffffff;
-  border-color: #d3d5dd;
+  min-height: 88px;
+  background-color: var(--card);
+  border-color: var(--border);
 }
 
-.game-shell-sidebar [data-slot="button"],
-.game-shell-header [data-slot="button"] {
+.game-shell-sidebar [data-variant][data-size],
+.game-shell-header [data-variant][data-size] {
   border-radius: 4px;
 }
 
-.dark .game-shell-frame,
-.dark .game-shell-sidebar {
-  background-color: #141518;
-}
-
-.dark .game-shell-header {
-  background-color: #191b1f;
-}
-
-.dark .game-shell-header,
-.dark .game-shell-inset {
-  border-color: #2d2f35;
-}
-
-/* Courtside is opt-in on html so body portals share the same tokens and typography. */
-html[data-ui-preview="courtside"] {
-  --cs-body: var(--font-courtside-body), sans-serif;
-  --cs-display: var(--font-courtside-display), sans-serif;
-  --font-sans: var(--font-courtside-body), sans-serif;
+/* Scope to html so production and preview body portals inherit the same foundation. */
+html:is([data-team]:not([data-ui-preview]), [data-ui-preview="courtside"]) {
+  --cs-body: var(--font-courtside-body, "Barlow"), "Segoe UI", sans-serif;
+  --cs-display: var(--font-courtside-display, "Barlow Condensed"), Impact, sans-serif;
+  --font-sans: var(--cs-body);
+  --radius: 6px;
   --background: #f4f4f6;
   --foreground: #202227;
   --sidebar: #ececf0;
@@ -1202,7 +1194,7 @@ html[data-ui-preview="courtside"] {
   --sidebar-foreground: var(--foreground);
   font-family: var(--cs-body);
 
-  /* Outrank the historical .dark[data-team] brand overrides only inside this boundary. */
+  /* Keep franchise primaries while replacing historical brand-tinted surfaces. */
   &[data-team] {
     --secondary: var(--muted);
     --secondary-foreground: var(--foreground);
@@ -1255,7 +1247,8 @@ html[data-ui-preview="courtside"] {
     font-family: var(--cs-body);
   }
 
-  [data-slot="button"] {
+  /* Radix asChild triggers can replace data-slot; Button's variant/size remain stable. */
+  [data-variant][data-size] {
     border-radius: 4px;
     font-size: 13px;
     font-weight: 600;
@@ -1426,14 +1419,24 @@ html[data-ui-preview="courtside"] {
   [data-slot="sidebar-menu-button"] {
     position: relative;
     min-height: 44px;
+    border: 1px solid transparent;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 14px;
 
     &[data-active="true"] {
       background: var(--cs-soft);
       color: var(--cs-ink);
-      box-shadow: inset 3px 0 var(--primary);
+      border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
       font-weight: 600;
+
+      &::before {
+        position: absolute;
+        left: -1px;
+        width: 3px;
+        height: 16px;
+        background: var(--cs-ink);
+        content: "";
+      }
     }
   }
 
@@ -1551,7 +1554,7 @@ html[data-ui-preview="courtside"] {
   }
 
   @media (pointer: coarse) {
-    [data-slot="button"], [data-slot="select-trigger"], .cs-segment button {
+    [data-variant][data-size], [data-slot="select-trigger"], .cs-segment button {
       min-width: 44px;
       min-height: 44px;
     }

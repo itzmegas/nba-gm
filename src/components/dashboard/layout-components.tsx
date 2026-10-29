@@ -18,7 +18,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
+import type { ComponentProps, ComponentType } from "react";
 import { body, display } from "@/app/ui-preview/fonts";
 import { useOffseason } from "@/application/hooks/offseason/useOffseason";
 import { usePostseason } from "@/application/hooks/postseason/usePostseason";
@@ -33,14 +33,6 @@ import {
   useBatchSimulationStore,
 } from "@/application/stores/useBatchSimulationStore";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -50,18 +42,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -105,6 +98,19 @@ const NAV_ITEMS: DashboardNavItem[] = [
   { key: "freeAgency", path: "/free-agency", icon: DollarSign },
   { key: "settings", path: "/settings", icon: Settings },
 ];
+
+function SidebarNavigationLink({ onClick, ...props }: ComponentProps<typeof Link>) {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Link
+      {...props}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented) setOpenMobile(false);
+      }}
+    />
+  );
+}
 
 interface DashboardSidebarProps {
   gameId: string;
@@ -191,65 +197,92 @@ export function DashboardSidebar({
       ? Math.min(100, Math.round((completedDays / totalDays) * 100))
       : null;
   return (
-    <Sidebar collapsible="icon" variant="inset">
+    <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader
-        className={`${body.className} game-shell-sidebar px-4 py-2 group-data-[collapsible=icon]:px-0`}
+        className={`${body.className} game-shell-sidebar p-4 pb-2 group-data-[collapsible=icon]:px-2`}
       >
-        <Link
+        <SidebarNavigationLink
           href={dashboardBasePath}
           aria-label={selectedTeam?.name || t("dashboard", "teamFallback")}
-          className="flex items-center justify-center rounded-lg py-2 group-data-[collapsible=icon]:py-1"
+          className="flex min-w-0 items-center gap-2 rounded-md border border-sidebar-border bg-card p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0"
         >
           {selectedTeam?.logoUrl ? (
             <Image
               src={selectedTeam.logoUrl}
               alt=""
-              width={112}
-              height={112}
-              className="size-28 shrink-0 object-contain transition-[width,height] group-data-[collapsible=icon]:size-12"
+              width={40}
+              height={40}
+              className="size-10 shrink-0 object-contain"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary/10 text-xs font-bold text-sidebar-primary">
               {selectedTeam?.abbreviation || t("dashboard", "nba")}
             </div>
           )}
-        </Link>
+          <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <span className="block text-sm font-semibold leading-tight break-words">
+              {selectedTeam?.name || t("dashboard", "teamFallback")}
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {selectedTeam?.conference === "East"
+                ? t("dashboard", "easternConference")
+                : selectedTeam?.conference === "West"
+                  ? t("dashboard", "westernConference")
+                  : "—"}
+            </span>
+          </span>
+        </SidebarNavigationLink>
       </SidebarHeader>
 
-      <SidebarSeparator />
+      <SidebarContent
+        className={`${body.className} game-shell-sidebar gap-4 py-4 group-data-[collapsible=icon]:overflow-y-auto`}
+      >
+        {[NAV_ITEMS.slice(0, 3), NAV_ITEMS.slice(3, 7), NAV_ITEMS.slice(7)].map((items, index) => (
+          <SidebarGroup
+            key={items[0].key}
+            className={`shrink-0 px-4 py-0 group-data-[collapsible=icon]:px-2 ${index === 2 ? "mt-auto" : ""}`}
+          >
+            {index < 2 && (
+              <SidebarGroupLabel className="h-auto pb-3 text-xs uppercase tracking-widest text-muted-foreground group-data-[collapsible=icon]:hidden">
+                {t("dashboard", index === 0 ? "franchiseNavigation" : "frontOfficeNavigation")}
+              </SidebarGroupLabel>
+            )}
+            <SidebarMenu className="gap-1.5">
+              {items.map((item) => {
+                const href = `${dashboardBasePath}${item.path}`;
+                const isRoot = item.path === "";
+                const isActive = isRoot
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(`${href}/`);
+                const Icon = item.icon;
+                const label =
+                  item.key === "postseason" ? t("postseason", "title") : t("dashboard", item.key);
 
-      <SidebarContent className={`${body.className} game-shell-sidebar`}>
-        <SidebarMenu className="py-4">
-          {NAV_ITEMS.map((item) => {
-            const href = `${dashboardBasePath}${item.path}`;
-            const isRoot = item.path === "";
-            const isActive = isRoot
-              ? pathname === href
-              : pathname === href || pathname.startsWith(`${href}/`);
-            const Icon = item.icon;
-            const label =
-              item.key === "postseason" ? t("postseason", "title") : t("dashboard", item.key);
-
-            return (
-              <SidebarMenuItem
-                key={href}
-                className="w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
-              >
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  tooltip={label}
-                  className="h-11 gap-3 rounded-none text-base [&_svg]:size-5 group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
-                >
-                  <Link href={href}>
-                    <Icon />
-                    <span className="group-data-[collapsible=icon]:hidden">{label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
+                return (
+                  <SidebarMenuItem
+                    key={href}
+                    className="w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
+                  >
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={label}
+                      className="h-11 gap-3 rounded-sm text-sm text-muted-foreground [&_svg]:size-5 group-data-[collapsible=icon]:mx-auto! group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-0!"
+                    >
+                      <SidebarNavigationLink
+                        href={href}
+                        aria-current={isActive ? "page" : undefined}
+                      >
+                        <Icon />
+                        <span className="group-data-[collapsible=icon]:hidden">{label}</span>
+                      </SidebarNavigationLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter
@@ -438,6 +471,7 @@ interface DashboardHeaderProps {
   gameName: string;
   selectedTeamId: string;
   seasonYear: number;
+  simulationDate: Date;
 }
 
 export function DashboardHeader({
@@ -445,69 +479,65 @@ export function DashboardHeader({
   gameName,
   selectedTeamId,
   seasonYear,
+  simulationDate,
 }: DashboardHeaderProps) {
-  const pathname = usePathname();
   const t = useT();
+  const locale = useLocale();
   const { data: teams } = useTeams();
   const dashboardBasePath = `/games/${gameId}/dashboard`;
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
 
-  // Determinar la sección activa para el breadcrumb
-  const activeItem = NAV_ITEMS.slice()
-    .reverse()
-    .find((item) => {
-      const href = `${dashboardBasePath}${item.path}`;
-      return item.path === ""
-        ? pathname === href
-        : pathname === href || pathname.startsWith(`${href}/`);
-    });
-
-  const isHome = activeItem?.path === "" || !activeItem;
-
   return (
     <header
-      className={`${body.className} game-shell-header flex h-12 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12`}
+      className={`${body.className} game-shell-header flex min-h-[88px] shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b px-4 py-4 md:px-6 min-[1700px]:px-12`}
     >
-      <div className="flex flex-1 items-center gap-2">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4 data-[orientation=vertical]:h-4" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink asChild>
-                <Link href={dashboardBasePath}>{t("dashboard", "gm")}</Link>
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            {!isHome && activeItem && (
-              <>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    {activeItem.key === "postseason"
-                      ? t("postseason", "title")
-                      : t("dashboard", activeItem.key)}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </>
-            )}
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="hidden items-end sm:flex flex-col">
-          <span className="text-xs text-muted-foreground">
-            {t("dashboard", "season")} {formatSeasonLabel(seasonYear)}
+      <SidebarTrigger aria-label={t("dashboard", "toggleSidebar")} className="-ml-1" />
+      <Link href={dashboardBasePath} className="hidden min-w-0 items-center gap-3 xl:flex">
+        {selectedTeam?.logoUrl && (
+          <Image
+            src={selectedTeam.logoUrl}
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 object-contain"
+          />
+        )}
+        <span className="min-w-0">
+          <span className="block text-xs uppercase tracking-widest text-muted-foreground">
+            {t("dashboard", "myFranchise")}
           </span>
-          <span className="text-xs font-medium leading-none">
-            {selectedTeam ? `GM · ${selectedTeam.city}` : t("dashboard", "guestGm")}
-          </span>
+          <strong className="block text-sm font-semibold">
+            {selectedTeam?.name || t("dashboard", "teamFallback")}
+          </strong>
+        </span>
+      </Link>
+      <dl className="flex flex-1 flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <div className="xl:border-l xl:pl-6">
+          <dt className="text-xs uppercase tracking-widest text-muted-foreground">
+            {t("dashboard", "season")}
+          </dt>
+          <dd className="mt-1 tabular-nums">
+            {formatSeasonLabel(seasonYear)}{" "}
+            <span className="ml-2 text-muted-foreground">{t("dashboard", "nba")}</span>
+          </dd>
         </div>
-        <Separator
-          orientation="vertical"
-          className="hidden sm:block h-4 data-[orientation=vertical]:h-4"
-        />
+        <div className="hidden border-l pl-6 sm:block">
+          <dt className="text-xs uppercase tracking-widest text-muted-foreground">
+            {t("dashboard", "simulationDate")}
+          </dt>
+          <dd className="mt-1 tabular-nums">
+            {getSimulationDateFormatter(locale).format(simulationDate)}
+          </dd>
+        </div>
+        <div className="hidden border-l pl-6 min-[1400px]:block">
+          <dt className="text-xs uppercase tracking-widest text-muted-foreground">
+            {t("dashboard", "yourRole")}
+          </dt>
+          <dd className="mt-1">{t("dashboard", "generalManager")}</dd>
+        </div>
+      </dl>
+      <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

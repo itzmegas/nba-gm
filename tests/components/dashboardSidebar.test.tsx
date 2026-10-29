@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/application/providers/I18nProvider";
 import {
@@ -8,7 +8,7 @@ import {
   useBatchSimulationStore,
 } from "@/application/stores/useBatchSimulationStore";
 import { DashboardSidebar } from "@/components/dashboard/layout-components";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { postseasonFixture } from "@/infrastructure/repositories/postseason.test-fixture";
 
@@ -17,6 +17,9 @@ vi.mock("next/font/local", () => ({
 }));
 
 const { postseason, offseason } = vi.hoisted(() => ({ postseason: vi.fn(), offseason: vi.fn() }));
+const mobile = vi.hoisted(() => ({ value: false }));
+
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => mobile.value }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/games/game/dashboard/roster" }));
 vi.mock("@/application/hooks/postseason/usePostseason", () => ({
@@ -27,7 +30,15 @@ vi.mock("@/application/hooks/offseason/useOffseason", () => ({
 }));
 vi.mock("@/application/hooks/teams/useTeams", () => ({
   useTeams: () => ({
-    data: [{ id: "team", name: "Chicago Bulls", city: "Chicago", logoUrl: "/team-logo.png" }],
+    data: [
+      {
+        id: "team",
+        name: "Chicago Bulls",
+        city: "Chicago",
+        conference: "East",
+        logoUrl: "/team-logo.png",
+      },
+    ],
   }),
 }));
 vi.mock("@/application/hooks/simulation", () => ({
@@ -42,6 +53,7 @@ vi.mock("@/application/hooks/simulation/useCurrentTeamGame", () => ({
 }));
 
 beforeEach(() => {
+  mobile.value = false;
   useBatchSimulationStore.setState({
     isActive: false,
     stopRequested: false,
@@ -63,6 +75,7 @@ function renderSidebar(defaultOpen = true) {
     <I18nProvider locale="en">
       <TooltipProvider>
         <SidebarProvider defaultOpen={defaultOpen}>
+          <SidebarTrigger aria-label="Open navigation" />
           <DashboardSidebar
             gameId="game"
             selectedTeamId="team"
@@ -76,6 +89,18 @@ function renderSidebar(defaultOpen = true) {
 }
 
 describe("game sidebar visual adjustments", () => {
+  it("dismisses the mobile drawer when a real navigation route is selected", async () => {
+    mobile.value = true;
+    renderSidebar();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = await screen.findByRole("dialog", { name: "Sidebar" });
+    const route = within(drawer).getByRole("link", { name: "Calendar" });
+    expect(route.getAttribute("href")).toBe("/games/game/dashboard/schedule");
+    fireEvent.click(route);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("preserves batch progress, exclusion and pause", () => {
     useBatchSimulationStore.getState().startBatch(BATCH_SIMULATION_MODE.MONTH, 30);
     useBatchSimulationStore.getState().updateProgress(12);
@@ -99,7 +124,7 @@ describe("game sidebar visual adjustments", () => {
     expect(container.querySelectorAll(".game-shell-sidebar.courtside-font")).toHaveLength(3);
     expect(document.documentElement.hasAttribute("data-ui-preview")).toBe(false);
     expect(screen.queryByText("Courtside")).toBeNull();
-    expect(container.querySelector('[data-variant="inset"]')).toBeTruthy();
+    expect(container.querySelector('[data-variant="sidebar"]')).toBeTruthy();
   });
 
   it("shows persisted offseason planning without enabling simulation or changing the season", () => {
@@ -133,13 +158,14 @@ describe("game sidebar visual adjustments", () => {
     expect(links[1]?.getAttribute("href")).toBe("/games/game/dashboard/schedule");
   });
 
-  it("centers a larger logo without visible identity text and preserves the link name", () => {
+  it("shows compact franchise identity and localized conference", () => {
     renderSidebar();
     const identity = screen.getByRole("link", { name: "Chicago Bulls" });
     expect(identity.getAttribute("href")).toBe("/games/game/dashboard");
-    expect(identity.classList.contains("justify-center")).toBe(true);
-    expect(identity.querySelector("img")?.classList.contains("size-28")).toBe(true);
-    expect(screen.queryByText("Chicago Bulls", { exact: true })).toBeNull();
+    expect(identity.querySelector("img")?.classList.contains("size-10")).toBe(true);
+    expect(identity.querySelector("img")?.getAttribute("width")).toBe("40");
+    expect(screen.getByText("Chicago Bulls", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Eastern Conference")).toBeTruthy();
     expect(screen.queryByText("Chicago", { exact: true })).toBeNull();
   });
 
@@ -150,7 +176,7 @@ describe("game sidebar visual adjustments", () => {
     expect(logo?.classList.contains("shrink-0")).toBe(true);
     expect(logo?.classList.contains("rounded-full")).toBe(false);
     expect(logo?.classList.contains("object-cover")).toBe(false);
-    expect(logo?.classList.contains("group-data-[collapsible=icon]:size-12")).toBe(true);
+    expect(logo?.classList.contains("size-10")).toBe(true);
   });
 
   it.each([true, false])("enlarges square navigation items with the sidebar open=%s", (open) => {
@@ -159,14 +185,17 @@ describe("game sidebar visual adjustments", () => {
     expect(items).toHaveLength(8);
     for (const item of items) {
       expect(item.classList.contains("h-11")).toBe(true);
-      expect(item.classList.contains("text-base")).toBe(true);
-      expect(item.classList.contains("rounded-none")).toBe(true);
+      expect(item.classList.contains("text-sm")).toBe(true);
+      expect(item.classList.contains("rounded-sm")).toBe(true);
       expect(item.classList.contains("[&_svg]:size-5")).toBe(true);
-      expect(item.classList.contains("group-data-[collapsible=icon]:size-11!")).toBe(true);
+      expect(item.classList.contains("group-data-[collapsible=icon]:size-10!")).toBe(true);
     }
     const roster = screen.getByRole("link", { name: "Roster" });
     expect(roster.getAttribute("href")).toBe("/games/game/dashboard/roster");
     expect(roster.getAttribute("data-active")).toBe("true");
+    expect(roster.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-slot="sidebar-group"]')).toHaveLength(3);
     expect(
       container.querySelector('[data-slot="sidebar"][data-state]')?.getAttribute("data-state")
     ).toBe(open ? "expanded" : "collapsed");
