@@ -7,6 +7,7 @@ import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import { createT } from "@/application/i18n/createT";
 import type { Locale } from "@/application/i18n/types";
 import { useLocale, useT } from "@/application/providers/I18nProvider";
+import { playerProfileHref } from "@/components/league/navigation";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import { ReleasePlayerButton } from "@/components/roster/release-player-button";
 import {
@@ -189,6 +190,7 @@ interface RosterTableProps {
   players: RosterPlayer[];
   seasonYear: number;
   leagueTeamId?: string;
+  leagueReturnQuery?: string;
   canRelease?: boolean;
   onSelectPlayer?: (playerId: string) => void;
   selectedPlayerId?: string;
@@ -199,6 +201,7 @@ export function RosterTable({
   players,
   seasonYear,
   leagueTeamId,
+  leagueReturnQuery,
   canRelease = false,
   onSelectPlayer,
   selectedPlayerId,
@@ -299,7 +302,7 @@ export function RosterTable({
                 if (onSelectPlayer) onSelectPlayer(player.id);
                 else
                   router.push(
-                    `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                    playerProfileHref(gameId, player.id, leagueTeamId, leagueReturnQuery)
                   );
               }}
               data-state={selectedPlayerId === player.id ? "selected" : undefined}
@@ -330,7 +333,7 @@ export function RosterTable({
                         if (onSelectPlayer) onSelectPlayer(player.id);
                         else
                           router.push(
-                            `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                            playerProfileHref(gameId, player.id, leagueTeamId, leagueReturnQuery)
                           );
                       }}
                     >
@@ -376,7 +379,7 @@ export function RosterTable({
                   <DropdownMenuItem
                     onSelect={() =>
                       router.push(
-                        `/games/${gameId}/dashboard/player/${player.id}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`
+                        playerProfileHref(gameId, player.id, leagueTeamId, leagueReturnQuery)
                       )
                     }
                   >

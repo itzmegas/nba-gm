@@ -8,11 +8,16 @@ export function selectConferenceStandings(
 ) {
   const conference = teams.find((team) => team.id === teamId)?.conference;
   if (!conference) return [];
-  const conferenceTeams = new Map(
-    teams.filter((team) => team.conference === conference).map((team) => [team.id, team])
+  return selectLeagueStandings(
+    standings,
+    teams.filter((team) => team.conference === conference)
   );
+}
+
+export function selectLeagueStandings(standings: LeagueStanding[], teams: Team[]) {
+  const teamsById = new Map(teams.map((team) => [team.id, team]));
   return standings
-    .filter((standing) => conferenceTeams.has(standing.teamId))
+    .filter((standing) => teamsById.has(standing.teamId))
     .sort((a, b) => {
       // shortcut: ties use wins and abbreviation; add NBA tiebreakers when head-to-head records are modeled.
       const aPct = a.wins / (a.wins + a.losses || 1);
@@ -20,8 +25,8 @@ export function selectConferenceStandings(
       return (
         bPct - aPct ||
         b.wins - a.wins ||
-        (conferenceTeams.get(a.teamId)?.abbreviation ?? "").localeCompare(
-          conferenceTeams.get(b.teamId)?.abbreviation ?? "",
+        (teamsById.get(a.teamId)?.abbreviation ?? "").localeCompare(
+          teamsById.get(b.teamId)?.abbreviation ?? "",
           "en"
         )
       );

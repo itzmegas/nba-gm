@@ -9,6 +9,7 @@ import { useContractsByPlayer } from "@/application/hooks/contracts/useContracts
 import { useGame } from "@/application/hooks/games/useGame";
 import { usePlayer } from "@/application/hooks/players/usePlayers";
 import { useTeams } from "@/application/hooks/teams/useTeams";
+import { franchiseHref } from "@/components/league/navigation";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import {
   AppTable,
@@ -53,9 +54,9 @@ export default function GamePlayerDetailPage({ params }: GamePlayerDetailPagePro
   const validLeagueTeamId =
     leagueTeamId && teams?.some((team) => team.id === leagueTeamId) ? leagueTeamId : null;
   const backHref = validLeagueTeamId
-    ? `/games/${gameId}/dashboard/league?teamId=${encodeURIComponent(validLeagueTeamId)}`
+    ? franchiseHref(gameId, validLeagueTeamId, searchParams.get("leagueReturnQuery") ?? "")
     : `/games/${gameId}/dashboard/roster`;
-  const backLabel = validLeagueTeamId ? "Volver a la liga" : "Volver al roster";
+  const backLabel = validLeagueTeamId ? "Volver a la franquicia" : "Volver al roster";
 
   if (isLoadingGame || isLoadingPlayer || isLoadingContract || isLoadingTeams) {
     return (

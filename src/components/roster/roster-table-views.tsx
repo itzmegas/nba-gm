@@ -36,6 +36,7 @@ export function RosterTableViews(props: ComponentProps<typeof RosterTable>) {
           seasonYear={props.seasonYear}
           players={props.players.filter(shouldRenderRosterPlayer).map(({ player }) => player)}
           leagueTeamId={props.leagueTeamId}
+          leagueReturnQuery={props.leagueReturnQuery}
           onSelectPlayer={props.onSelectPlayer}
           selectedPlayerId={props.selectedPlayerId}
         />

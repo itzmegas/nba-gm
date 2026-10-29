@@ -15,9 +15,10 @@ import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 interface CapSpaceWidgetProps {
   gameId: string;
   teamId: string;
+  rosterHref?: string;
 }
 
-export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
+export function CapSpaceWidget({ gameId, teamId, rosterHref }: CapSpaceWidgetProps) {
   const contracts = useTeamContracts(gameId, teamId);
   const game = useGame(gameId);
   const releases = useReleaseCapCharge(gameId, teamId, game.data?.seasonYear ?? 2026);
@@ -50,7 +51,7 @@ export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
           {t("dashboard", "finances")}
         </CardTitle>
         <Button asChild variant="ghost" size="sm" className="rounded-sm">
-          <Link href={`/games/${gameId}/dashboard/roster`}>
+          <Link href={rosterHref ?? `/games/${gameId}/dashboard/roster`}>
             {t("dashboard", "roster")}
             <ArrowUpRight className="size-4" />
           </Link>

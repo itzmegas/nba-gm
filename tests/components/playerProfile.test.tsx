@@ -110,7 +110,11 @@ it("shows real identity, remaining contract years and salaries with the current 
 
 it.each([
   ["", "Volver al roster", "/games/game/dashboard/roster"],
-  ["leagueTeamId=other-team", "Volver a la liga", "/games/game/dashboard/league?teamId=other-team"],
+  [
+    "leagueTeamId=other-team",
+    "Volver a la franquicia",
+    "/games/game/dashboard/league/teams/other-team",
+  ],
   ["leagueTeamId=unknown", "Volver al roster", "/games/game/dashboard/roster"],
 ])("preserves return navigation for %s", async (search, label, href) => {
   query = search;
@@ -126,6 +130,53 @@ it("keeps zero salaries and unknown guarantees distinct from missing or negative
   expect(within(table).getAllByRole("row")).toHaveLength(3);
   expect(screen.getByText("Garantizado").nextElementSibling?.textContent).toBe("Desconocido");
   expect(within(table).queryByText("Actual")).toBeNull();
+});
+
+it("returns to the validated franchise preserving filters, repeated values and its internal tab", async () => {
+  const filters =
+    "teamId=ignored&q=LA+%26+Boston&conference=West&division=Pacific&sort=record&tag=a&tag=b&franchiseTab=roster";
+  query = new URLSearchParams({
+    leagueTeamId: "other-team",
+    leagueReturnQuery: filters,
+  }).toString();
+  await showProfile();
+  const href = screen.getByRole("link", { name: "Volver a la franquicia" }).getAttribute("href");
+  const target = new URL(href ?? "", "http://localhost");
+  expect(target.pathname).toBe("/games/game/dashboard/league/teams/other-team");
+  const expected = new URLSearchParams(filters);
+  expected.delete("teamId");
+  expect([...target.searchParams]).toEqual([...expected]);
+});
+
+it.each([
+  undefined,
+  "unknown",
+  "https://evil.example/",
+])("rejects return context without a valid league team: %s", async (leagueTeamId) => {
+  const context = new URLSearchParams({
+    leagueReturnQuery: "franchiseTab=finances&returnTo=https%3A%2F%2Fevil.example%2F",
+    returnTo: "https://evil.example/",
+  });
+  if (leagueTeamId) context.set("leagueTeamId", leagueTeamId);
+  query = context.toString();
+  await showProfile();
+  expect(screen.getByRole("link", { name: "Volver al roster" }).getAttribute("href")).toBe(
+    "/games/game/dashboard/roster"
+  );
+});
+
+it("treats a return path as query data, never as a navigation destination", async () => {
+  query = new URLSearchParams({
+    leagueTeamId: "other-team",
+    leagueReturnQuery: "https://evil.example/",
+  }).toString();
+  await showProfile();
+  const target = new URL(
+    screen.getByRole("link", { name: "Volver a la franquicia" }).getAttribute("href") ?? "",
+    "http://localhost"
+  );
+  expect(target.origin).toBe("http://localhost");
+  expect(target.pathname).toBe("/games/game/dashboard/league/teams/other-team");
 });
 
 it.each([
@@ -184,8 +235,8 @@ it.each(["game", "player"])("keeps return navigation when %s is missing", async 
   query = "leagueTeamId=other-team";
   await showProfile();
   expect(screen.getByText("Jugador no encontrado")).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Volver a la liga" }).getAttribute("href")).toBe(
-    "/games/game/dashboard/league?teamId=other-team"
+  expect(screen.getByRole("link", { name: "Volver a la franquicia" }).getAttribute("href")).toBe(
+    "/games/game/dashboard/league/teams/other-team"
   );
   expect(document.querySelector("a button")).toBeNull();
 });

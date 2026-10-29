@@ -352,6 +352,15 @@ describe("roster evidence", () => {
 });
 
 describe("financial truth", () => {
+  it("keeps an opponent's financial roster link inside its franchise profile", () => {
+    const href = "/games/game/dashboard/league/teams/cha?conference=East&franchiseTab=roster";
+    show(<CapSpaceWidget gameId="game" teamId="cha" rosterHref={href} />);
+    expect(screen.getByRole("link", { name: "Roster" }).getAttribute("href")).toBe(href);
+    expect(screen.queryByRole("link", { name: "Roster" })?.getAttribute("href")).not.toBe(
+      "/games/game/dashboard/roster"
+    );
+  });
+
   it("retains all thresholds and the computed bar including release charges", () => {
     const { container } = show(<CapSpaceWidget gameId="game" teamId="chi" />);
     const thresholds = getSalaryCapThresholds(game.seasonYear);
