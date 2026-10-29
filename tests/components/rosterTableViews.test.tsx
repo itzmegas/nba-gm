@@ -158,3 +158,43 @@ it.each([
     `/games/career/dashboard/player/${scores[0].playerId}?${new URLSearchParams({ leagueTeamId: "team", leagueReturnQuery: returnQuery })}`
   );
 });
+
+it("offers compact overview and sortable contracts with unknown salaries and retained sorting", () => {
+  const roster = [
+    { ...players[0], contract: { salaryY1: 10_000_000, salaryY2: 12_000_000, endYear: 2028 } },
+    { ...players[1], contract: { salaryY1: 5_000_000, endYear: 2026 } },
+  ] as RosterPlayer[];
+  const select = vi.fn();
+  render(
+    <I18nProvider locale="en">
+      <RosterTableViews
+        gameId="career"
+        seasonYear={2026}
+        players={roster}
+        initialView="overview"
+        onSelectPlayer={select}
+        selectedPlayerId="missing"
+      />
+    </I18nProvider>
+  );
+  expect(screen.getAllByRole("columnheader")).toHaveLength(7);
+  expect(screen.queryByRole("columnheader", { name: "CLOSE" })).toBeNull();
+  expect(screen.queryByRole("columnheader", { name: "POT" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Contracts", pressed: false }));
+  const table = screen.getByRole("table");
+  expect(within(table).queryByRole("columnheader", { name: "OVR" })).toBeNull();
+  expect(within(table).getByText("$12.0M")).toBeTruthy();
+  expect(within(table).getAllByText("Unknown").length).toBeGreaterThan(0);
+  fireEvent.click(within(table).getByRole("button", { name: "Duration" }));
+  expect(within(table).getAllByRole("row")[1].textContent).toContain("Roster Player");
+  fireEvent.click(within(table).getByRole("button", { name: "Duration" }));
+  expect(within(table).getAllByRole("row")[1].textContent).toContain("No Appearances");
+  fireEvent.click(within(table).getByRole("button", { name: "No Appearances", pressed: true }));
+  expect(select).toHaveBeenCalledExactlyOnceWith("missing");
+  fireEvent.click(screen.getByRole("button", { name: "Roster & ratings" }));
+  expect(screen.getByRole("columnheader", { name: "CLOSE" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Contracts" }));
+  expect(within(screen.getByRole("table")).getAllByRole("row")[1].textContent).toContain(
+    "No Appearances"
+  );
+});

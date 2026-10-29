@@ -1,4 +1,20 @@
 export const en = {
+  rosterUI: {
+    context: "Front office / Personnel",
+    title: "Roster management",
+    description: "Know your core. Find your edge. Build your contender.",
+    overview: "Overview",
+    contracts: "Contracts",
+    selectHelp: "Select a player to view details",
+    search: "Search players",
+    searchPlaceholder: "Find a player…",
+    allPositions: "All positions",
+    allPlayers: "All players",
+    noMatches: "No players match. Try another name, position or roster group.",
+    selectedPlayer: "Selected player",
+    previousPlayer: "Select previous player",
+    nextPlayer: "Select next player",
+  },
   franchise: {
     description: "Understand the organization behind the roster.",
     backToTeams: "Back to Teams",

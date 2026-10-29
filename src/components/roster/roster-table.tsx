@@ -176,7 +176,18 @@ const SORT_VALUES = {
   },
   salary: ({ contract }: RosterPlayer) => contract?.salaryY1,
   overall: ({ ratings }: RosterPlayer) => ratings?.overall,
+  endYear: ({ contract }: RosterPlayer) => contract?.endYear,
+  salaryY2: ({ contract }: RosterPlayer) => contract?.salaryY2,
+  salaryY3: ({ contract }: RosterPlayer) => contract?.salaryY3,
+  salaryY4: ({ contract }: RosterPlayer) => contract?.salaryY4,
 };
+
+export const ROSTER_TABLE_VIEW = {
+  OVERVIEW: "overview",
+  RATINGS: "ratings",
+  CONTRACTS: "contracts",
+} as const;
+export type RosterTableView = (typeof ROSTER_TABLE_VIEW)[keyof typeof ROSTER_TABLE_VIEW];
 
 type SortColumn = keyof typeof SORT_VALUES | keyof PlayerAttributes;
 
@@ -194,6 +205,7 @@ interface RosterTableProps {
   canRelease?: boolean;
   onSelectPlayer?: (playerId: string) => void;
   selectedPlayerId?: string;
+  view?: RosterTableView;
 }
 
 export function RosterTable({
@@ -205,6 +217,7 @@ export function RosterTable({
   canRelease = false,
   onSelectPlayer,
   selectedPlayerId,
+  view = ROSTER_TABLE_VIEW.RATINGS,
 }: RosterTableProps) {
   const router = useRouter();
   const t = useT();
@@ -259,31 +272,48 @@ export function RosterTable({
           {header("jerseyNumber", "#", "w-8")}
           {header("player", t("dashboard", "rosterPlayer"), "[&>button]:justify-start")}
           {header("position", t("dashboard", "rosterPosition"), "w-16 text-center")}
-          {header(
-            "height",
-            t("dashboard", "rosterHeight"),
-            "w-20 text-center hidden md:table-cell"
-          )}
+          {view === ROSTER_TABLE_VIEW.RATINGS &&
+            header(
+              "height",
+              t("dashboard", "rosterHeight"),
+              "w-20 text-center hidden md:table-cell"
+            )}
           {header(
             "salary",
             `${t("dashboard", "rosterSalary")} ${formatSalarySeasonLabel(seasonYear)}`,
             "min-w-36 whitespace-nowrap text-right [&>button]:justify-end"
           )}
-          {header(
-            "overall",
-            <abbr title={t("playerAttributes", "overall")} className="cursor-help no-underline">
-              OVR
-            </abbr>,
-            "min-w-16 border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-bold"
-          )}
-          {ATTRIBUTE_COLUMNS.map(({ key, label }) =>
+          {view !== ROSTER_TABLE_VIEW.CONTRACTS &&
             header(
-              key,
-              <abbr title={t("playerAttributes", key)} className="cursor-help no-underline">
-                {label}
+              "overall",
+              <abbr title={t("playerAttributes", "overall")} className="cursor-help no-underline">
+                OVR
               </abbr>,
-              "px-3 text-center whitespace-nowrap"
-            )
+              "min-w-16 border-x border-primary/20 bg-primary/10 px-3 py-3 text-center font-bold"
+            )}
+          {view === ROSTER_TABLE_VIEW.RATINGS &&
+            ATTRIBUTE_COLUMNS.map(({ key, label }) =>
+              header(
+                key,
+                <abbr title={t("playerAttributes", key)} className="cursor-help no-underline">
+                  {label}
+                </abbr>,
+                "px-3 text-center whitespace-nowrap"
+              )
+            )}
+          {view !== ROSTER_TABLE_VIEW.RATINGS &&
+            header("endYear", t("dashboard", "rosterDuration"), "text-center")}
+          {view === ROSTER_TABLE_VIEW.CONTRACTS && (
+            <>
+              {(["salaryY2", "salaryY3", "salaryY4"] as const).map((key, index) =>
+                header(
+                  key,
+                  `${t("dashboard", "rosterSalary")} ${formatSalarySeasonLabel(seasonYear + index + 1)}`,
+                  "whitespace-nowrap text-right [&>button]:justify-end"
+                )
+              )}
+              <AppTableHead>{t("dashboard", "rosterStatus")}</AppTableHead>
+            </>
           )}
           <AppTableHead className="text-right">{t("dashboard", "rosterActions")}</AppTableHead>
         </AppTableRow>
@@ -316,14 +346,14 @@ export function RosterTable({
               {/* Nombre y Foto */}
               <AppTableCell>
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
+                  <div className="h-10 w-10 rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center shrink-0">
                     <PlayerHeadshot
                       src={player.headshotUrl}
                       alt={player.fullName}
                       className="h-full w-full object-cover object-top"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <button
                       type="button"
                       className="font-semibold whitespace-nowrap hover:underline focus-visible:outline-2 focus-visible:outline-primary"
@@ -357,23 +387,49 @@ export function RosterTable({
               </AppTableCell>
 
               {/* Altura */}
-              <AppTableCell className="text-center text-muted-foreground hidden md:table-cell">
-                {player.height ?? "—"}
-              </AppTableCell>
+              {view === ROSTER_TABLE_VIEW.RATINGS && (
+                <AppTableCell className="text-center text-muted-foreground hidden md:table-cell">
+                  {player.height ?? "—"}
+                </AppTableCell>
+              )}
 
               {/* Salario Y1 */}
               <AppTableCell className="min-w-36 whitespace-nowrap text-right font-mono font-semibold">
                 {formatRosterSalary(contract?.salaryY1, locale)}
               </AppTableCell>
-              <AppTableCell className="border-x border-primary/20 bg-primary/10 px-3 text-center font-mono text-base font-black tabular-nums">
-                {rosterPlayer.ratings?.overall ?? "—"}
-              </AppTableCell>
-
-              {ATTRIBUTE_COLUMNS.map(({ key }) => (
-                <AppTableCell key={key} className="px-3 text-center font-mono tabular-nums">
-                  {rosterPlayer.ratings?.attributes[key] ?? "—"}
+              {view !== ROSTER_TABLE_VIEW.CONTRACTS && (
+                <AppTableCell className="px-3 text-center font-mono tabular-nums">
+                  <span className="inline-block min-w-8 rounded-sm border border-primary/20 bg-primary/10 px-1.5 py-1 font-bold">
+                    {rosterPlayer.ratings?.overall ?? "—"}
+                  </span>
                 </AppTableCell>
-              ))}
+              )}
+
+              {view === ROSTER_TABLE_VIEW.RATINGS &&
+                ATTRIBUTE_COLUMNS.map(({ key }) => (
+                  <AppTableCell key={key} className="px-3 text-center font-mono tabular-nums">
+                    {rosterPlayer.ratings?.attributes[key] ?? "—"}
+                  </AppTableCell>
+                ))}
+              {view !== ROSTER_TABLE_VIEW.RATINGS && (
+                <AppTableCell className="text-center font-mono whitespace-nowrap">
+                  {contract
+                    ? `${getYearsRemaining(seasonYear, contract.endYear)}${t("dashboard", "yearsShort")}`
+                    : "—"}
+                </AppTableCell>
+              )}
+              {view === ROSTER_TABLE_VIEW.CONTRACTS && (
+                <>
+                  {(["salaryY2", "salaryY3", "salaryY4"] as const).map((key) => (
+                    <AppTableCell key={key} className="text-right font-mono whitespace-nowrap">
+                      {formatRosterSalary(contract?.[key], locale)}
+                    </AppTableCell>
+                  ))}
+                  <AppTableCell className="whitespace-nowrap">
+                    {getContractStatus(rosterPlayer, seasonYear, locale).label}
+                  </AppTableCell>
+                </>
+              )}
               <AppTableCell className="text-right">
                 <TableActions label={`${t("dashboard", "rosterActions")} — ${player.fullName}`}>
                   <DropdownMenuItem

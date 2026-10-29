@@ -1,6 +1,22 @@
 import type { Messages } from "../types";
 
 export const es: Messages = {
+  rosterUI: {
+    context: "Dirección deportiva / Personal",
+    title: "Gestión del plantel",
+    description: "Conoce tu núcleo. Encuentra tu ventaja. Construye un equipo competitivo.",
+    overview: "Resumen",
+    contracts: "Contratos",
+    selectHelp: "Selecciona un jugador para ver sus detalles",
+    search: "Buscar jugadores",
+    searchPlaceholder: "Buscar un jugador…",
+    allPositions: "Todas las posiciones",
+    allPlayers: "Todos los jugadores",
+    noMatches: "Ningún jugador coincide. Prueba otro nombre, posición o grupo.",
+    selectedPlayer: "Jugador seleccionado",
+    previousPlayer: "Seleccionar jugador anterior",
+    nextPlayer: "Seleccionar jugador siguiente",
+  },
   franchise: {
     description: "Conoce la organización detrás de la plantilla.",
     backToTeams: "Volver a Equipos",
