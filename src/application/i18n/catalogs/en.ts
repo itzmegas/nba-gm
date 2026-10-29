@@ -98,6 +98,9 @@ export const en = {
     loadFailed: "Unable to load the franchise. Retry before inspecting its data.",
   },
   standings: {
+    description: "Follow the league table and inspect each franchise.",
+    inspectorLimitations:
+      "Only recorded standings are shown. Form, payroll, roster ratings and postseason qualification are not evaluated here.",
     back: "Back to Standings",
     view: "Standings view",
     overall: "Overall league",

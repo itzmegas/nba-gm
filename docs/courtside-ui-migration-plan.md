@@ -4,15 +4,23 @@
 
 **Decisión vigente — 2026-10-29:** adoptar íntegramente la presentación de `docs/NBA-Franchise-Management-Redesign/`, con las excepciones de la sección 0. Se abandona el enfoque híbrido: el objetivo es la identidad de un juego de gestión, no el aspecto predeterminado de shadcn con otra tipografía o paleta.
 
-**Alcance de la entrega actual:** ficha de franquicia `/league/teams/[teamId]` (fase 5A), realineada con el export completo sobre sus datos existentes; el usuario solicitó su commit. Teams ya está aprobado y commiteado en `08df92e`. Sin cambios en el directorio, Standings, shell/layout, Dashboard, Roster compartido, backend ni dependencias en esta unidad.
+**Alcance de la entrega actual:** Standings `/league/standings` (fase 5A), realineado con el diseño dedicado sobre datos reales, aprobado visualmente por el usuario y con commit solicitado antes de continuar. Teams (`08df92e`) y ficha de franquicia (`45db726`) están aprobados y commiteados. Sin push; sin cambios en shell/layout, otras pantallas, backend ni dependencias.
 
-**Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings mantienen sus alcances funcionales acordados y su revisión visual pendiente.
+**Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings completos están aprobados visualmente; Standings conserva su alcance funcional acordado.
 
-**Siguiente paso:** revisar y aprobar visualmente la ficha de franquicia antes de avanzar a Standings. No volver a negociar un híbrido por pantalla. La aprobación de Teams no acredita comprobaciones de navegador, persistencia autenticada ni build.
+**Siguiente paso:** realizar el commit solicitado de Standings; después continuar con Players, el directorio global específico de la partida de la fase 5, no Calendar. No volver a negociar un híbrido por pantalla. La aprobación visual humana no acredita comprobaciones técnicas de navegador, persistencia autenticada ni build.
 
 La sección 0 prevalece sobre recomendaciones y aprobaciones anteriores. Las secciones 1–8 orientan la migración; la sección 9 y las entregas anteriores de la sección 10 conservan evidencia histórica, no acreditan la nueva implementación. Adoptar todo el diseño no autoriza implementar todas sus funcionalidades.
 
 ## 0. Acuerdos vigentes y forma de trabajo
+
+**Continuación aprobada — Standings completo (2026-10-29):** tras aprobar Teams y ficha de franquicia, el usuario autorizó esta unidad. Se inspeccionaron `standings.js` y `standings.css` dedicados, no la alternativa de `league.js`. Se adopta encabezado editorial con temporada real, toolbar única con conferencia/vista/orden, tablas densas con escudos de 25 px, encabezados compactos y ordenables, y panel tintado con identidad centrada, escudo de 70 px y tres métricas separadas por divisores. La relación tabla/inspector es 73:27 en escritorio amplio, apilada por debajo de 1280 px para conservar legibilidad con el shell. Scroll horizontal local y encabezados sticky; sin CSS global.
+
+**Conservación y límites:** se mantienen RK/franquicia/W/L/PCT/GB reales, East/West/Both, agrupaciones conferencia/división/liga, orden ascendente/descendente, rango y GB independientes del orden visual, equipo propio y selección diferenciados, selección fuera del filtro, errores/reintentos, registros ausentes y 0–0 sin porcentaje inventado. La toolbar reutiliza el orden URL existente; el enlace a la ficha conserva filtros y parámetros repetidos. EN/ES y tokens semánticos claro/oscuro/franquicia permanecen. No se agregan HOME/AWAY/L10/racha/diferencial, comparación, forma, payroll, ratings, jugadores ni acciones ficticias. Se omiten zonas de postseason; permanece el orden simplificado PCT/victorias/abreviatura, sin desempates oficiales NBA ni afirmaciones de clasificación.
+
+**Estado de entrega — Standings (2026-10-29):** implementación completa y **aprobada visualmente por el usuario**, quien solicitó el commit antes de continuar. No se verificaron técnicamente capturas o geometría en navegador, contraste completo, zoom nativo, partida autenticada, persistencia ni build productivo. La siguiente unidad es Players; no se implementa en esta entrega.
+
+**Verificación de Standings:** `bun biome check` (438 archivos), `bun run typecheck` y `git diff --check` pasan. Suite completa `bun run test --maxWorkers=2`: **1061 tests en 135 archivos**, incluidos **17 tests** de Standings. La nueva regresión cubre toolbar de orden, inspector con registro/rango reales, seis columnas sin métricas ficticias y enlace a ficha con parámetros repetidos. Siguen pasando filtros, conservación de conferencia al salir de liga completa, orden bidireccional, rango/GB estables, selección ajena al filtro, registros ausentes/cero, EN/ES y reintento. Las primeras ejecuciones detectaron dos expectativas incorrectas del nuevo test (temporada abreviada y equipo codificado en ruta, no en query); se corrigieron sin alterar comportamiento. Happy DOM conserva la advertencia conocida sobre `search` en Teams, sin fallos.
 
 **Aprobación posterior — Teams completo (2026-10-29):** el usuario aprobó la entrega («Bien»), solicitó commitear y continuar. Se cierra la revisión visual del directorio, sin acreditar las comprobaciones técnicas pendientes. La siguiente unidad es la ficha de franquicia; no se solicitó push.
 
@@ -503,7 +511,7 @@ Es un buen primer caso real: usa pocos componentes, tiene datos conectados y per
 
 ### Fase 5 — League existente: Teams → Standings → Players
 
-**Estado actual 5A:** directorio Teams aprobado y commiteado (`08df92e`); ficha de franquicia realineada con el export completo, pendiente de aprobación visual. Standings no se modifica en esta unidad. Detalles y verificaciones en la sección 0.
+**Estado actual 5A:** directorio Teams (`08df92e`) y ficha de franquicia (`45db726`) aprobados y commiteados; Standings realineado con el diseño dedicado, aprobado visualmente y con commit solicitado. La siguiente unidad es Players, el directorio global específico de la partida; Calendar corresponde a la fase 6. Detalles y límites de verificación en la sección 0.
 
 Después de realinear Roster (4A) y Player Profile (4B), dividir en tres entregas con alcance funcional acotado y la presentación completa como referencia común:
 

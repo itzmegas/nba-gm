@@ -103,6 +103,9 @@ export const es: Messages = {
     loadFailed: "No se pudo cargar la franquicia. Reintenta antes de consultar sus datos.",
   },
   standings: {
+    description: "Consulta la clasificación y explora cada franquicia.",
+    inspectorLimitations:
+      "Solo se muestran registros disponibles. Aquí no se evalúan forma reciente, masa salarial, valoración del plantel ni clasificación a postemporada.",
     back: "Volver a posiciones",
     view: "Vista de posiciones",
     overall: "Liga completa",

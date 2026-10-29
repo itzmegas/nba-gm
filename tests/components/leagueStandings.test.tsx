@@ -134,6 +134,29 @@ it("changes filters interactively, preserving the conference when returning from
   expect(mocks.query).toContain("stConference=West");
 });
 
+it("renders the full-design inspector and toolbar without unsupported metrics", () => {
+  mocks.query = "tag=a&tag=b&teamId=nyk";
+  page();
+  expect(screen.getByText("26-27 · NBA")).toBeTruthy();
+  const inspector = screen.getByRole("region", { name: "Selected franchise" });
+  expect(within(inspector).getByRole("heading", { name: "New York Knicks" })).toBeTruthy();
+  expect(within(inspector).getByText("2–4")).toBeTruthy();
+  expect(within(inspector).getByText("2 / 2")).toBeTruthy();
+  fireEvent.click(screen.getByRole("combobox", { name: "Sort by" }));
+  fireEvent.click(screen.getByRole("option", { name: "Wins" }));
+  const table = screen.getAllByRole("table")[0];
+  expect(
+    within(table).getByRole("button", { name: "Wins" }).closest("th")?.getAttribute("aria-sort")
+  ).toBe("descending");
+  expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+  expect(screen.queryByText("HOME")).toBeNull();
+  expect(screen.queryByText("L10")).toBeNull();
+  const href = screen.getByRole("link", { name: "View Franchise" }).getAttribute("href") ?? "";
+  expect(href).toContain("tag=a&tag=b");
+  expect(href).toContain("/league/teams/nyk?");
+  expect(href).toContain("stSort=wins");
+});
+
 it.each([
   "Rank",
   "Franchise",
