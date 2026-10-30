@@ -32,7 +32,7 @@ afterEach(cleanup);
 it.each([
   "en",
   "es",
-] as const)("renders six localized sections with Teams and Standings enabled (%s)", async (locale) => {
+] as const)("renders six localized sections with Teams, Standings and Players enabled (%s)", async (locale) => {
   const t = createT(locale);
   const layout = await LeagueLayout({
     params: Promise.resolve({ gameId: "game" }),
@@ -46,7 +46,12 @@ it.each([
   expect(screen.getByText(t("league", "description"))).toBeTruthy();
   const nav = screen.getByRole("navigation", { name: t("league", "navigation") });
   expect(within(nav).getAllByRole("listitem")).toHaveLength(6);
-  expect(within(nav).getAllByRole("link")).toHaveLength(2);
+  expect(within(nav).getAllByRole("link")).toHaveLength(3);
+  expect(
+    within(nav)
+      .getByRole("link", { name: t("league", "players") })
+      .getAttribute("href")
+  ).toBe("/games/game/dashboard/league/players");
   expect(
     within(nav)
       .getByRole("link", { name: t("league", "standings") })
@@ -56,7 +61,7 @@ it.each([
   expect(teams.getAttribute("href")).toBe(teamsHref);
   expect(teams.getAttribute("aria-current")).toBe("page");
 
-  for (const section of ["overview", "players", "leaders", "transactions"] as const) {
+  for (const section of ["overview", "leaders", "transactions"] as const) {
     const upcoming = within(nav).getByText(t("league", section)).closest("[aria-disabled]");
     expect(upcoming?.tagName).toBe("SPAN");
     expect(upcoming?.getAttribute("aria-disabled")).toBe("true");

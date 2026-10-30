@@ -139,6 +139,17 @@ it("translates the profile, return link, salary schedule and unavailable notice 
   expect(screen.queryByText("Actual")).toBeNull();
 });
 
+it("returns to Players with validated directory context without changing franchise precedence", async () => {
+  query = new URLSearchParams({
+    playersReturn: "1",
+    playersReturnQuery: "q=Player&status=inactive&page=2&returnTo=https://evil.example",
+  }).toString();
+  await showProfile("en");
+  expect(screen.getByRole("link", { name: "Players" }).getAttribute("href")).toBe(
+    "/games/game/dashboard/league/players?q=Player&status=inactive&page=2"
+  );
+});
+
 it.each([
   ["", "Volver al roster", "/games/game/dashboard/roster"],
   [

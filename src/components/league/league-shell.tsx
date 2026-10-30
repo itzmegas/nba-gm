@@ -31,10 +31,10 @@ export function LeagueShell({ gameId, children }: LeagueShellProps) {
         <ul className="flex min-w-max gap-1 border-b border-border/60 pb-2">
           {sections.map((section) => (
             <li key={section}>
-              {section === "teams" || section === "standings" ? (
+              {section === "teams" || section === "standings" || section === "players" ? (
                 <Link
                   href={
-                    section === "teams" ? teamsHref : `/games/${gameId}/dashboard/league/standings`
+                    section === "teams" ? teamsHref : `/games/${gameId}/dashboard/league/${section}`
                   }
                   aria-current={
                     pathname === `/games/${gameId}/dashboard/league/${section}` ||

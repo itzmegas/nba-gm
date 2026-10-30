@@ -120,6 +120,35 @@ export const es: Messages = {
     missing:
       "— = registro no disponible o sin partidos jugados. Los registros faltantes no tienen posición.",
   },
+  playersDirectory: {
+    title: "Jugadores NBA",
+    description:
+      "Explora los jugadores de esta partida. Abre un perfil para ver los detalles disponibles.",
+    database: "Directorio de jugadores",
+    search: "Buscar jugadores",
+    team: "Equipo",
+    allTeams: "Todos los equipos",
+    free: "Sin equipo",
+    position: "Posición",
+    all: "Todos",
+    status: "Estado",
+    active: "Activo",
+    inactive: "Inactivo",
+    name: "Nombre del jugador",
+    salary: "Salario actual",
+    inspector: "Inspector de jugador",
+    profile: "Ver perfil completo",
+    previous: "Anterior",
+    next: "Siguiente",
+    page: "Página",
+    results: "jugadores",
+    empty: "No hay jugadores que coincidan con estos filtros.",
+    error: "No se pudo cargar el directorio de jugadores. No se muestra un directorio parcial.",
+    coverage:
+      "Pertenencia y actividad específicas de la partida. Los salarios y valoraciones ausentes permanecen desconocidos. Los jugadores activos sin equipo se muestran por separado; esto no establece elegibilidad para la agencia libre.",
+    limits:
+      "Directorio de solo lectura. No se infieren estadísticas, potencial, informes de scouting ni acciones de traspaso. La cobertura contractual no garantiza salarios futuros.",
+  },
   league: {
     navigation: "Secciones de la liga",
     title: "Liga",
