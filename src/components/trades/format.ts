@@ -1,7 +1,8 @@
 import type { PickInventory } from "@/domain/entities/Trade";
 
 export function formatSalary(amount: number | null | undefined): string {
-  if (!amount) return "—";
+  if (amount === null || amount === undefined) return "—";
+  if (amount === 0) return "$0";
   if (amount >= 1_000_000) {
     return `$${(amount / 1_000_000).toFixed(1)}M`;
   }

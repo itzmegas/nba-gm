@@ -2,10 +2,17 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TradesPage from "@/app/(protected)/games/[gameId]/dashboard/trades/page";
+import { I18nProvider } from "@/application/providers/I18nProvider";
+
+vi.mock("@/app/ui-preview/fonts", () => ({ display: { className: "display" } }));
 
 const mocks = vi.hoisted(() => ({
   loaded: true,
   releaseChargesLoaded: true,
+  queryError: false,
+  queryLoading: false,
+  pending: false,
+  refetch: vi.fn(),
   simulate: vi.fn(() => ({ data: undefined })),
   execute: vi.fn(async () => ({ success: false, error: "Trade unavailable" })),
   panelLogo: vi.fn<(logoUrl?: string) => void>(),
@@ -55,7 +62,12 @@ vi.mock("@/application/hooks/player-states/usePlayerStates", () => ({
   usePlayerStates: () => ({ data: [] }),
 }));
 vi.mock("@/application/hooks/trades/useDraftPickInventory", () => ({
-  useDraftPickInventory: () => ({ data: [] }),
+  useDraftPickInventory: () => ({
+    data: [],
+    isError: mocks.queryError,
+    isLoading: mocks.queryLoading,
+    refetch: mocks.refetch,
+  }),
 }));
 vi.mock("@/application/hooks/trades/useTradeHistory", () => ({
   useTradeHistory: () => ({
@@ -72,7 +84,7 @@ vi.mock("@/application/hooks/trades/useTradeHistory", () => ({
 }));
 vi.mock("@/application/hooks/trades/useTrades", () => ({
   useSimulateTrade: mocks.simulate,
-  useExecuteTrade: () => ({ mutateAsync: mocks.execute, isPending: false }),
+  useExecuteTrade: () => ({ mutateAsync: mocks.execute, isPending: mocks.pending }),
 }));
 vi.mock("@/components/trades/trade-asset-panel", () => ({
   TradeAssetPanel: ({
@@ -95,16 +107,21 @@ vi.mock("@/components/trades/trade-summary", () => ({
     onExecute,
     teamALogoUrl,
     teamBLogoUrl,
+    executionError,
   }: {
     onExecute: () => Promise<void>;
     teamALogoUrl?: string;
     teamBLogoUrl?: string;
+    executionError: string | null;
   }) => {
     mocks.summaryLogos(teamALogoUrl, teamBLogoUrl);
     return (
-      <button type="button" onClick={onExecute}>
-        Execute trade
-      </button>
+      <>
+        <span>{executionError}</span>
+        <button type="button" onClick={onExecute}>
+          Execute trade
+        </button>
+      </>
     );
   },
 }));
@@ -122,6 +139,9 @@ vi.mock("@/components/ui/select", () => ({
 
 describe("TradesPage", () => {
   beforeEach(() => {
+    mocks.queryError = false;
+    mocks.queryLoading = false;
+    mocks.pending = false;
     mocks.loaded = true;
     mocks.releaseChargesLoaded = true;
     mocks.simulate.mockClear();
@@ -133,7 +153,11 @@ describe("TradesPage", () => {
 
   async function selectOpponent() {
     await act(async () => {
-      render(<TradesPage params={Promise.resolve({ gameId: "game" })} />);
+      render(
+        <I18nProvider locale="en">
+          <TradesPage params={Promise.resolve({ gameId: "game" })} />
+        </I18nProvider>
+      );
     });
     fireEvent.click(screen.getByRole("button", { name: "Select opponent" }));
   }
@@ -217,7 +241,7 @@ describe("TradesPage", () => {
       2026
     );
     expect(screen.getByRole("status").textContent).toBe("Checking trade…");
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Trade" }));
     expect(mocks.simulate).toHaveBeenLastCalledWith(
       "game",
       expect.anything(),
@@ -227,5 +251,81 @@ describe("TradesPage", () => {
       2026
     );
     expect(screen.getByRole("status").textContent).toBe("Waiting for your next move");
+  });
+
+  it("shows query failures instead of a usable partial builder or false empty history", async () => {
+    mocks.queryError = true;
+    await act(async () =>
+      render(
+        <I18nProvider locale="en">
+          <TradesPage params={Promise.resolve({ gameId: "game" })} />
+        </I18nProvider>
+      )
+    );
+    expect(screen.getByRole("alert").textContent).toContain("Unable to load trade data");
+    expect(screen.queryByText("No trades recorded yet.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Execute trade" })).toBeNull();
+  });
+
+  it("shows loading without partial data and translates page context", async () => {
+    mocks.queryLoading = true;
+    await act(async () =>
+      render(
+        <I18nProvider locale="es">
+          <TradesPage params={Promise.resolve({ gameId: "game" })} />
+        </I18nProvider>
+      )
+    );
+    expect(screen.getByRole("status").textContent).toBe("Cargando datos del traspaso…");
+    cleanup();
+    mocks.queryLoading = false;
+    await act(async () =>
+      render(
+        <I18nProvider locale="es">
+          <TradesPage params={Promise.resolve({ gameId: "game" })} />
+        </I18nProvider>
+      )
+    );
+    expect(screen.getByRole("heading", { name: "CENTRO DE TRASPASOS" })).toBeTruthy();
+    expect(screen.getAllByText("Historial de traspasos")).toHaveLength(2);
+  });
+
+  it("locks reset while execution is pending", async () => {
+    mocks.pending = true;
+    await selectOpponent();
+    expect(screen.getByRole("button", { name: "Reset Trade" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("keeps selected packages when execution throws and exposes the error", async () => {
+    await selectOpponent();
+    for (const button of screen.getAllByRole("button", { name: "Select pick" }))
+      fireEvent.click(button);
+    mocks.execute.mockRejectedValueOnce(new Error("Transaction rejected"));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Execute trade" })));
+    expect(screen.getByText("Transaction rejected")).toBeTruthy();
+    expect(mocks.simulate).toHaveBeenLastCalledWith(
+      "game",
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ outgoingAssets: [{ type: "pick", pickId: "pick" }] }),
+      expect.objectContaining({ outgoingAssets: [{ type: "pick", pickId: "pick" }] }),
+      2026
+    );
+  });
+
+  it("clears both packages only after successful execution", async () => {
+    await selectOpponent();
+    for (const button of screen.getAllByRole("button", { name: "Select pick" }))
+      fireEvent.click(button);
+    mocks.execute.mockResolvedValueOnce({ success: true, error: "" });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Execute trade" })));
+    expect(mocks.simulate).toHaveBeenLastCalledWith(
+      "game",
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ outgoingAssets: [] }),
+      expect.objectContaining({ outgoingAssets: [] }),
+      2026
+    );
   });
 });

@@ -4,15 +4,23 @@
 
 **Decisión vigente — 2026-10-29:** adoptar íntegramente la presentación de `docs/NBA-Franchise-Management-Redesign/`, con las excepciones de la sección 0. Se abandona el enfoque híbrido: el objetivo es la identidad de un juego de gestión, no el aspecto predeterminado de shadcn con otra tipografía o paleta.
 
-**Alcance de la entrega actual:** Players `/league/players` (fase 5), directorio global específico de la partida y corrección de selección de filas, aprobados por el usuario con commit solicitado el 2026-10-30. Standings (`6191d5f`), Teams (`08df92e`) y ficha de franquicia (`45db726`) están aprobados y commiteados. Players se entrega en commits por unidad de trabajo, sin push; sin cambios de layout, esquema, dependencias ni nuevas funcionalidades de backend.
+**Alcance de la entrega actual:** Trades (fase 8), autorizado por el usuario («Sí, vamos con trades»), sobre `trade-center.html` y sus CSS/JS dedicados. Adopción completa de su composición sobre selección, validación, ejecución e historial reales; sin commits ni push solicitados, cambios de esquema, dependencias o funcionalidades nuevas de backend. Postseason/offseason permanecen sin cambios.
 
 **Estado de lo construido:** catálogo híbrido, shell, Dashboard y Roster tuvieron aprobación previa; Roster y Player Profile están integrados en `feat/courtside-hybrid-preview`. Esas aprobaciones son historial, no restricciones para conservar su composición visual. La nueva dirección requiere realinear también las pantallas ya migradas. Teams, ficha de franquicia y Standings completos están aprobados visualmente; Standings conserva su alcance funcional acordado.
 
-**Siguiente paso:** continuar en otra sesión con Calendar mensual (fase 6); después, vista diaria y box scores. Calendar no se implementa en esta entrega. No volver a negociar un híbrido por pantalla. La aprobación visual humana no acredita comprobaciones técnicas de navegador, persistencia autenticada ni build.
+**Siguiente paso:** revisión visual humana de Trades antes de continuar. Calendar mensual y detalle diario/resultados ya tienen aprobación registrada en la fase 6. La fase 7 quedó diferida por el usuario tras detenerse antes de modificar archivos, por falta de una referencia completa. No volver a negociar un híbrido por pantalla. La aprobación visual humana no acredita comprobaciones técnicas de navegador, persistencia autenticada ni build.
 
 La sección 0 prevalece sobre recomendaciones y aprobaciones anteriores. Las secciones 1–8 orientan la migración; la sección 9 y las entregas anteriores de la sección 10 conservan evidencia histórica, no acreditan la nueva implementación. Adoptar todo el diseño no autoriza implementar todas sus funcionalidades.
 
 ## 0. Acuerdos vigentes y forma de trabajo
+
+**Unidad implementada — Trades (2026-10-30), pendiente de aceptación visual humana:** encabezado editorial, toolbar de identidad/selección de equipo y workspace 34:34:32 en escritorio amplio; dos paneles densos con cabeceras tintadas, finanzas, activos entrantes, búsqueda local, selección de jugadores/elecciones y totales enviados. Resumen lateral sticky con intercambio, validación, impacto financiero y ejecución real; detalle de jugadores desplegable con salario, duración, posición, experiencia, altura, moral y fatiga. Historial persistido desplegable. Dos columnas con resumen debajo y una columna en móvil; tablas con desplazamiento local. Sin CSS global ni cambios del shell.
+
+**Datos y salvaguardas de Trades:** se reutilizan los hooks y validadores existentes, snapshots con cargos por cortes, inventario transferible, ejecución transaccional e invalidaciones. OVR procede del soporte de temporada de `useRoster`, sin ratings inventados; experiencia sustituye la edad que esta pantalla no calcula. Búsqueda no altera selección ni totales. Se mantienen jugadores sin contrato deshabilitados y errores/advertencias del motor; errores de consultas impiden mostrar datos parciales, con reintento. Activos, equipo asociado y reset se bloquean mientras se ejecuta; rechazos y excepciones no borran los paquetes. El formato distingue salario cero conocido de salario ausente. EN/ES y tokens de tema existentes. No se incorporan negociación ficticia, propuestas/contraofertas, estrategia de GM, fixtures, reglas JS del prototipo, cash ni nuevas reglas de mercado.
+
+**Verificación de Trades:** `bun biome check` (**444 archivos**), `bun run typecheck` y `git diff --check` pasan. Regresión enfocada de presentación/hooks/motor/validador/repositorio: **39 tests en 7 archivos**. Suite completa `bun run test --maxWorkers=2`: **1100 tests en 138 archivos**. Cobertura nueva: búsqueda sin perder selección/totales, bloqueo durante ejecución, resumen con intercambio de elecciones, validación pendiente, advertencias/errores, cero frente a ausencia, EN/ES, consultas fallidas/cargando, conservación de paquetes ante excepción y limpieza únicamente tras éxito. Las primeras ejecuciones detectaron ajustes necesarios en el wrapper de traducciones del test y una consulta ambigua del placeholder; corregidos sin alterar la lógica de mercado.
+
+**Navegador y límites de Trades:** Chrome con harness temporal de componentes reales renderizados, CSS compilado y fuentes locales, sin dependencias nuevas; fixtures controlados, no partida autenticada. Paneles y documento sin desbordamiento horizontal a **360/768/1024/1440/1920 px**, EN oscuro y ES claro. Se verificó una/dos/tres columnas; el harness detectó que el breakpoint arbitrario en `px` quedaba sobrescrito por `md` en Tailwind y se corrigió a `90rem`. Capturas `/tmp/opencode/trades-en-1440.png` y `/tmp/opencode/trades-es-360.png`; mediciones `/tmp/opencode/trades-measurements.json`. El harness no monta la página completa ni el shell, no prueba interacción, imágenes productivas, todos los temas de franquicia, contraste completo, zoom nativo o alturas cortas. Tampoco se ejecutó un trade autenticado con recarga ni build productivo. **Pendientes la aceptación visual humana y la comprobación persistida de planteles, contratos, elecciones e historial; no avanzar automáticamente a otra fase.**
 
 **Unidad implementada — Players (2026-10-29), aprobada por el usuario el 2026-10-30:** referencia dedicada `players.html`, `players.css` y `pdTable`/`pdInspector` en `players.js`. Encabezado editorial y temporada real, directorio/inspector en proporción 72:28 con paneles apilados antes de perder legibilidad, retratos, selección accesible, identidad propia, tabla de lectura con scroll horizontal local y paginación de 20 filas. Filtros URL de nombre, equipo/sin equipo, posiciones reales del dominio (G/F/C/G-F/F-C), actividad y orden por nombre/OVR; selección y página conservadas al abrir el perfil canónico. «Sin equipo» no implica elegibilidad para la agencia libre. Se habilita únicamente Players en la navegación League existente.
 
@@ -554,6 +562,8 @@ Los deadlines y eventos editoriales del prototipo se incorporarían después de 
 
 ### Fase 7 — Postseason y offseason
 
+**Diferida por el usuario (2026-10-30):** detenida antes de modificar archivos por falta de referencia completa; el usuario autorizó continuar con Trades. Esta entrega no adapta ni modifica postseason/offseason. La recomendación histórica de adaptación siguiente no autoriza trabajo en estas pantallas.
+
 Dos unidades: brackets/resultados; después planificación.
 
 - **Archivos:** `src/components/postseason/`, `src/components/offseason/` y página de Postseason.
@@ -565,6 +575,8 @@ Dos unidades: brackets/resultados; después planificación.
 No hay una referencia equivalente completa en OpenDesign: adaptar estas pantallas al sistema, conservando su disposición funcional actual.
 
 ### Fase 8 — Trades
+
+**Implementada, pendiente de aceptación visual humana.** Alcance vigente y diferencias funcionales documentados en la sección 0. La comprobación de ejecución autenticada con recarga sigue pendiente; los tests no la sustituyen.
 
 - **Archivos:** página de Trades, `src/components/trades/trade-asset-panel.tsx` y `src/components/trades/trade-summary.tsx`.
 - **Trabajo:** paneles de activos, resumen e impacto financiero.
