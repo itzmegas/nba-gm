@@ -6,6 +6,8 @@ import { I18nProvider } from "@/application/providers/I18nProvider";
 import { DailyGames } from "@/components/games/DailyGames";
 import { boxScoreFixture } from "@/infrastructure/repositories/boxScore.test-fixture";
 
+vi.mock("@/app/ui-preview/fonts", () => ({ display: { className: "display-font" } }));
+
 const { game, schedule, teams, score, push } = vi.hoisted(() => ({
   game: vi.fn(),
   schedule: vi.fn(),
@@ -86,6 +88,22 @@ function view(date = "2026-10-16", locale: "en" | "es" = "en") {
     </I18nProvider>
   );
 }
+
+it("uses the editorial heading and a two-sided scoreboard without changing the result", () => {
+  render(view());
+  expect(
+    screen.getByRole("heading", { name: "Daily games" }).classList.contains("display-font")
+  ).toBe(true);
+  const own = screen.getByRole("article", { name: "Boston Celtics @ Chicago Bulls" });
+  expect(
+    own.querySelector('[data-slot="fixture-scoreboard"]')?.classList.contains("grid-cols-2")
+  ).toBe(true);
+  expect(within(own).getByText("102")).toBeTruthy();
+  expect(within(own).getByText("114")).toBeTruthy();
+  expect(within(own).getByText("BOS")).toBeTruthy();
+  expect(within(own).getByText("CHI")).toBeTruthy();
+  expect(score).not.toHaveBeenCalled();
+});
 
 it("includes every game that day, highlights ours first and loads box scores only on demand", () => {
   render(view());

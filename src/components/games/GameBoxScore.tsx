@@ -44,7 +44,12 @@ export function GameBoxScoreContent({
 }: GameBoxScoreProps) {
   const t = useT();
   const query = useBoxScore(gameId, fixtureId);
-  if (query.isPending) return <output>{t("boxScore", "loading")}</output>;
+  if (query.isPending)
+    return (
+      <output className="block py-6 text-sm text-muted-foreground">
+        {t("boxScore", "loading")}
+      </output>
+    );
   if (query.isError)
     return (
       <div role="alert" className="space-y-2 text-destructive">
@@ -54,10 +59,15 @@ export function GameBoxScoreContent({
         </Button>
       </div>
     );
-  if (!query.data) return <p className="text-muted-foreground">{t("boxScore", "unavailable")}</p>;
+  if (!query.data)
+    return (
+      <p className="rounded-lg border border-dashed p-4 text-sm leading-relaxed text-muted-foreground">
+        {t("boxScore", "unavailable")}
+      </p>
+    );
   const game = query.data;
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-5 py-4">
       {game.overtimes > 0 && (
         <p>
           {t("boxScore", "overtimes")}: {game.overtimes}
@@ -65,13 +75,15 @@ export function GameBoxScoreContent({
       )}
       {[BOX_SCORE_SIDE.AWAY, BOX_SCORE_SIDE.HOME].map((side) => (
         <AppTable key={side}>
-          <caption className="p-3 text-left text-sm font-semibold text-foreground">
+          <caption className="border-b bg-muted/30 px-4 py-3 text-left text-sm font-semibold text-foreground">
             {side === BOX_SCORE_SIDE.HOME ? homeLabel : awayLabel} ·{" "}
             {side === BOX_SCORE_SIDE.HOME ? game.homeScore : game.awayScore}
           </caption>
           <AppTableHeader>
             <AppTableRow>
-              <AppTableHead>{t("boxScore", "player")}</AppTableHead>
+              <AppTableHead className="sticky left-0 z-10 bg-card">
+                {t("boxScore", "player")}
+              </AppTableHead>
               {COLUMNS.map(([key, label]) => (
                 <AppTableHead key={key} className="px-3 text-right">
                   <abbr title={t("boxScore", key)} className="no-underline">
@@ -88,7 +100,7 @@ export function GameBoxScoreContent({
                 <AppTableRow key={p.playerId}>
                   <AppTableHead
                     scope="row"
-                    className="whitespace-nowrap font-semibold text-foreground"
+                    className="sticky left-0 z-10 whitespace-nowrap bg-card font-semibold text-foreground"
                   >
                     {p.playerName}
                   </AppTableHead>
@@ -111,7 +123,7 @@ export function GameBoxScoreContent({
                   ].map((value, index) => (
                     <AppTableCell
                       key={COLUMNS[index][0]}
-                      className="whitespace-nowrap px-3 text-right font-mono tabular-nums"
+                      className={`whitespace-nowrap px-3 text-right font-mono tabular-nums ${index === COLUMNS.length - 1 ? "bg-primary/5 font-semibold text-foreground" : "text-muted-foreground"}`}
                     >
                       {value}
                     </AppTableCell>
@@ -130,7 +142,7 @@ export function GameBoxScore(props: GameBoxScoreProps) {
   const [open, setOpen] = useState(false);
   return (
     <details className="mt-3" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="cursor-pointer rounded-sm py-2 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+      <summary className="cursor-pointer rounded-sm py-3 text-sm font-semibold text-primary focus-visible:outline-2 focus-visible:outline-ring">
         {t("boxScore", "title")}
       </summary>
       {open && <GameBoxScoreContent {...props} />}

@@ -542,6 +542,7 @@ Después de realinear Roster (4A) y Player Profile (4B), dividir en tres entrega
 Entregas separadas: calendario mensual; después detalle diario y resultados.
 
 - **Entrega mensual aprobada visualmente:** encabezado editorial, panel mensual e inspector de cronología; selección de fecha, regreso a hoy, próximo partido propio y resumen de fixtures/resultados reales del día. Se conservan el diálogo del partido propio y los enlaces diarios. Sin cambios en persistencia ni simulación; sin eventos editoriales ficticios.
+- **Detalle diario y resultados aprobados visualmente:** encabezado editorial, barra de navegación con conteo real, enfrentamientos en dos columnas y tablas de estadísticas con identidad del jugador fija al desplazar horizontalmente. Se mantienen la carga bajo demanda, los marcadores guardados, los estados de carga/error/reintento y la ausencia explícita de estadísticas históricas. Adaptación del inspector exportado, sin maqueta diaria independiente ni datos inventados.
 
 - **Archivos:** páginas de Schedule y Daily Games; `src/components/games/Calendar.tsx`, `src/components/games/DailyGames.tsx`, `src/components/games/FixtureGameCard.tsx`, `src/components/games/GameBoxScore.tsx`.
 - **Reutilización:** consultas, fechas, fixtures y resultados guardados.
