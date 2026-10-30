@@ -7,6 +7,7 @@ interface SupabaseQueryContext {
   operation: "select" | "insert" | "update" | "delete";
   filters: Array<{ column: string; value: unknown; operator: "eq" | "gte" }>;
   orderBy?: { column: string; ascending?: boolean };
+  range?: [number, number];
   insertPayload?: unknown;
   updatePayload?: unknown;
   selected: boolean;
@@ -67,6 +68,11 @@ class QueryBuilder {
 
   single(): QueryBuilder {
     this.context.single = true;
+    return this;
+  }
+
+  range(from: number, to: number): this {
+    this.context.range = [from, to];
     return this;
   }
 

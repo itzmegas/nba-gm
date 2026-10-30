@@ -114,6 +114,7 @@ interface RepositoryFixture {
   legacyRows?: unknown[];
   materializationRows?: unknown[];
   seasonErrorFrom?: number;
+  legacyErrorFrom?: number;
 }
 
 function createRepository(fixture: RepositoryFixture = {}) {
@@ -203,7 +204,13 @@ function createRepository(fixture: RepositoryFixture = {}) {
           return { data: fixture.runtimeRows ?? [], error: fixture.runtimeError ?? null };
         }
         if (queriedTable === "contracts") {
-          return { data: fixture.legacyRows ?? [], error: null };
+          if (
+            fixture.legacyErrorFrom !== undefined &&
+            (range?.from ?? 0) >= fixture.legacyErrorFrom
+          )
+            return { data: null, error: { message: "Legacy page unavailable" } };
+          const rows = fixture.legacyRows ?? [];
+          return { data: range ? rows.slice(range.from, range.to + 1) : rows, error: null };
         }
         if (queriedTable === "game_contract_materializations") {
           return { data: fixture.materializationRows ?? [], error: null };
@@ -216,6 +223,20 @@ function createRepository(fixture: RepositoryFixture = {}) {
 }
 
 describe("SupabaseContractRepository effective modern reads", () => {
+  it("paginates legacy global salary reads without returning partial data", async () => {
+    const legacyRows = Array.from({ length: 1051 }, (_, index) => ({
+      ...legacyContractRow,
+      id: String(index),
+    }));
+    const { repository } = createRepository({ seasonEraId: "historical", legacyRows });
+    expect(await repository.getAll(ids.game)).toHaveLength(1051);
+    const failed = createRepository({
+      seasonEraId: "historical",
+      legacyRows,
+      legacyErrorFrom: 500,
+    });
+    await expect(failed.repository.getAll(ids.game)).rejects.toThrow("Legacy page unavailable");
+  });
   it("types and round-trips simulated origin without observed compatibility provenance", () => {
     const parsed = contractSchema.parse({
       id: ids.agreement,

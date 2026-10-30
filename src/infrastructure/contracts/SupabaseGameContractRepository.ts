@@ -133,11 +133,12 @@ export class SupabaseGameContractRepository implements GameContractRepository {
   private async getRosterOwners(
     gameId: string
   ): Promise<Array<{ playerId: string; teamId: string | null }>> {
-    const { data, error } = await this.client
-      .from("game_player_states")
-      .select("player_id, team_id")
-      .eq("game_id", gameId);
-    if (error) throw new Error(error.message);
+    const data = await this.getRows(
+      gameId,
+      "game_player_states",
+      "player_id, team_id",
+      "player_id"
+    );
     return z
       .array(rosterOwnerRowSchema)
       .parse(data ?? [])
@@ -148,13 +149,7 @@ export class SupabaseGameContractRepository implements GameContractRepository {
   }
 
   private async getRuntimeContracts(gameId: string): Promise<SimulatedGameContract[]> {
-    const { data, error } = await this.client
-      .from("game_active_runtime_contracts")
-      .select(
-        "id, game_id, player_id, origin_kind, start_year, end_year, annual_salary, is_player_option, is_team_option, is_guaranteed, created_at"
-      )
-      .eq("game_id", gameId);
-    if (error) throw new Error(error.message);
+    const data = await this.getRows(gameId, "game_active_runtime_contracts");
     const rows = z.array(runtimeContractRowSchema).parse(data ?? []);
     const seenPlayers = new Set<string>();
     for (const row of rows) {
@@ -179,23 +174,16 @@ export class SupabaseGameContractRepository implements GameContractRepository {
   }
 
   private async get(gameId: string): Promise<readonly GamePlayerContractState[]> {
-    const identitiesQuery = this.client
-      .from("game_contract_identities")
-      .select(
-        "player_id, resolution_status, contract_type, provenance_quality, source_method, estimated, cap_treatment, exclusion_evidence"
-      )
-      .eq("game_id", gameId);
-    const agreementsQuery = this.client
-      .from("game_contract_agreements")
-      .select("*")
-      .eq("game_id", gameId);
-    const [identitiesResult, agreementsResult] = await Promise.all([
-      identitiesQuery,
-      agreementsQuery,
+    const [identityRows, agreementRows] = await Promise.all([
+      this.getRows(
+        gameId,
+        "game_contract_identities",
+        "player_id, resolution_status, contract_type, provenance_quality, source_method, estimated, cap_treatment, exclusion_evidence",
+        "player_id"
+      ),
+      this.getRows(gameId, "game_contract_agreements"),
     ]);
-    if (identitiesResult.error) throw new Error(identitiesResult.error.message);
-    if (agreementsResult.error) throw new Error(agreementsResult.error.message);
-    const agreements = z.array(agreementRowSchema).parse(agreementsResult.data ?? []);
+    const agreements = z.array(agreementRowSchema).parse(agreementRows);
     const seasons: z.infer<typeof seasonRowSchema>[] = [];
     // A league's multi-year agreements exceed PostgREST's single-response row limit.
     if (agreements.length > 0) {
@@ -247,7 +235,7 @@ export class SupabaseGameContractRepository implements GameContractRepository {
     );
     return z
       .array(identityRowSchema)
-      .parse(identitiesResult.data ?? [])
+      .parse(identityRows)
       .map((row) => ({
         playerId: row.player_id,
         resolutionStatus: row.resolution_status,
@@ -259,5 +247,25 @@ export class SupabaseGameContractRepository implements GameContractRepository {
         exclusionEvidence: row.exclusion_evidence,
         agreement: agreementByPlayer.get(row.player_id) ?? null,
       }));
+  }
+
+  private async getRows(
+    gameId: string,
+    table: string,
+    columns = "*",
+    order = "id"
+  ): Promise<unknown[]> {
+    const rows: unknown[] = [];
+    for (let from = 0; ; from += CONTRACT_SEASONS_PAGE_SIZE) {
+      const { data, error } = await this.client
+        .from(table)
+        .select(columns)
+        .eq("game_id", gameId)
+        .order(order, { ascending: true })
+        .range(from, from + CONTRACT_SEASONS_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []));
+      if ((data?.length ?? 0) < CONTRACT_SEASONS_PAGE_SIZE) return rows;
+    }
   }
 }
