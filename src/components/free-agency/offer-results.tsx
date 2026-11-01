@@ -42,12 +42,14 @@ export function OfferResults({ offers }: OfferResultsProps) {
     return <p className="text-muted-foreground">{t("freeAgency", "noOffers")}</p>;
 
   return (
-    <ul className="space-y-4">
+    <ul className="divide-y">
       {offers.map((offer) => (
-        <li key={offer.id} className="rounded-md border p-4">
+        <li key={offer.id} className="space-y-1 py-4 text-sm first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h3 className="font-semibold">{offer.playerName}</h3>
-            <span>{t("freeAgency", offer.origin)}</span>
+            <span className="rounded border bg-muted px-2 py-1 text-xs text-muted-foreground">
+              {t("freeAgency", offer.origin)}
+            </span>
           </div>
           <p>
             {offer.teamName} · {money.format(offer.offer.annualSalary)} · {offer.offer.years}{" "}

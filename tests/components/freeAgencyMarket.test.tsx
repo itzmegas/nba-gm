@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/application/providers/I18nProvider";
@@ -121,7 +121,7 @@ describe("free agency market screen", () => {
     expect(screen.getByRole("status").textContent).toBe("Loading...");
     expect(await screen.findByRole("heading", { name: "Free agency market" })).toBeTruthy();
     expect(screen.getByText("$120,000,000")).toBeTruthy();
-    expect(screen.getByText("Your offer")).toBeTruthy();
+    expect(screen.getByText("Your offer", { selector: "span" })).toBeTruthy();
     expect(screen.getByText("AI offer")).toBeTruthy();
     expect(
       screen.getByText(
@@ -185,7 +185,7 @@ describe("free agency market screen", () => {
     expect(await screen.findByText(/market requires an active/)).toBeTruthy();
     first.unmount();
     renderMarket();
-    expect(await screen.findByText(/No eligible free agents/)).toBeTruthy();
+    expect((await screen.findAllByText(/No eligible free agents/)).length).toBeGreaterThan(0);
   });
 
   it("recovers an older empty save only on explicit import and refreshes the market", async () => {
@@ -200,7 +200,7 @@ describe("free agency market screen", () => {
     const button = await screen.findByRole("button", { name: "Load initial market" });
     expect(fetcher).not.toHaveBeenCalled();
     fireEvent.click(button);
-    await screen.findByText("Alex Player");
+    await screen.findByRole("button", { name: "Alex Player" });
     expect(fetcher).toHaveBeenCalledWith(
       "/api/free-agency/bootstrap",
       expect.objectContaining({
@@ -219,7 +219,7 @@ describe("free agency market screen", () => {
       error: null,
     });
     renderMarket("es");
-    expect(await screen.findByText("Tu oferta")).toBeTruthy();
+    expect(await screen.findByText("Tu oferta", { selector: "span" })).toBeTruthy();
     expect(screen.getByText(/Aceptada:/)).toBeTruthy();
     expect(
       screen.getByText(
@@ -251,8 +251,8 @@ describe("free agency market screen", () => {
     await screen.findByRole("heading", { name: "Free agency market" });
     fireEvent.click(screen.getByRole("button", { name: "Submit offer" }));
     const form = screen.getByTestId("offer-form");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh market" }));
-    expect(await screen.findByRole("alert")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh market", hidden: true }));
+    expect(await screen.findByRole("alert", { hidden: true })).toBeTruthy();
     expect(screen.getByTestId("offer-form")).toBe(form);
     expect(form.getAttribute("data-disabled")).toBe("true");
   });
@@ -292,14 +292,85 @@ describe("free agency market screen", () => {
           })
       );
     const { container } = renderMarket();
-    await screen.findByText("Alex Player", { selector: "h3" });
+    await screen.findByRole("button", { name: "Alex Player" });
     fireEvent.click(screen.getByRole("button", { name: "Submit offer" }));
     expect(screen.getByTestId("offer-form").getAttribute("data-pending")).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh market" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh market", hidden: true }));
     await waitFor(() =>
       expect(screen.getByTestId("offer-form").getAttribute("data-disabled")).toBe("true")
     );
     expect(container.querySelector("form")).toBeNull();
     resolveRefresh?.({ data: market(), error: null });
+  });
+
+  it("filters real candidates without changing financial totals or the selected inspector", async () => {
+    rpc.mockResolvedValue({
+      data: market({
+        candidates: [
+          candidate,
+          {
+            ...candidate,
+            player_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            first_name: "Casey",
+            last_name: "Center",
+            position: "C",
+          },
+        ],
+      }),
+      error: null,
+    });
+    renderMarket();
+    fireEvent.click(await screen.findByRole("button", { name: "Casey Center" }));
+    expect(screen.getByRole("button", { name: "Casey Center" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+    fireEvent.change(screen.getByLabelText("Search players"), { target: { value: "  ALEX  " } });
+    expect(screen.queryByRole("button", { name: "Casey Center" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Casey Center" })).toBeTruthy();
+    expect(screen.getByText("$120,000,000")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Position"), { target: { value: "C" } });
+    expect(screen.getByText("No matching players. Adjust your filters.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load initial market" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Submit offer" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByTestId("offer-form").textContent).toBe("Casey");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes the offer sheet rather than silently targeting another player after a refresh", async () => {
+    const replacement = {
+      ...candidate,
+      player_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      first_name: "Casey",
+    };
+    rpc
+      .mockResolvedValueOnce({ data: market(), error: null })
+      .mockResolvedValueOnce({ data: market({ candidates: [replacement] }), error: null });
+    renderMarket();
+    await screen.findByRole("button", { name: "Alex Player" });
+    fireEvent.click(screen.getByRole("button", { name: "Submit offer" }));
+    expect(screen.getByTestId("offer-form").textContent).toBe("Alex");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh market", hidden: true }));
+    await screen.findByRole("button", { name: "Casey Player" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByTestId("offer-form")).toBeNull();
+  });
+
+  it("filters only your pending offers, not AI bids, and translates the new composition", async () => {
+    rpc.mockResolvedValue({
+      data: market({ offers: [offer("66666666-6666-4666-8666-666666666666", "ai", "pending")] }),
+      error: null,
+    });
+    renderMarket("es");
+    await screen.findByRole("button", { name: "Alex Player" });
+    expect(screen.getByRole("region", { name: "Presupuesto de contratación" })).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Inspector de jugador" })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Solo tus ofertas pendientes"));
+    expect(screen.queryByRole("button", { name: "Alex Player" })).toBeNull();
+    expect(screen.getByText("No hay jugadores coincidentes. Ajusta los filtros.")).toBeTruthy();
+    expect(
+      within(screen.getByRole("complementary")).getByRole("heading", { name: "Alex Player" })
+    ).toBeTruthy();
   });
 });

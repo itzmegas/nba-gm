@@ -95,7 +95,7 @@ export function OfferForm({
   return (
     <form
       onSubmit={submit}
-      className="space-y-3"
+      className="space-y-4"
       aria-label={`${t("freeAgency", "submit")} · ${player.firstName} ${player.lastName}`}
     >
       <p className="text-sm text-muted-foreground">
@@ -166,7 +166,7 @@ export function OfferForm({
       {submission.isSuccess && (
         <output className="block text-sm text-primary">{t("freeAgency", "submitted")}</output>
       )}
-      <Button type="submit" disabled={blocked || !terms.success || capExceeded}>
+      <Button className="w-full" type="submit" disabled={blocked || !terms.success || capExceeded}>
         {submission.isPending ? t("freeAgency", "submitting") : t("freeAgency", "submit")}
       </Button>
     </form>
