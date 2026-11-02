@@ -96,6 +96,14 @@
       "sessions": 46,
       "memories": 503,
       "prompts": 0
+    },
+    {
+      "id": "a8957524",
+      "created_by": "emmanuel",
+      "created_at": "2026-11-02T17:10:16.999924381Z",
+      "sessions": 5,
+      "memories": 69,
+      "prompts": 0
     }
   ]
 }
