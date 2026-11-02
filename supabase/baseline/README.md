@@ -1,0 +1,23 @@
+# Recovered history and observed-state evidence
+
+The two `2026020619...` migrations are exact UTF-8 registry payloads recovered
+through official Supabase MCP on 2026-11-02, without adding a final newline.
+`provenance.json` records their source, byte counts and MD5/SHA-256 fingerprints.
+Recovery proves registry contents, not original human-authored file identity or
+execution of every later manual migration.
+
+`remote-catalog.json` contains schema metadata and stored migration SQL only, no
+production user rows. `catalog.sql` is the metadata-only single-snapshot capture
+query. `initial-catalog.json` records local replay of the recovered-original boundary.
+The later catch-up must preserve observed state, including security drift, rather
+than quietly include desired corrections.
+
+Tooling is pinned to Supabase CLI 2.90.0, PostgreSQL 17.6. Bun's Supabase postinstall
+was explicitly approved; no other blocked package scripts were authorized.
+Use only the isolated local project `courtside-baseline-step2` and loopback ports.
+Never link, push, repair or register history from this preparation workflow.
+
+See `docs/database/deployment-runbook.md` for the complete local rehearsal and
+`docs/database/schema-verification-step-2.md` for proof boundaries and production
+NO-GO. Platform-owned `supabase_admin` defaults are evidence/prerequisites, not
+ordinary application migration authority.

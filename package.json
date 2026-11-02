@@ -41,6 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "happy-dom": "^20.11.2",
+    "supabase": "2.90.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
@@ -51,6 +52,7 @@
   ],
   "trustedDependencies": [
     "sharp",
+    "supabase",
     "unrs-resolver"
   ]
 }
