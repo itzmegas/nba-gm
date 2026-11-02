@@ -21,3 +21,17 @@ See `docs/database/deployment-runbook.md` for the complete local rehearsal and
 `docs/database/schema-verification-step-2.md` for proof boundaries and production
 NO-GO. Platform-owned `supabase_admin` defaults are evidence/prerequisites, not
 ordinary application migration authority.
+
+## Replayable observed-state chain
+
+`20261102170000_reconcile_legacy_through_056.sql` extends the recovered originals
+using captured definitions, preserving deployed columns, policies and ACLs.
+It does not replay legacy backfills. Regenerate with
+`python3 scripts/build-supabase-baseline.py`; then run
+`python3 scripts/test-supabase-baseline.py` and
+`python3 scripts/test-supabase-baseline-loopback.py` on the dedicated disposable
+local stack. The latter resets its local database and verifies full catalog parity,
+synthetic upgrade preservation and loopback binding after both resets.
+`test-supabase-baseline-canonical.py` checks the untouched canonical source in a
+separate synthetic database. Generated replay/canonical snapshots are evidence,
+not substitutes for running checks. Nothing here approves production adoption.
