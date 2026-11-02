@@ -33,6 +33,8 @@ const validMarket = {
       first_name: "First",
       last_name: "Player",
       position: "PG",
+      nba_id: 1630162,
+      espn_id: null,
       minimum_salary: 2_625_627,
       maximum_salary: 46_394_100,
     },
@@ -127,6 +129,7 @@ describe("SupabaseFreeAgencyRepository", () => {
           position: "PG",
           minimumSalary: 2_625_627,
           maximumSalary: 46_394_100,
+          headshotUrl: "https://cdn.nba.com/headshots/nba/latest/1040x760/1630162.png",
         },
       ],
       offers: [
@@ -150,6 +153,22 @@ describe("SupabaseFreeAgencyRepository", () => {
       ],
     });
     expect(rpc).toHaveBeenCalledWith("get_free_agency_market", { p_game_id: gameId });
+
+    await expect(
+      repositoryForRpc(
+        vi.fn().mockResolvedValue({
+          data: {
+            ...validMarket,
+            candidates: [{ ...validMarket.candidates[0], nba_id: null, espn_id: 3916822 }],
+          },
+          error: null,
+        })
+      ).getMarket(gameId)
+    ).resolves.toMatchObject({
+      candidates: [
+        { headshotUrl: "https://a.espncdn.com/i/headshots/nba/players/full/3916822.png" },
+      ],
+    });
 
     const terminal = {
       ...validMarket,

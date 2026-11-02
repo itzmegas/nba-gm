@@ -246,6 +246,7 @@ export function FreeAgencyMarketScreen({ gameId }: FreeAgencyMarketScreenProps) 
                             onClick={() => setSelectedPlayerId(player.playerId)}
                           >
                             <PlayerHeadshot
+                              src={player.headshotUrl}
                               alt=""
                               className="h-9 w-9 rounded bg-muted object-contain"
                             />
@@ -293,7 +294,11 @@ export function FreeAgencyMarketScreen({ gameId }: FreeAgencyMarketScreenProps) 
                 >
                   {selectedPlayer.position}
                 </span>
-                <PlayerHeadshot alt="" className="relative h-44 w-44 object-contain" />
+                <PlayerHeadshot
+                  src={selectedPlayer.headshotUrl}
+                  alt=""
+                  className="relative h-44 w-44 object-contain"
+                />
               </div>
               <div className="space-y-4 p-4">
                 <p className="text-xs uppercase tracking-widest text-primary">

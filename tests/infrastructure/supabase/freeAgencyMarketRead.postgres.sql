@@ -22,6 +22,9 @@ SELECT pg_temp.assert_true((SELECT array_agg(candidate->>'player_id' ORDER BY ca
     '30000000-0000-4000-8000-000000000005', '30000000-0000-4000-8000-000000000017'
   ] FROM market_read_result, jsonb_array_elements(value->'candidates') candidate),
   'Explicitly enrolled eligible candidates are missing or unordered');
+SELECT pg_temp.assert_true((SELECT bool_and(candidate ? 'nba_id' AND candidate ? 'espn_id')
+  FROM market_read_result, jsonb_array_elements(value->'candidates') candidate),
+  'Eligible candidates are missing player image identifiers');
 SELECT pg_temp.assert_true((SELECT roster = (SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM game_player_states x)
   AND offers = (SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM free_agency_pending_offers x)
   AND runtime = (SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM game_runtime_contracts x)

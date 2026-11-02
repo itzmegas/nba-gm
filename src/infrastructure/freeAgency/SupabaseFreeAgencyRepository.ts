@@ -35,6 +35,8 @@ const marketCandidateSchema = z
     first_name: z.string(),
     last_name: z.string(),
     position: z.string(),
+    nba_id: z.number().int().positive().safe().nullable().optional(),
+    espn_id: z.number().int().positive().safe().nullable().optional(),
     minimum_salary: safeSalarySchema,
     maximum_salary: safeSalarySchema,
   })
@@ -206,6 +208,11 @@ export class SupabaseFreeAgencyRepository implements FreeAgencyRepository {
         position: candidate.position,
         minimumSalary: candidate.minimum_salary,
         maximumSalary: candidate.maximum_salary,
+        headshotUrl: candidate.nba_id
+          ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${candidate.nba_id}.png`
+          : candidate.espn_id
+            ? `https://a.espncdn.com/i/headshots/nba/players/full/${candidate.espn_id}.png`
+            : undefined,
       })),
       offers: market.offers.map((offer) => ({
         id: offer.id,

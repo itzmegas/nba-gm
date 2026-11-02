@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL("../../../scripts/migrations/031_free_agency_market_read.sql", import.meta.url),
   "utf8"
 );
+const headshotsMigration = readFileSync(
+  new URL("../../../scripts/migrations/056_free_agency_player_headshots.sql", import.meta.url),
+  "utf8"
+);
 
 describe("free-agency market read boundary", () => {
   it("mirrors migration 031 exactly once", () => {
@@ -18,6 +22,17 @@ describe("free-agency market read boundary", () => {
     expect(end).toBeGreaterThan(start);
     expect(schema.indexOf(endMarker, end + endMarker.length)).toBe(-1);
     expect(`${schema.slice(start + marker.length, end).trimEnd()}\n`).toBe(migration);
+  });
+
+  it("mirrors the player image identifiers in migration 056", () => {
+    const marker = "-- Canonical schema mirror for migration 056. Keep byte-identical below.\n";
+    const endMarker = "-- End canonical schema mirror for migration 056.\n";
+    const start = schema.indexOf(marker);
+    const end = schema.indexOf(endMarker, start + marker.length);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(`${schema.slice(start + marker.length, end).trimEnd()}\n`).toBe(headshotsMigration);
+    expect(headshotsMigration).toContain("'nba_id', p.nba_id, 'espn_id', p.espn_id");
   });
 
   it("exposes only the authenticated read RPC and retains private finance helpers", () => {

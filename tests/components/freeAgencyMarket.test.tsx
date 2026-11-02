@@ -34,6 +34,8 @@ const candidate = {
   first_name: "Alex",
   last_name: "Player",
   position: "G",
+  nba_id: 1630162,
+  espn_id: null,
   minimum_salary: 1_000_000,
   maximum_salary: 10_000_000,
 };
@@ -120,6 +122,13 @@ describe("free agency market screen", () => {
     renderMarket();
     expect(screen.getByRole("status").textContent).toBe("Loading...");
     expect(await screen.findByRole("heading", { name: "Free agency market" })).toBeTruthy();
+    expect(screen.getAllByAltText("")).toHaveLength(2);
+    expect(screen.getAllByAltText("")[0].getAttribute("src")).toBe(
+      "https://cdn.nba.com/headshots/nba/latest/1040x760/1630162.png"
+    );
+    expect(screen.getAllByAltText("")[1].getAttribute("src")).toBe(
+      "https://cdn.nba.com/headshots/nba/latest/1040x760/1630162.png"
+    );
     expect(screen.getByText("$120,000,000")).toBeTruthy();
     expect(screen.getByText("Your offer", { selector: "span" })).toBeTruthy();
     expect(screen.getByText("AI offer")).toBeTruthy();
