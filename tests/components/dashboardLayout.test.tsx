@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import tailwind from "@tailwindcss/postcss";
@@ -104,7 +105,7 @@ function startBrowser(profile: string) {
 
 describe.skipIf(!existsSync("/usr/bin/google-chrome"))("dashboard browser geometry", () => {
   it("contains tall/wide content without moving the header or losing keyboard access", async () => {
-    const profile = mkdtempSync("/tmp/opencode/dashboard-scroll-");
+    const profile = mkdtempSync(path.join(tmpdir(), "dashboard-scroll-"));
     const { browser, command } = startBrowser(profile);
     try {
       const target = await command("Target.createTarget", { url: "about:blank" });
