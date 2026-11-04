@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowUpRight, DollarSign } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
+import { display } from "@/app/ui-preview/fonts";
 import { useTeamContracts } from "@/application/hooks/contracts/useTeamContracts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useReleaseCapCharge } from "@/application/hooks/roster/useReleasePlayer";
@@ -14,9 +15,10 @@ import { SalaryCapCalculator } from "@/domain/services/SalaryCapCalculator";
 interface CapSpaceWidgetProps {
   gameId: string;
   teamId: string;
+  rosterHref?: string;
 }
 
-export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
+export function CapSpaceWidget({ gameId, teamId, rosterHref }: CapSpaceWidgetProps) {
   const contracts = useTeamContracts(gameId, teamId);
   const game = useGame(gameId);
   const releases = useReleaseCapCharge(gameId, teamId, game.data?.seasonYear ?? 2026);
@@ -42,14 +44,11 @@ export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
   ];
 
   return (
-    <Card className="h-full bg-card shadow-sm">
+    <Card className="min-w-0 gap-4 rounded-md border-border/60 bg-card py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-          <DollarSign className="size-4 text-primary" />
-          {t("dashboard", "finances")}
-        </CardTitle>
-        <Button asChild variant="ghost" size="sm">
-          <Link href={`/games/${gameId}/dashboard/roster`}>
+        <CardTitle className="text-base font-semibold">{t("dashboard", "finances")}</CardTitle>
+        <Button asChild variant="ghost" size="sm" className="rounded-sm">
+          <Link href={rosterHref ?? `/games/${gameId}/dashboard/roster`}>
             {t("dashboard", "roster")}
             <ArrowUpRight className="size-4" />
           </Link>
@@ -69,7 +68,9 @@ export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-xs text-muted-foreground">{t("dashboard", "totalPayroll")}</p>
-                <p className="mt-1 break-all text-3xl font-black tracking-tight tabular-nums">
+                <p
+                  className={`${display.className} mt-1 break-all text-3xl font-semibold tracking-tight tabular-nums`}
+                >
                   {formatCurrency(status.totalSalary)}
                 </p>
               </div>
@@ -117,7 +118,7 @@ export function CapSpaceWidget({ gameId, teamId }: CapSpaceWidgetProps) {
                 )}
               </p>
             </div>
-            <dl className="grid grid-cols-2 gap-4 border-t border-border/60 pt-4 xl:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-4 border-t border-border/60 pt-4">
               {limits.map((limit) => (
                 <div key={limit.label}>
                   <dt className="text-xs text-muted-foreground">{limit.label}</dt>

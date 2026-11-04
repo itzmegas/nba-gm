@@ -65,6 +65,7 @@ export function useExecuteTrade() {
       const { gameId, packageA, packageB } = variables;
 
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["games", gameId, "players"] }),
         queryClient.invalidateQueries({ queryKey: ["games", gameId, "contracts"] }),
         queryClient.invalidateQueries({
           queryKey: ["games", gameId, "contracts", "team", packageA.teamId],

@@ -1,0 +1,28 @@
+{
+  "source": "Official Supabase MCP execute_sql; supabase_migrations.schema_migrations",
+  "project_ref": "yyxqyziilzgnoztfcjgj",
+  "captured_on": "2026-11-02",
+  "encoding": "UTF-8; exact statements[0], no added newline",
+  "scope": "Registry payload identity, not proof of historical execution or original source files",
+  "catalog_sha256": "8102f0abc82d5ca0efd590ac170750953edb328671a4cab84f8e66e6015c74ca",
+  "migrations": [
+    {
+      "file": "20260206190001_initial_schema.sql",
+      "version": "20260206190001",
+      "name": "initial_schema",
+      "bytes": 1845,
+      "characters": 1845,
+      "md5": "6a2530ad179d27216644f6741e9c6680",
+      "sha256": "c07ed43c8a43f702469cf43249bd98ee8ae383a7546f68ace7d8466eccc5a778"
+    },
+    {
+      "file": "20260206190014_enable_rls.sql",
+      "version": "20260206190014",
+      "name": "enable_rls",
+      "bytes": 657,
+      "characters": 657,
+      "md5": "f4046c2b4391216ba4b1152b2fbd7535",
+      "sha256": "d4a96b8fc6f99e242a299e69d127557559ab3661492544fe4c6931b0245b3937"
+    }
+  ]
+}

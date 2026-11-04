@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { SupabaseGameContractRepository } from "@/infrastructure/contracts/SupabaseGameContractRepository";
+import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
 
 interface QueryContext {
   table: string;
   filters: Array<{ column: string; value: unknown }>;
+  from?: number;
+  to?: number;
 }
 
 class QueryBuilder {
@@ -33,7 +36,9 @@ class QueryBuilder {
     return this;
   }
 
-  range(): this {
+  range(from: number, to: number): this {
+    this.context.from = from;
+    this.context.to = to;
     return this;
   }
 
@@ -62,6 +67,65 @@ const ids = {
   canonicalAgreement: "55555555-5555-4555-8555-555555555555",
   simulatedAgreement: "66666666-6666-4666-8666-666666666666",
 } as const;
+
+it("reads all global identities and owners beyond the response limit and fails on later-page errors", async () => {
+  const playerIds = Array.from(
+    { length: 1051 },
+    (_, n) => `77777777-7777-4777-8777-${String(n).padStart(12, "0")}`
+  );
+  let fail = false;
+  const client = {
+    from(table: string) {
+      return new QueryBuilder({ table, filters: [] }, (context) => {
+        expect(context.filters).toContainEqual({ column: "game_id", value: ids.game });
+        if (fail && context.table === "game_player_states" && context.from === 500)
+          return { data: null, error: { message: "Later page unavailable" } };
+        const rows =
+          context.table === "game_player_states"
+            ? playerIds.map((playerId) => ({
+                id: playerId,
+                player_id: playerId,
+                game_id: ids.game,
+                team_id: ids.team,
+                is_active: true,
+                is_injured: false,
+                morale: 50,
+                fatigue: 0,
+                created_at: "2026-01-01",
+                updated_at: "2026-01-01",
+              }))
+            : context.table === "game_contract_identities"
+              ? playerIds.map((playerId) => ({
+                  player_id: playerId,
+                  resolution_status: "inactive-excluded",
+                  contract_type: null,
+                  provenance_quality: null,
+                  source_method: null,
+                  estimated: false,
+                  cap_treatment: "excluded-inactive",
+                  exclusion_evidence: null,
+                }))
+              : [];
+        return { data: rows.slice(context.from ?? 0, (context.to ?? 999) + 1), error: null };
+      });
+    },
+  } as unknown as SupabaseClient;
+  const effective = await new SupabaseGameContractRepository(client).getEffectiveAll(ids.game);
+  expect(effective).toHaveLength(1051);
+  expect(effective.at(-1)).toMatchObject({
+    playerId: playerIds.at(-1),
+    teamId: ids.team,
+    canonical: { resolutionStatus: "inactive-excluded" },
+  });
+  expect(await new SupabasePlayerStateRepository(client).getByGameId(ids.game)).toHaveLength(1051);
+  fail = true;
+  await expect(
+    new SupabaseGameContractRepository(client).getEffectiveAll(ids.game)
+  ).rejects.toThrow("Later page unavailable");
+  await expect(new SupabasePlayerStateRepository(client).getByGameId(ids.game)).rejects.toThrow(
+    "Later page unavailable"
+  );
+});
 
 function createRepository(runtimeResult?: {
   data: unknown;

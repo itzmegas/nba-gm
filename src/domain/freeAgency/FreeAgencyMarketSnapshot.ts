@@ -34,6 +34,7 @@ export interface FreeAgencyMarketPlayer {
   position: string;
   minimumSalary: number;
   maximumSalary: number;
+  headshotUrl?: string;
 }
 
 export interface FreeAgencyMarketOffer {

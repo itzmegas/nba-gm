@@ -40,14 +40,18 @@ export class SupabasePlayerStateRepository implements PlayerStateRepository {
   }
 
   async getByGameId(gameId: string): Promise<PlayerState[]> {
-    const { data, error } = await this.client
-      .from("game_player_states")
-      .select("*")
-      .eq("game_id", gameId);
-
-    if (error) throw new Error(error.message);
-
-    return data.map(this.mapToEntity);
+    const states: PlayerState[] = [];
+    for (let from = 0; ; from += 500) {
+      const { data, error } = await this.client
+        .from("game_player_states")
+        .select("*")
+        .eq("game_id", gameId)
+        .order("id", { ascending: true })
+        .range(from, from + 499);
+      if (error) throw new Error(error.message);
+      states.push(...data.map(this.mapToEntity));
+      if (data.length < 500) return states;
+    }
   }
 
   async getByGameAndTeam(gameId: string, teamId: string): Promise<PlayerState[]> {

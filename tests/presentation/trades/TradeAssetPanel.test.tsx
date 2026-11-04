@@ -1,9 +1,17 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as renderUI, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@/application/providers/I18nProvider";
 import { TradeAssetPanel } from "@/components/trades/trade-asset-panel";
 import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
+
+vi.mock("@/app/ui-preview/fonts", () => ({ display: { className: "display" } }));
+function render(ui: Parameters<typeof renderUI>[0]) {
+  return renderUI(ui, {
+    wrapper: ({ children }) => <I18nProvider locale="en">{children}</I18nProvider>,
+  });
+}
 
 vi.mock("@/components/players/player-headshot", () => ({ PlayerHeadshot: () => null }));
 
@@ -112,5 +120,40 @@ describe("TradeAssetPanel", () => {
     rerender(<TradeAssetPanel {...props} payroll={null} />);
     expect(screen.getByText("Loading finances…")).toBeTruthy();
     expect(screen.queryByText("Over the cap")).toBeNull();
+  });
+
+  it("searches players and picks without changing selected assets or outgoing totals", () => {
+    render(<TradeAssetPanel {...props} selectedPlayerIds={[player.id]} />);
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "missing" } });
+    expect(screen.queryByRole("button", { name: /Test Player/ })).toBeNull();
+    expect(screen.getByText("No matching assets")).toBeTruthy();
+    expect(screen.getByText("Sending $20.0M")).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "test" } });
+    expect(screen.getByRole("button", { name: /Test Player/ }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Picks · 1" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "2027" } });
+    expect(screen.getByRole("button", { name: "2027 R1" })).toBeTruthy();
+    expect(props.onTogglePlayer).not.toHaveBeenCalled();
+  });
+
+  it("locks asset changes during execution", () => {
+    render(<TradeAssetPanel {...props} disabled />);
+    expect(screen.getByRole("button", { name: /Test Player/ }).hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Picks · 1" }));
+    expect(screen.getByRole("button", { name: "2027 R1" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("renders Spanish asset controls and explicit missing ratings", () => {
+    renderUI(
+      <I18nProvider locale="es">
+        <TradeAssetPanel {...props} />
+      </I18nProvider>
+    );
+    expect(screen.getByRole("searchbox", { name: "Buscar activos" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Elecciones · 1" })).toBeTruthy();
+    expect(screen.getByText("Envía $0")).toBeTruthy();
+    expect(screen.getByText(/Valoración general/).parentElement?.textContent).toContain("—");
   });
 });

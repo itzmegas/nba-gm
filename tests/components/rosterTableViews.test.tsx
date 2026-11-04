@@ -6,9 +6,9 @@ import { I18nProvider } from "@/application/providers/I18nProvider";
 import { RosterTableViews } from "@/components/roster/roster-table-views";
 import { boxScoreFixture } from "@/infrastructure/repositories/boxScore.test-fixture";
 
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+const { query, push } = vi.hoisted(() => ({ query: vi.fn(), push: vi.fn() }));
 vi.mock("@/application/hooks/schedule/useSeasonStatistics", () => ({ useSeasonStatistics: query }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -78,15 +78,22 @@ it("loads statistics only on demand, keeps the roster players, and preserves sel
 
 it("updates the statistics list with roster filters and retains league navigation", () => {
   loadStatistics();
+  const returnQuery = "q=Boston&tag=a&tag=b&franchiseTab=roster";
   const view = (roster: RosterPlayer[]) => (
     <I18nProvider locale="en">
-      <RosterTableViews gameId="career" seasonYear={2026} players={roster} leagueTeamId="team" />
+      <RosterTableViews
+        gameId="career"
+        seasonYear={2026}
+        players={roster}
+        leagueTeamId="team"
+        leagueReturnQuery={returnQuery}
+      />
     </I18nProvider>
   );
   const { rerender } = render(view(players));
   fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
   expect(screen.getByRole("link", { name: "Roster Player" }).getAttribute("href")).toBe(
-    `/games/career/dashboard/player/${scores[0].playerId}?leagueTeamId=team`
+    `/games/career/dashboard/player/${scores[0].playerId}?${new URLSearchParams({ leagueTeamId: "team", leagueReturnQuery: returnQuery })}`
   );
   rerender(view([players[1]]));
   const table = screen.getByRole("table");
@@ -114,4 +121,80 @@ it("offers both views in Spanish and shows the roster even without any recorded 
       .getAllByRole("cell")
       .every((cell) => cell.textContent === "—")
   ).toBe(true);
+});
+
+it.each([
+  "row",
+  "name",
+  "menu",
+])("preserves franchise context through the roster %s action", (action) => {
+  const returnQuery = "q=Boston&tag=a&tag=b&franchiseTab=roster";
+  render(
+    <I18nProvider locale="en">
+      <RosterTableViews
+        gameId="career"
+        seasonYear={2026}
+        players={[players[0]]}
+        leagueTeamId="team"
+        leagueReturnQuery={returnQuery}
+      />
+    </I18nProvider>
+  );
+  const name = screen.getByRole("button", { name: "Roster Player" });
+  if (action === "menu") {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Actions — Roster Player" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "View player" }));
+  } else if (action === "name") {
+    fireEvent.click(name);
+  } else {
+    const row = name.closest("tr");
+    if (!row) throw new Error("Missing roster row");
+    fireEvent.click(row);
+  }
+  expect(push).toHaveBeenCalledExactlyOnceWith(
+    `/games/career/dashboard/player/${scores[0].playerId}?${new URLSearchParams({ leagueTeamId: "team", leagueReturnQuery: returnQuery })}`
+  );
+});
+
+it("offers compact overview and sortable contracts with unknown salaries and retained sorting", () => {
+  const roster = [
+    { ...players[0], contract: { salaryY1: 10_000_000, salaryY2: 12_000_000, endYear: 2028 } },
+    { ...players[1], contract: { salaryY1: 5_000_000, endYear: 2026 } },
+  ] as RosterPlayer[];
+  const select = vi.fn();
+  render(
+    <I18nProvider locale="en">
+      <RosterTableViews
+        gameId="career"
+        seasonYear={2026}
+        players={roster}
+        initialView="overview"
+        onSelectPlayer={select}
+        selectedPlayerId="missing"
+      />
+    </I18nProvider>
+  );
+  expect(screen.getAllByRole("columnheader")).toHaveLength(7);
+  expect(screen.queryByRole("columnheader", { name: "CLOSE" })).toBeNull();
+  expect(screen.queryByRole("columnheader", { name: "POT" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Contracts", pressed: false }));
+  const table = screen.getByRole("table");
+  expect(within(table).queryByRole("columnheader", { name: "OVR" })).toBeNull();
+  expect(within(table).getByText("$12.0M")).toBeTruthy();
+  expect(within(table).getAllByText("Unknown").length).toBeGreaterThan(0);
+  fireEvent.click(within(table).getByRole("button", { name: "Duration" }));
+  expect(within(table).getAllByRole("row")[1].textContent).toContain("Roster Player");
+  fireEvent.click(within(table).getByRole("button", { name: "Duration" }));
+  expect(within(table).getAllByRole("row")[1].textContent).toContain("No Appearances");
+  fireEvent.click(within(table).getByRole("button", { name: "No Appearances", pressed: true }));
+  expect(select).toHaveBeenCalledExactlyOnceWith("missing");
+  fireEvent.click(screen.getByRole("button", { name: "Roster & ratings" }));
+  expect(screen.getByRole("columnheader", { name: "CLOSE" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Contracts" }));
+  expect(within(screen.getByRole("table")).getAllByRole("row")[1].textContent).toContain(
+    "No Appearances"
+  );
 });

@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import GameDashboardPage from "@/app/(protected)/games/[gameId]/dashboard/page";
 import { selectConferenceStandings } from "@/application/dashboard/selectConferenceStandings";
 import type { RosterPlayer } from "@/application/hooks/roster/useRoster";
 import type { Locale } from "@/application/i18n/types";
@@ -10,14 +11,21 @@ import { I18nProvider } from "@/application/providers/I18nProvider";
 import { useBatchSimulationStore } from "@/application/stores/useBatchSimulationStore";
 import { AlertsWidget, getVerifiedContractEndYear } from "@/components/dashboard/alerts-widget";
 import { CapSpaceWidget } from "@/components/dashboard/cap-space-widget";
+import { FranchiseOverview } from "@/components/dashboard/franchise-overview";
 import { NextGameWidget } from "@/components/dashboard/next-game-widget";
 import { StandingsWidget } from "@/components/dashboard/standings-widget";
 import { getSalaryCapThresholds } from "@/domain/constants/nba-rules";
 import type { Contract } from "@/domain/entities/Contract";
 import type { Game } from "@/domain/entities/Game";
 import type { LeagueStanding } from "@/domain/entities/LeagueStanding";
+import type { PostseasonState } from "@/domain/entities/Postseason";
 import type { ScheduledGame } from "@/domain/entities/ScheduledGame";
 import type { Team } from "@/domain/entities/Team";
+
+vi.mock("@/app/ui-preview/fonts", () => ({
+  body: { className: "barlow" },
+  display: { className: "barlow-condensed" },
+}));
 
 const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
 const game = {
@@ -31,6 +39,8 @@ const baseTeams = [
   {
     id: "chi",
     name: "Chicago Bulls",
+    city: "Chicago",
+    division: "Central",
     abbreviation: "CHI",
     conference: "East",
     logoUrl: "/chi.png",
@@ -51,13 +61,27 @@ let standings: { data: LeagueStanding[]; isPending: boolean; isError: boolean };
 let releases: { data: number | undefined; isError: boolean };
 let contracts: { data: Contract[]; isError: boolean };
 let injuredIds: string[];
+let gamePending = false;
+let gameError = false;
+let teamsPending = false;
+let teamsError = false;
+let advancePending = false;
+let advanceError = false;
+let postseason: { data: PostseasonState | undefined; isPending: boolean; isError: boolean };
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({
+  usePostseason: () => postseason,
+}));
 
-vi.mock("@/application/hooks/games/useGame", () => ({ useGame: () => ({ data: game }) }));
-vi.mock("@/application/hooks/teams/useTeams", () => ({ useTeams: () => ({ data: teams }) }));
+vi.mock("@/application/hooks/games/useGame", () => ({
+  useGame: () => ({ data: game, isPending: gamePending, isError: gameError }),
+}));
+vi.mock("@/application/hooks/teams/useTeams", () => ({
+  useTeams: () => ({ data: teams, isPending: teamsPending, isError: teamsError }),
+}));
 vi.mock("@/application/hooks/simulation", () => ({
   useNextGame: () => next,
   useStandings: () => standings,
-  useAdvanceRange: () => ({ isPending: false, isError: false, mutate }),
+  useAdvanceRange: () => ({ isPending: advancePending, isError: advanceError, mutate }),
 }));
 vi.mock("@/application/hooks/roster/useRoster", () => ({ useRoster: () => roster }));
 vi.mock("@/application/hooks/player-states/usePlayerStates", () => ({
@@ -86,6 +110,13 @@ function show(component: ReactElement, locale: Locale = "en") {
 }
 
 beforeEach(() => {
+  gamePending = false;
+  gameError = false;
+  teamsPending = false;
+  teamsError = false;
+  advancePending = false;
+  advanceError = false;
+  postseason = { data: undefined, isPending: false, isError: false };
   teams = [...baseTeams];
   mutate.mockReset();
   useBatchSimulationStore.setState({
@@ -124,7 +155,164 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+function dashboard() {
+  const params = Object.assign(Promise.resolve({ gameId: "game" }), {
+    status: "fulfilled",
+    value: { gameId: "game" },
+  });
+  return show(<GameDashboardPage params={params} />);
+}
+
+describe("dashboard composition", () => {
+  it("renders the export's row-major panels below franchise identity and metrics", () => {
+    const { container } = dashboard();
+    expect(screen.getByRole("heading", { level: 1, name: "Franchise dashboard" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "Franchise overview" })).toBeDefined();
+    const titles = [...container.querySelectorAll('[data-slot="card-title"]')].map(
+      (node) => node.textContent
+    );
+    expect(titles).toEqual([
+      "Next game",
+      "Team finances",
+      "Conference standings",
+      "Front office priorities",
+    ]);
+    expect(screen.getByRole("link", { name: "View standings" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/league/standings"
+    );
+  });
+
+  it.each([
+    "game-loading",
+    "game-error",
+    "teams-loading",
+    "teams-error",
+  ])("keeps %s out of the ready dashboard", (state) => {
+    gamePending = state === "game-loading";
+    gameError = state === "game-error";
+    teamsPending = state === "teams-loading";
+    teamsError = state === "teams-error";
+    dashboard();
+    expect(screen.getByRole(state.endsWith("error") ? "alert" : "status")).toBeDefined();
+    expect(screen.queryByRole("region", { name: "Franchise overview" })).toBeNull();
+  });
+});
+
+describe("franchise overview", () => {
+  it("uses real conference records, rank and played games, never prototype metrics", () => {
+    standings.data = [
+      { gameId: "game", teamId: "chi", wins: 12, losses: 8 },
+      { gameId: "game", teamId: "cha", wins: 15, losses: 5 },
+      { gameId: "game", teamId: "dal", wins: 30, losses: 0 },
+    ];
+    show(<FranchiseOverview game={game} teams={teams} />);
+    expect(screen.getByRole("heading", { name: "Chicago Bulls" })).toBeDefined();
+    expect(screen.getByText("Central")).toBeDefined();
+    const strip = screen.getByRole("region", { name: "Season at a glance" });
+    expect(within(strip).getByText("12–8")).toBeDefined();
+    expect(within(strip).getByText("60%")).toBeDefined();
+    expect(within(strip).getByText("2")).toBeDefined();
+    expect(within(strip).getByText("20")).toBeDefined();
+    expect(screen.queryByText(/Last 5|arena|draft|eliminated/i)).toBeNull();
+  });
+
+  it.each([
+    "loading",
+    "error",
+    "missing",
+    "unplayed",
+  ])("handles %s records without invented numbers", (state) => {
+    standings.isPending = state === "loading";
+    standings.isError = state === "error";
+    if (state === "missing") standings.data = [];
+    if (state === "unplayed")
+      standings.data = [{ gameId: "game", teamId: "chi", wins: 0, losses: 0 }];
+    show(<FranchiseOverview game={game} teams={teams} />);
+    const strip = screen.getByRole("region", { name: "Season at a glance" });
+    expect(within(strip).queryByText("100%")).toBeNull();
+    if (state === "loading") expect(within(strip).getByRole("status")).toBeDefined();
+    if (state === "error") expect(within(strip).getByRole("alert")).toBeDefined();
+    if (state === "missing") expect(within(strip).getByText(/not available yet/)).toBeDefined();
+    if (state === "unplayed") {
+      expect(within(strip).getByText("0–0")).toBeDefined();
+      expect(within(strip).getByText("—")).toBeDefined();
+    }
+  });
+
+  it("localizes real metrics and falls back when team identity is missing", () => {
+    show(<FranchiseOverview game={game} teams={[]} />, "es");
+    expect(screen.getByRole("region", { name: "Temporada de un vistazo" })).toBeDefined();
+    expect(screen.getByText("Porcentaje de victorias")).toBeDefined();
+    expect(screen.queryByText("Chicago Bulls")).toBeNull();
+  });
+});
+
 describe("next game", () => {
+  it("does not start simulation after a confirmed champion even if a stale fixture remains", () => {
+    postseason.data = { phase: "complete", championTeamId: "chi" } as PostseasonState;
+    show(<NextGameWidget game={game} />);
+    fireEvent.click(screen.getByRole("button", { name: "Simulate next game" }));
+    expect(mutate).not.toHaveBeenCalled();
+    expect(
+      (screen.getByRole("button", { name: "Simulate next game" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+  });
+  it("keeps pending simulation locked and allows retry after an advance error", () => {
+    advancePending = true;
+    const view = show(<NextGameWidget game={game} />);
+    expect(
+      (screen.getByRole("button", { name: "Simulate next game" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    advancePending = false;
+    advanceError = true;
+    view.rerender(
+      <I18nProvider locale="en">
+        <NextGameWidget game={game} />
+      </I18nProvider>
+    );
+    expect(screen.getByRole("alert")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Simulate next game" }));
+    expect(mutate).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ["regular_season", null, false, false],
+    ["play_in", null, true, false],
+    ["playoffs", null, true, false],
+    ["complete", null, true, false],
+    ["complete", "chi", true, true],
+  ] as const)("links only to existing postseason states: %s / %s", (phase, championTeamId, visible, offseason) => {
+    next.data = null;
+    postseason.data = {
+      phase,
+      championTeamId,
+      runnerUpTeamId: null,
+      qualification: [],
+      playoffSeeds: [],
+      series: [],
+      games: [],
+    };
+    show(<NextGameWidget game={game} />);
+    const links = screen.getAllByRole("link");
+    const link = links.find((item) => item.getAttribute("href")?.endsWith("/postseason"));
+    expect(Boolean(link)).toBe(visible);
+    if (link) expect(link.textContent?.includes("Offseason")).toBe(offseason);
+    expect(screen.getByRole("link", { name: "Calendar" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/schedule"
+    );
+    expect(screen.queryByRole("button", { name: "Simulate next game" })).toBeNull();
+  });
+
+  it.each(["pending", "error"])("does not promote stale postseason data during %s", (state) => {
+    next.data = null;
+    postseason = {
+      data: { phase: "complete", championTeamId: "chi" } as PostseasonState,
+      isPending: state === "pending",
+      isError: state === "error",
+    };
+    show(<NextGameWidget game={game} />);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
+
   it("shows full logos and home/away order, and starts a bounded league simulation", () => {
     const { container } = show(<NextGameWidget game={game} />);
     expect(
@@ -190,8 +378,8 @@ describe("conference standings", () => {
     expect(screen.getByText("East")).toBeDefined();
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1]?.textContent)).toEqual([
-      "CHI",
-      "CHA",
+      "Chicago Bulls",
+      "Charlotte Hornets",
     ]);
     expect(screen.queryByText("DAL")).toBeNull();
     expect(rows[0]?.textContent).toContain("100%");
@@ -215,7 +403,7 @@ describe("conference standings", () => {
         .getAllByRole("cell")
         .slice(0, 2)
         .map((cell) => cell.textContent)
-    ).toEqual(["8", "CHI"]);
+    ).toEqual(["8", "Chicago Bulls"]);
   });
 
   it("uses stable alphabetical ties and does not fabricate a percentage before play", () => {
@@ -225,7 +413,7 @@ describe("conference standings", () => {
     ];
     show(<StandingsWidget gameId="game" teamId="chi" />);
     const rows = screen.getAllByRole("row").slice(1);
-    expect(rows[0]?.textContent).toContain("CHA");
+    expect(rows[0]?.textContent).toContain("Charlotte Hornets");
     expect(rows[0]?.textContent).toContain("—");
     expect(screen.getByText(/NBA tiebreakers are not modeled/)).toBeDefined();
   });
@@ -281,6 +469,43 @@ describe("roster evidence", () => {
 });
 
 describe("financial truth", () => {
+  it("keeps an opponent's financial roster link inside its franchise profile", () => {
+    const href = "/games/game/dashboard/league/teams/cha?conference=East&franchiseTab=roster";
+    show(<CapSpaceWidget gameId="game" teamId="cha" rosterHref={href} />);
+    expect(screen.getByRole("link", { name: "Roster" }).getAttribute("href")).toBe(href);
+    expect(screen.queryByRole("link", { name: "Roster" })?.getAttribute("href")).not.toBe(
+      "/games/game/dashboard/roster"
+    );
+  });
+
+  it("retains all thresholds and the computed bar including release charges", () => {
+    const { container } = show(<CapSpaceWidget gameId="game" teamId="chi" />);
+    const thresholds = getSalaryCapThresholds(game.seasonYear);
+    for (const value of [
+      thresholds.salaryCap,
+      thresholds.luxuryTax,
+      thresholds.firstApron,
+      thresholds.secondApron,
+    ]) {
+      expect(
+        screen.getByText(
+          new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          }).format(value)
+        )
+      ).toBeDefined();
+    }
+    const bar = container.querySelector<HTMLElement>('[aria-hidden="true"] > div');
+    expect(Number.parseFloat(bar?.style.width ?? "0")).toBeCloseTo(
+      (105_000_000 / thresholds.secondApron) * 100
+    );
+    expect(container.querySelectorAll('[aria-hidden="true"] > span')).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Roster" }).getAttribute("href")).toBe(
+      "/games/game/dashboard/roster"
+    );
+  });
   it("includes released cap charges and uses the game's season thresholds", () => {
     show(<CapSpaceWidget gameId="game" teamId="chi" />);
     expect(screen.getByText("$105,000,000")).toBeDefined();

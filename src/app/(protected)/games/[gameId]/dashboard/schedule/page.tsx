@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { display } from "@/app/ui-preview/fonts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useT } from "@/application/providers/I18nProvider";
 import { Calendar } from "@/components/games/Calendar";
@@ -35,9 +36,12 @@ export default function SchedulePage({ params }: SchedulePageProps) {
     <section
       data-slot="schedule-screen"
       aria-labelledby="calendar-title"
-      className="animate-in fade-in duration-500"
+      className="space-y-6 animate-in fade-in duration-500"
     >
-      <h1 id="calendar-title" className="sr-only">
+      <h1
+        id="calendar-title"
+        className={`${display.className} text-4xl font-semibold tracking-tight`}
+      >
         {t("dashboard", "calendar")}
       </h1>
       <Calendar

@@ -35,6 +35,10 @@ it("loads only when opened and displays the saved individual shooting and exact 
   view.open();
   expect(query).toHaveBeenCalledWith("career", "fixture");
   expect(screen.getAllByRole("table")).toHaveLength(2);
+  expect(screen.getAllByRole("table")[0].querySelector('th[scope="col"]')).toBeTruthy();
+  expect(
+    screen.getAllByRole("table")[0].querySelector('th[scope="row"]')?.classList.contains("sticky")
+  ).toBe(true);
   expect(screen.getByText("Home · 10")).toBeTruthy();
   expect(screen.getByText("Player 1")).toBeTruthy();
   expect(screen.getByText("5-8")).toBeTruthy();

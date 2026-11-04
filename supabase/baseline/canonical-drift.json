@@ -1,0 +1,2953 @@
+{
+  "indexes": {
+    "missing": [
+      {
+        "constraint": true,
+        "definition": "CREATE UNIQUE INDEX scheduled_games_game_id_game_date_home_team_id_away_team_id_key ON public.scheduled_games USING btree (game_id, game_date, home_team_id, away_team_id)",
+        "name": "scheduled_games_game_id_game_date_home_team_id_away_team_id_key",
+        "ready": true,
+        "table": "scheduled_games",
+        "valid": true
+      }
+    ],
+    "extra": [
+      {
+        "constraint": false,
+        "definition": "CREATE INDEX idx_scheduled_games_team ON public.scheduled_games USING btree (game_id, home_team_id, away_team_id, game_date)",
+        "name": "idx_scheduled_games_team",
+        "ready": true,
+        "table": "scheduled_games",
+        "valid": true
+      },
+      {
+        "constraint": true,
+        "definition": "CREATE UNIQUE INDEX scheduled_games_unique_matchup ON public.scheduled_games USING btree (game_id, game_date, home_team_id, away_team_id)",
+        "name": "scheduled_games_unique_matchup",
+        "ready": true,
+        "table": "scheduled_games",
+        "valid": true
+      }
+    ]
+  },
+  "defaults": {
+    "missing": [],
+    "extra": [
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "DELETE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "EXECUTE",
+        "schema": "public",
+        "type": "f"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "INSERT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "MAINTAIN",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "REFERENCES",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "TRIGGER",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "TRUNCATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "anon",
+        "owner": "supabase_admin",
+        "privilege": "USAGE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "DELETE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "EXECUTE",
+        "schema": "public",
+        "type": "f"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "INSERT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "MAINTAIN",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "REFERENCES",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "TRIGGER",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "TRUNCATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "authenticated",
+        "owner": "supabase_admin",
+        "privilege": "USAGE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "DELETE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "EXECUTE",
+        "schema": "public",
+        "type": "f"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "INSERT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "MAINTAIN",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "REFERENCES",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "TRIGGER",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "TRUNCATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "postgres",
+        "privilege": "USAGE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "DELETE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "EXECUTE",
+        "schema": "public",
+        "type": "f"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "INSERT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "MAINTAIN",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "REFERENCES",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "TRIGGER",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "TRUNCATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "postgres",
+        "owner": "supabase_admin",
+        "privilege": "USAGE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "DELETE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "EXECUTE",
+        "schema": "public",
+        "type": "f"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "INSERT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "MAINTAIN",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "REFERENCES",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "SELECT",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "TRIGGER",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "TRUNCATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "S"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "UPDATE",
+        "schema": "public",
+        "type": "r"
+      },
+      {
+        "grantable": false,
+        "grantee": "service_role",
+        "owner": "supabase_admin",
+        "privilege": "USAGE",
+        "schema": "public",
+        "type": "S"
+      }
+    ]
+  },
+  "policies": {
+    "missing": [],
+    "extra": [
+      {
+        "check": null,
+        "command": "SELECT",
+        "name": "Allow public read access to contracts",
+        "permissive": "PERMISSIVE",
+        "roles": ["anon", "authenticated"],
+        "table": "contracts",
+        "using": "true"
+      },
+      {
+        "check": null,
+        "command": "SELECT",
+        "name": "Allow public read access to players",
+        "permissive": "PERMISSIVE",
+        "roles": ["anon", "authenticated"],
+        "table": "players",
+        "using": "true"
+      },
+      {
+        "check": null,
+        "command": "SELECT",
+        "name": "Allow public read access to teams",
+        "permissive": "PERMISSIVE",
+        "roles": ["anon", "authenticated"],
+        "table": "teams",
+        "using": "true"
+      }
+    ]
+  },
+  "relations": {
+    "missing": [
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "nba_id",
+            "not_null": false,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "espn_id",
+            "not_null": false,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": false,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "first_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "last_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "full_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "position",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "height",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "weight",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "jersey_number",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "age",
+            "not_null": false,
+            "type": "smallint"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "birth_date",
+            "not_null": false,
+            "type": "date"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "years_of_experience",
+            "not_null": false,
+            "type": "smallint"
+          },
+          {
+            "collation": null,
+            "default": "true",
+            "generated": "",
+            "identity": "",
+            "name": "is_active",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "players",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "player_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "game_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "start_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "end_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y1",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y2",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y3",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y4",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y5",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "false",
+            "generated": "",
+            "identity": "",
+            "name": "is_player_option",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "false",
+            "generated": "",
+            "identity": "",
+            "name": "is_team_option",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "true",
+            "generated": "",
+            "identity": "",
+            "name": "is_guaranteed",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "contracts",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "user_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "selected_team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "season_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": "'modern'::text",
+            "generated": "",
+            "identity": "",
+            "name": "season_era_id",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "simulation_date",
+            "not_null": true,
+            "type": "date"
+          },
+          {
+            "collation": null,
+            "default": "'initializing'::game_status",
+            "generated": "",
+            "identity": "",
+            "name": "status",
+            "not_null": true,
+            "type": "game_status"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "deleted_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "games",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "run_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "provider",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "player_source_id",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "payload",
+            "not_null": true,
+            "type": "jsonb"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "roster_refresh_staging",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      }
+    ],
+    "extra": [
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "nba_id",
+            "not_null": false,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": false,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "first_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "last_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "full_name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "position",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "height",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "weight",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "jersey_number",
+            "not_null": false,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": "true",
+            "generated": "",
+            "identity": "",
+            "name": "is_active",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "espn_id",
+            "not_null": false,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "years_of_experience",
+            "not_null": false,
+            "type": "smallint"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "age",
+            "not_null": false,
+            "type": "smallint"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "birth_date",
+            "not_null": false,
+            "type": "date"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "players",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "player_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "start_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "end_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y1",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y2",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y3",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y4",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "0",
+            "generated": "",
+            "identity": "",
+            "name": "salary_y5",
+            "not_null": false,
+            "type": "bigint"
+          },
+          {
+            "collation": null,
+            "default": "false",
+            "generated": "",
+            "identity": "",
+            "name": "is_player_option",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "false",
+            "generated": "",
+            "identity": "",
+            "name": "is_team_option",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "true",
+            "generated": "",
+            "identity": "",
+            "name": "is_guaranteed",
+            "not_null": false,
+            "type": "boolean"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "game_id",
+            "not_null": false,
+            "type": "uuid"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "contracts",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "anon",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "authenticated",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": "gen_random_uuid()",
+            "generated": "",
+            "identity": "",
+            "name": "id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "user_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "name",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "selected_team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "season_year",
+            "not_null": true,
+            "type": "integer"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "simulation_date",
+            "not_null": true,
+            "type": "date"
+          },
+          {
+            "collation": null,
+            "default": "'initializing'::game_status",
+            "generated": "",
+            "identity": "",
+            "name": "status",
+            "not_null": true,
+            "type": "game_status"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "deleted_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "created_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "now()",
+            "generated": "",
+            "identity": "",
+            "name": "updated_at",
+            "not_null": false,
+            "type": "timestamp with time zone"
+          },
+          {
+            "collation": null,
+            "default": "'modern'::text",
+            "generated": "",
+            "identity": "",
+            "name": "season_era_id",
+            "not_null": true,
+            "type": "text"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "games",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      },
+      {
+        "acl": [
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "postgres",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "DELETE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "INSERT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "MAINTAIN"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "REFERENCES"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "SELECT"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRIGGER"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "TRUNCATE"
+          },
+          {
+            "grantable": false,
+            "grantee": "service_role",
+            "grantor": "postgres",
+            "privilege": "UPDATE"
+          }
+        ],
+        "columns": [
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "run_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "team_id",
+            "not_null": true,
+            "type": "uuid"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "payload",
+            "not_null": true,
+            "type": "jsonb"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "provider",
+            "not_null": true,
+            "type": "text"
+          },
+          {
+            "collation": null,
+            "default": null,
+            "generated": "",
+            "identity": "",
+            "name": "player_source_id",
+            "not_null": true,
+            "type": "integer"
+          }
+        ],
+        "force_rls": false,
+        "kind": "r",
+        "name": "roster_refresh_staging",
+        "options": null,
+        "owner": "postgres",
+        "rls": true,
+        "view": null
+      }
+    ]
+  },
+  "extensions": {
+    "missing": [
+      {
+        "name": "pgcrypto",
+        "schema": "public",
+        "version": "1.3"
+      }
+    ],
+    "extra": [
+      {
+        "name": "pg_graphql",
+        "schema": "graphql",
+        "version": "1.5.11"
+      },
+      {
+        "name": "pg_stat_statements",
+        "schema": "extensions",
+        "version": "1.11"
+      },
+      {
+        "name": "pgcrypto",
+        "schema": "extensions",
+        "version": "1.3"
+      },
+      {
+        "name": "supabase_vault",
+        "schema": "vault",
+        "version": "0.3.1"
+      },
+      {
+        "name": "uuid-ossp",
+        "schema": "extensions",
+        "version": "1.1"
+      }
+    ]
+  },
+  "constraints": {
+    "missing": [
+      {
+        "definition": "UNIQUE (game_id, game_date, home_team_id, away_team_id)",
+        "name": "scheduled_games_game_id_game_date_home_team_id_away_team_id_key",
+        "table": "scheduled_games",
+        "validated": true
+      }
+    ],
+    "extra": [
+      {
+        "definition": "UNIQUE (game_id, game_date, home_team_id, away_team_id)",
+        "name": "scheduled_games_unique_matchup",
+        "table": "scheduled_games",
+        "validated": true
+      }
+    ]
+  },
+  "publications": {
+    "expected": null,
+    "actual": [
+      {
+        "name": "supabase_realtime",
+        "delete": true,
+        "insert": true,
+        "tables": null,
+        "update": true,
+        "truncate": true,
+        "all_tables": false
+      }
+    ]
+  }
+}

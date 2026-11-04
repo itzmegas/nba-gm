@@ -2,7 +2,9 @@
 
 import { AlertTriangle, Info, Scale, ShieldCheck, XCircle } from "lucide-react";
 import Image from "next/image";
+import { useT } from "@/application/providers/I18nProvider";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
+import { formatPick, formatSalary, formatSignedSalary } from "@/components/trades/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +18,6 @@ import type {
   TradeValidationResult,
 } from "@/domain/entities/Trade";
 import { cn } from "@/utils/utils";
-import { formatPick, formatSalary, formatSignedSalary } from "./format";
 
 function MeterBar({ value, invert = false }: { value: number; invert?: boolean }) {
   const isGood = invert ? value <= 30 : value >= 70;
@@ -78,20 +79,21 @@ export function TradeSummary({
   onExecute,
   seasonYear,
 }: TradeSummaryProps) {
+  const t = useT();
   const hasAssets = packageA.outgoingAssets.length > 0 && packageB.outgoingAssets.length > 0;
   const detailsA = simulation?.details.teamA;
   const detailsB = simulation?.details.teamB;
 
   const groups = [
     {
-      label: "You send",
+      label: t("trades", "send"),
       teamName: teamAName,
       badgeVariant: "secondary" as const,
       players: playerAssets(packageA.outgoingAssets),
       picks: pickAssets(packageA.outgoingAssets),
     },
     {
-      label: "You receive",
+      label: t("trades", "receive"),
       teamName: teamBName,
       badgeVariant: "default" as const,
       players: playerAssets(packageB.outgoingAssets),
@@ -104,63 +106,61 @@ export function TradeSummary({
   const rosterMax = NBA_RULES.ROSTER_LIMITS.IN_SEASON_MAX;
 
   return (
-    <Card className="border-border/50 bg-card/50">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
+    <Card className="gap-0 overflow-hidden rounded-[5px] border-primary/30 bg-primary/5 py-0">
+      <CardHeader className="border-b border-primary/20 bg-primary/10 p-4">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
           <Scale className="size-5 text-primary" />
-          Trade Summary
+          {t("trades", "summary")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {!hasAssets && (
-          <div className="flex items-start gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-            <Info className="mt-0.5 size-4 shrink-0" />
-            Select players or picks from both teams to compare packages and validate the trade.
-          </div>
-        )}
-
-        {simulation && !simulation.isValid && (
-          <div className="space-y-1.5 rounded-xl border border-destructive/30 bg-destructive/10 p-3">
-            {simulation.errors.map((error) => (
-              <p key={error.message} className="flex items-start gap-2 text-sm text-destructive">
-                <XCircle className="mt-0.5 size-4 shrink-0" />
-                {error.message}
+      <CardContent className="space-y-4 p-4 text-xs min-[90rem]:max-h-[calc(100dvh-15rem)] min-[90rem]:overflow-y-auto">
+        <section
+          className="space-y-3 border-b border-primary/20 pb-4"
+          aria-label={t("trades", "exchange")}
+        >
+          <h3 className="text-[13px] font-semibold">{t("trades", "exchange")}</h3>
+          {[
+            { id: packageA.teamId, name: teamAName, assets: packageB.outgoingAssets },
+            { id: packageB.teamId, name: teamBName, assets: packageA.outgoingAssets },
+          ].map(({ id, name, assets }) => (
+            <div key={id} className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {name} {t("trades", "receives")}
               </p>
-            ))}
-          </div>
-        )}
-
-        {simulation?.warnings.map((warning) => (
-          <div
-            key={warning}
-            className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400"
-          >
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            {warning}
-          </div>
-        ))}
-
-        {simulation?.isValid && hasAssets && (
-          <div className="flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm font-medium text-green-600 dark:text-green-400">
-            <ShieldCheck className="size-4 shrink-0" />
-            Trade is legal under cap and roster rules.
-          </div>
-        )}
-
-        {executionError && (
-          <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            <XCircle className="mt-0.5 size-4 shrink-0" />
-            {executionError}
-          </div>
-        )}
-
-        {detailsA && detailsB && hasAssets && (
-          <div className="overflow-x-auto rounded-lg border border-border/50">
-            <table className="w-full text-sm">
+              {assets.length === 0 && (
+                <p className="text-muted-foreground">{t("trades", "noIncoming")}</p>
+              )}
+              <ul className="space-y-1.5">
+                {assets.map((asset) => {
+                  const pick = asset.pickId ? pickById.get(asset.pickId) : undefined;
+                  return (
+                    <li
+                      key={asset.player?.id ?? asset.pickId}
+                      className="flex justify-between gap-2"
+                    >
+                      <span className="min-w-0 break-words">
+                        {asset.player?.fullName ?? (pick ? formatPick(pick) : t("trades", "pick"))}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {asset.player
+                          ? formatSalary(asset.contract?.salaryY1)
+                          : t("trades", "pick")}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </section>
+        <div className="overflow-x-auto border-t border-primary/20 pt-4">
+          <h3 className="mb-3 text-[13px] font-semibold">{t("trades", "financial")}</h3>
+          {detailsA && detailsB && hasAssets ? (
+            <table className="w-full text-[11px] [&_td]:px-1 [&_td]:py-2 [&_th]:px-1 [&_th]:py-2">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   <th className="py-2.5 px-4 text-left font-medium text-muted-foreground">
-                    Cap impact
+                    {t("trades", "capImpact")}
                   </th>
                   {[
                     { teamName: teamAName, logoUrl: teamALogoUrl },
@@ -181,7 +181,7 @@ export function TradeSummary({
               </thead>
               <tbody>
                 <tr className="border-b border-border/30">
-                  <td className="py-2.5 px-4 text-muted-foreground">Salary sent</td>
+                  <td className="py-2.5 px-4 text-muted-foreground">{t("trades", "sent")}</td>
                   <td className="py-2.5 px-4 text-right font-mono">
                     {formatSalary(detailsA.outgoingSalary)}
                   </td>
@@ -190,7 +190,7 @@ export function TradeSummary({
                   </td>
                 </tr>
                 <tr className="border-b border-border/30 bg-muted/10">
-                  <td className="py-2.5 px-4 text-muted-foreground">Salary received</td>
+                  <td className="py-2.5 px-4 text-muted-foreground">{t("trades", "received")}</td>
                   <td className="py-2.5 px-4 text-right font-mono">
                     {formatSalary(detailsA.incomingSalary)}
                   </td>
@@ -199,7 +199,7 @@ export function TradeSummary({
                   </td>
                 </tr>
                 <tr className="border-b border-border/30">
-                  <td className="py-2.5 px-4 text-muted-foreground">Net change</td>
+                  <td className="py-2.5 px-4 text-muted-foreground">{t("trades", "net")}</td>
                   {[detailsA, detailsB].map((details) => (
                     <td
                       key={details.teamId}
@@ -214,7 +214,9 @@ export function TradeSummary({
                   ))}
                 </tr>
                 <tr className="border-b border-border/30 bg-muted/10">
-                  <td className="py-2.5 px-4 text-muted-foreground">Roster after</td>
+                  <td className="py-2.5 px-4 text-muted-foreground">
+                    {t("trades", "rosterAfter")}
+                  </td>
                   {[detailsA, detailsB].map((details) => (
                     <td
                       key={details.teamId}
@@ -231,9 +233,10 @@ export function TradeSummary({
                 </tr>
                 <tr>
                   <td className="py-2.5 px-4 text-muted-foreground">
-                    Payroll after
+                    {t("trades", "payrollAfter")}
                     <span className="block text-xs">
-                      Cap {formatSalary(getSalaryCapThresholds(seasonYear).salaryCap)}
+                      {t("trades", "cap")}{" "}
+                      {formatSalary(getSalaryCapThresholds(seasonYear).salaryCap)}
                     </span>
                   </td>
                   {[detailsA, detailsB].map((details) => (
@@ -250,60 +253,120 @@ export function TradeSummary({
                 </tr>
               </tbody>
             </table>
+          ) : (
+            <p className="text-muted-foreground">{t("trades", "selectHint")}</p>
+          )}
+        </div>
+
+        <h3 className="text-[13px] font-semibold">{t("trades", "legality")}</h3>
+        {!hasAssets && (
+          <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+            <Info className="size-4 shrink-0" />
+            {t("trades", "selectHint")}
+          </p>
+        )}
+        {hasAssets && !simulation && !executionError && (
+          <p className="text-muted-foreground">{t("trades", "checking")}</p>
+        )}
+        {simulation && !simulation.isValid && (
+          <div role="alert" className="space-y-2">
+            {simulation.errors.map((error) => (
+              <p
+                key={error.message}
+                className="flex items-start gap-2 text-xs leading-relaxed text-destructive"
+              >
+                <XCircle className="size-4 shrink-0" />
+                {error.message}
+              </p>
+            ))}
+          </div>
+        )}
+        {simulation?.warnings.map((warning) => (
+          <p
+            key={warning}
+            className="flex items-start gap-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400"
+          >
+            <AlertTriangle className="size-4 shrink-0" />
+            {warning}
+          </p>
+        ))}
+        {simulation?.isValid && hasAssets && (
+          <p className="flex items-start gap-2 text-xs leading-relaxed text-green-700 dark:text-green-400">
+            <ShieldCheck className="size-4 shrink-0" />
+            {t("trades", "legal")}
+          </p>
+        )}
+        {executionError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 text-xs leading-relaxed text-destructive"
+          >
+            <XCircle className="size-4 shrink-0" />
+            {executionError}
           </div>
         )}
 
         {hasPlayers && (
-          <div className="overflow-x-auto rounded-lg border border-border/50">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/30">
-                  <th className="py-2.5 px-4 text-left font-medium text-muted-foreground">
-                    Player
-                  </th>
-                  <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">Pos</th>
-                  <th className="py-2.5 px-2 text-center font-medium text-muted-foreground hidden md:table-cell">
-                    Exp
-                  </th>
-                  <th className="py-2.5 px-2 text-center font-medium text-muted-foreground hidden md:table-cell">
-                    Ht
-                  </th>
-                  <th className="py-2.5 px-2 text-right font-medium text-muted-foreground">
-                    Salary
-                  </th>
-                  <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">Yrs</th>
-                  <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">
-                    Morale
-                  </th>
-                  <th className="py-2.5 px-4 text-center font-medium text-muted-foreground">
-                    Fatigue
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((group) => (
-                  <GroupSection
-                    key={group.label}
-                    group={group}
-                    pickById={pickById}
-                    playerStateByPlayerId={playerStateByPlayerId}
-                    seasonYear={seasonYear}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <details className="border-t border-primary/20 pt-3">
+            <summary className="cursor-pointer text-xs text-primary focus-visible:outline-2 focus-visible:outline-ring">
+              {t("trades", "breakdown")} · {t("trades", "playerDetails")}
+            </summary>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[540px] text-xs">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/30">
+                    <th className="py-2.5 px-4 text-left font-medium text-muted-foreground">
+                      {t("trades", "player")}
+                    </th>
+                    <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">
+                      {t("trades", "position")}
+                    </th>
+                    <th className="py-2.5 px-2 text-center font-medium text-muted-foreground hidden md:table-cell">
+                      {t("trades", "exp")}
+                    </th>
+                    <th className="py-2.5 px-2 text-center font-medium text-muted-foreground hidden md:table-cell">
+                      {t("trades", "height")}
+                    </th>
+                    <th className="py-2.5 px-2 text-right font-medium text-muted-foreground">
+                      {t("trades", "salary")}
+                    </th>
+                    <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">
+                      {t("trades", "years")}
+                    </th>
+                    <th className="py-2.5 px-2 text-center font-medium text-muted-foreground">
+                      {t("trades", "morale")}
+                    </th>
+                    <th className="py-2.5 px-4 text-center font-medium text-muted-foreground">
+                      {t("trades", "fatigue")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((group) => (
+                    <GroupSection
+                      key={group.label}
+                      group={group}
+                      pickById={pickById}
+                      playerStateByPlayerId={playerStateByPlayerId}
+                      seasonYear={seasonYear}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         )}
-
+      </CardContent>
+      <div className="border-t border-primary/25 bg-primary/5 p-4">
         <Button
-          className="w-full"
-          size="lg"
+          className="w-full rounded-[3px] text-xs uppercase tracking-wider"
+          size="default"
           disabled={!hasAssets || simulation?.isValid !== true || isExecuting}
           onClick={onExecute}
         >
-          {isExecuting ? "Executing..." : "Execute trade"}
+          {isExecuting ? t("trades", "executing") : t("trades", "execute")}
         </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -322,6 +385,7 @@ interface GroupSectionProps {
 }
 
 function GroupSection({ group, pickById, playerStateByPlayerId, seasonYear }: GroupSectionProps) {
+  const t = useT();
   const pickLabels = group.picks
     .map((asset) => (asset.pickId ? pickById.get(asset.pickId) : undefined))
     .filter((pick): pick is PickInventory => Boolean(pick))
@@ -336,7 +400,7 @@ function GroupSection({ group, pickById, playerStateByPlayerId, seasonYear }: Gr
             <span className="text-xs font-medium text-muted-foreground">{group.teamName}</span>
             {pickLabels.length > 0 && (
               <span className="text-xs text-muted-foreground">
-                + picks: {pickLabels.join(", ")}
+                + {t("trades", "picks")}: {pickLabels.join(", ")}
               </span>
             )}
           </span>
@@ -398,7 +462,7 @@ function GroupSection({ group, pickById, playerStateByPlayerId, seasonYear }: Gr
       {group.players.length === 0 && (
         <tr className="border-b border-border/30">
           <td colSpan={8} className="py-2.5 px-4 text-sm text-muted-foreground">
-            Picks only
+            {t("trades", "picksOnly")}
           </td>
         </tr>
       )}

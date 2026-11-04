@@ -7,6 +7,8 @@ import SchedulePage from "@/app/(protected)/games/[gameId]/dashboard/schedule/pa
 import { I18nProvider } from "@/application/providers/I18nProvider";
 import { Calendar } from "@/components/games/Calendar";
 
+vi.mock("@/app/ui-preview/fonts", () => ({ display: { className: "display-font" } }));
+
 const teams = [
   { id: "chi", name: "Chicago Bulls", abbreviation: "CHI", logoUrl: "/chi.png" },
   { id: "bos", name: "Boston Celtics", abbreviation: "BOS", logoUrl: "/bos.png" },
@@ -166,7 +168,7 @@ it("preserves the manually browsed month during a simulation update within the s
   expect(screen.getByRole("heading", { name: "November 2026" })).toBeTruthy();
 });
 
-it("reclaims the page heading space while retaining an accessible calendar heading", async () => {
+it("shows the editorial calendar heading", async () => {
   const params = Promise.resolve({ gameId: "game" });
   await act(async () => {
     render(
@@ -179,7 +181,53 @@ it("reclaims the page heading space while retaining an accessible calendar headi
   });
   expect(
     screen.getByRole("heading", { name: "Calendar", level: 1 }).classList.contains("sr-only")
-  ).toBe(true);
+  ).toBe(false);
   expect(screen.queryByText("Scheduled games for the season.")).toBeNull();
   expect(document.querySelector('[data-slot="schedule-screen"]')).toBeTruthy();
+});
+
+it("selects empty days in the inspector without opening results and returns to today", () => {
+  render(calendar());
+  fireEvent.click(screen.getByRole("button", { name: "Select date 2026-10-18" }));
+  const inspector = screen.getByRole("complementary", { name: "Timeline" });
+  expect(within(inspector).getByText("No games scheduled for this date.")).toBeTruthy();
+  expect(within(inspector).getByText("Sunday, October 18, 2026")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  fireEvent.click(screen.getByRole("button", { name: "Today" }));
+  expect(screen.getByRole("heading", { name: "October 2026" })).toBeTruthy();
+  expect(
+    within(inspector)
+      .getAllByRole("link", { name: "View games" })
+      .some((link) => link.getAttribute("href") === "/games/game/dashboard/schedule/day/2026-10-16")
+  ).toBe(true);
+  expect(boxScore).not.toHaveBeenCalled();
+});
+
+it("shows saved results in the inspector without loading box scores", () => {
+  render(calendar());
+  const inspector = screen.getByRole("complementary", { name: "Timeline" });
+  expect(within(inspector).getByText("BOS @ CHI")).toBeTruthy();
+  expect(within(inspector).getByText("Final · 102-114")).toBeTruthy();
+  expect(within(inspector).getByText("LAL @ BOS")).toBeTruthy();
+  expect(boxScore).not.toHaveBeenCalled();
+});
+
+it("localizes the inspector and keeps empty months navigable", () => {
+  schedule.mockReturnValue({ data: [], isLoading: false, isError: false });
+  render(
+    <I18nProvider locale="es">
+      <Calendar
+        gameId="game"
+        selectedTeamId="chi"
+        simulationDate={new Date("2026-12-31T23:00:00Z")}
+      />
+    </I18nProvider>
+  );
+  const inspector = screen.getByRole("complementary", { name: "Cronología" });
+  expect(within(inspector).getByText("No hay un próximo partido programado.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Mes siguiente" }));
+  expect(screen.getByRole("heading", { name: "enero de 2027" })).toBeTruthy();
+  expect(screen.getByText("No hay partidos programados en este mes.")).toBeTruthy();
+  expect(within(inspector).getByText("No hay partidos programados para esta fecha.")).toBeTruthy();
 });

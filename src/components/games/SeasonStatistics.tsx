@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useSeasonStatistics } from "@/application/hooks/schedule/useSeasonStatistics";
 import { useT } from "@/application/providers/I18nProvider";
 import { playerStatisticsValues } from "@/application/statistics/playerStatisticsValues";
+import { playerProfileHref } from "@/components/league/navigation";
 import { PlayerHeadshot } from "@/components/players/player-headshot";
 import {
   AppTable,
@@ -65,6 +66,7 @@ interface SeasonStatisticsProps {
   seasonYear: number;
   players?: Pick<Player, "id" | "fullName" | "headshotUrl">[];
   leagueTeamId?: string;
+  leagueReturnQuery?: string;
   onSelectPlayer?: (playerId: string) => void;
   selectedPlayerId?: string;
 }
@@ -74,6 +76,7 @@ export function SeasonStatistics({
   seasonYear,
   players,
   leagueTeamId,
+  leagueReturnQuery,
   onSelectPlayer,
   selectedPlayerId,
 }: SeasonStatisticsProps) {
@@ -237,7 +240,12 @@ export function SeasonStatistics({
                             ) : players ? (
                               <Link
                                 className="hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                                href={`/games/${gameId}/dashboard/player/${row.playerId}${leagueTeamId ? `?leagueTeamId=${encodeURIComponent(leagueTeamId)}` : ""}`}
+                                href={playerProfileHref(
+                                  gameId,
+                                  row.playerId,
+                                  leagueTeamId,
+                                  leagueReturnQuery
+                                )}
                               >
                                 {row.playerName}
                               </Link>

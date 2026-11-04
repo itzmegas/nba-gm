@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
+import { display } from "@/app/ui-preview/fonts";
 import { useGame } from "@/application/hooks/games/useGame";
 import { useSchedule } from "@/application/hooks/schedule/useSchedule";
 import { useTeams } from "@/application/hooks/teams/useTeams";
@@ -50,10 +51,13 @@ export function DailyGames({ gameId, date }: { gameId: string; date: string }) {
     <section className="space-y-6" aria-labelledby="daily-games-title">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 id="daily-games-title" className="text-3xl font-black">
+          <h1
+            id="daily-games-title"
+            className={`${display.className} text-4xl font-semibold tracking-tight`}
+          >
             {t("dailyGames", "title")}
           </h1>
-          <p className="capitalize text-muted-foreground">
+          <p className="mt-2 text-sm capitalize text-muted-foreground">
             <time dateTime={date}>{label}</time>
           </p>
         </div>
@@ -61,7 +65,7 @@ export function DailyGames({ gameId, date }: { gameId: string; date: string }) {
           <Link href={basePath}>{t("dailyGames", "backToCalendar")}</Link>
         </Button>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4">
         <Button
           variant="outline"
           size="icon"
@@ -95,6 +99,9 @@ export function DailyGames({ gameId, date }: { gameId: string; date: string }) {
         >
           <ChevronRight />
         </Button>
+        <span className="text-xs text-muted-foreground sm:ml-auto">
+          {fixtures.length} {t("dashboard", "gamesCount")}
+        </span>
       </div>
       {!fixtures.length ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">

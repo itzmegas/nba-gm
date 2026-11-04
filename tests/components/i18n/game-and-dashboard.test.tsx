@@ -10,6 +10,10 @@ import { I18nProvider } from "@/application/providers/I18nProvider";
 import { Calendar } from "@/components/games/Calendar";
 import { GameList } from "@/components/games/GameList";
 
+vi.mock("next/font/local", () => ({
+  default: () => ({ className: "courtside-font", variable: "courtside-variable" }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children?: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
@@ -60,6 +64,10 @@ vi.mock("@/application/hooks/simulation", () => ({
   useNextGame: () => ({ data: { date: "2026-01-16", homeTeamId: "team-1", awayTeamId: "team-2" } }),
   useStandings: () => ({ data: [] }),
   useAdvanceRange: () => ({ isPending: false, isError: false, mutate: () => undefined }),
+}));
+
+vi.mock("@/application/hooks/postseason/usePostseason", () => ({
+  usePostseason: () => ({ data: null, isPending: false, isError: false }),
 }));
 
 vi.mock("@/components/dashboard/alerts-widget", () => ({
@@ -165,7 +173,8 @@ describe("game and dashboard internationalization", () => {
     expect(english).toContain("Simulate next game");
     expect(spanish).toContain("Los Angeles Lakers");
     expect(spanish).toContain("Simular próximo partido");
-    expect(spanish).toContain("Fecha de simulación");
+    expect(spanish).toContain("Panel de franquicia");
+    expect(spanish).toContain("Temporada de un vistazo");
     expect(spanish).not.toContain("Simulate next game");
     expect(english).not.toContain("Joel Embiid");
     expect(english).not.toContain("Zach LaVine");

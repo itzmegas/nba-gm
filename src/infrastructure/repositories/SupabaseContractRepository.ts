@@ -14,15 +14,7 @@ export class SupabaseContractRepository implements ContractRepository {
     uuidSchema.parse(gameId);
     const modern = await this.getEffectiveModernContracts(gameId);
     if (modern !== null) return modern;
-    const { data, error } = await this.client
-      .from("contracts")
-      .select("*")
-      .eq("game_id", gameId)
-      .order("start_year", { ascending: true });
-
-    if (error) throw new Error(error.message);
-
-    return data.map(this.mapToEntity);
+    return this.getLegacyContracts(gameId);
   }
 
   async getById(gameId: string, id: string): Promise<Contract | null> {
@@ -211,22 +203,35 @@ export class SupabaseContractRepository implements ContractRepository {
     if (effective.length === 0) {
       const hasCanonicalMaterialization = await this.hasCanonicalMaterialization(gameId);
       if (hasCanonicalMaterialization) return [];
-      const { data, error } = await this.client.from("contracts").select("*").eq("game_id", gameId);
-      if (error) throw new Error(error.message);
-      return data.map(this.mapToEntity);
+      return this.getLegacyContracts(gameId);
     }
     if (missingCanonicalPlayers.size === 0) return activeContracts;
 
     // Only players without canonical identity coverage may use pre-modern legacy contracts.
-    const { data, error } = await this.client.from("contracts").select("*").eq("game_id", gameId);
-    if (error) throw new Error(error.message);
+    const legacyContracts = await this.getLegacyContracts(gameId);
     const ownerByPlayer = new Map(effective.map(({ playerId, teamId }) => [playerId, teamId]));
-    const legacyFallbacks = data.flatMap((row) => {
-      const teamId = ownerByPlayer.get(row.player_id);
-      if (!missingCanonicalPlayers.has(row.player_id) || !teamId) return [];
-      return [{ ...this.mapToEntity(row), teamId }];
+    const legacyFallbacks = legacyContracts.flatMap((contract) => {
+      const teamId = ownerByPlayer.get(contract.playerId);
+      if (!missingCanonicalPlayers.has(contract.playerId) || !teamId) return [];
+      return [{ ...contract, teamId }];
     });
     return [...activeContracts, ...legacyFallbacks];
+  }
+
+  private async getLegacyContracts(gameId: string): Promise<Contract[]> {
+    const contracts: Contract[] = [];
+    for (let from = 0; ; from += 500) {
+      const { data, error } = await this.client
+        .from("contracts")
+        .select("*")
+        .eq("game_id", gameId)
+        .order("start_year", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + 499);
+      if (error) throw new Error(error.message);
+      contracts.push(...data.map(this.mapToEntity));
+      if (data.length < 500) return contracts;
+    }
   }
 
   private async hasCanonicalMaterialization(gameId: string): Promise<boolean> {

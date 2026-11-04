@@ -139,13 +139,13 @@ it("selects a roster player without navigating and uses the menu for full detail
   expect(push).toHaveBeenCalledExactlyOnceWith(`/games/${gameId}/dashboard/player/${playerId}`);
 });
 
-it("uses 48px portraits while preserving read-only league navigation", () => {
+it("uses compact rectangular portraits while preserving read-only league navigation", () => {
   const leagueTeamId = "55555555-5555-4555-8555-555555555555";
   renderRoster(false, leagueTeamId);
   const row = screen.getByText("Test Player").closest("tr");
-  const portrait = row?.querySelector(".rounded-full");
-  expect(portrait?.classList.contains("h-12")).toBe(true);
-  expect(portrait?.classList.contains("w-12")).toBe(true);
+  const portrait = row?.querySelector(".rounded-sm");
+  expect(portrait?.classList.contains("h-10")).toBe(true);
+  expect(portrait?.classList.contains("w-10")).toBe(true);
   fireEvent.click(screen.getByText("Test Player"));
   expect(push).toHaveBeenCalledExactlyOnceWith(
     `/games/${gameId}/dashboard/player/${playerId}?leagueTeamId=${leagueTeamId}`

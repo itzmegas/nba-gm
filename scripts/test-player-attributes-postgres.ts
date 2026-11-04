@@ -5,9 +5,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const containerId = process.argv[2];
-const expectedId = "8e53ae3e3837c893523abab3aa3f262770e574ab1c6eaae0568e941592aa7d1b";
-if (containerId !== expectedId) {
-  throw new Error("Pass the explicitly authorized player-attributes test container id.");
+if (!containerId || !/^[a-f0-9]{64}$/u.test(containerId)) {
+  throw new Error("Pass the full ID of the isolated fixture created for this run.");
 }
 
 const dockerPrefix = ["--host", "unix:///var/run/docker.sock"];

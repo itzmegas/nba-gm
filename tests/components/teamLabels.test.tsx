@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { Suspense } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import LeaguePage from "@/app/(protected)/games/[gameId]/dashboard/league/page";
+import TeamsPage from "@/app/(protected)/games/[gameId]/dashboard/league/teams/page";
 import { I18nProvider } from "@/application/providers/I18nProvider";
 import { useGameStore } from "@/application/stores/useGameStore";
 import { useTeamStore } from "@/application/stores/useTeamStore";
@@ -12,7 +12,12 @@ import { TeamSelector } from "@/components/team-selector";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/games/game/dashboard/league/teams",
   useSearchParams: () => new URLSearchParams("teamId=atl"),
+}));
+vi.mock("@/app/ui-preview/fonts", () => ({ display: { className: "barlow-condensed" } }));
+vi.mock("@/application/hooks/simulation/useStandings", () => ({
+  useStandings: () => ({ data: [], isPending: false, isError: false }),
 }));
 vi.mock("@/application/hooks/games/useGame", () => ({
   useGame: () => ({ data: { selectedTeamId: "atl", seasonYear: 2026 }, isLoading: false }),
@@ -72,20 +77,22 @@ it.each([
   expect(screen.queryByText("Atlanta Atlanta Hawks")).toBeNull();
 });
 
-it("shows each full team name once in league dropdown labels and the selected heading", async () => {
+it("uses canonical team names in the directory and franchise links", async () => {
   await act(async () => {
     render(
       <I18nProvider locale="en">
         <Suspense fallback="Loading">
-          <LeaguePage params={Promise.resolve({ gameId: "game" })} />
+          <TeamsPage params={Promise.resolve({ gameId: "game" })} />
         </Suspense>
       </I18nProvider>
     );
   });
-  expect(screen.getByText("Atlanta Hawks")).toBeTruthy();
-  fireEvent.click(screen.getByRole("combobox"));
-  expect(await screen.findByRole("option", { name: "Atlanta Hawks (ATL)" })).toBeTruthy();
-  expect(screen.getByRole("option", { name: "LA Clippers (LAC)" })).toBeTruthy();
-  expect(screen.getByRole("option", { name: "Portland Trail Blazers (POR)" })).toBeTruthy();
-  expect(screen.queryByText("Atlanta Atlanta Hawks (ATL)")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Atlanta Hawks" })).toBeNull();
+  for (const name of ["Atlanta Hawks", "LA Clippers", "Portland Trail Blazers"]) {
+    expect(screen.getByRole("link", { name: `View Franchise · ${name}` })).toBeTruthy();
+  }
+  expect(
+    screen.getByRole("link", { name: "View Franchise · Atlanta Hawks" }).getAttribute("href")
+  ).toBe("/games/game/dashboard/league/teams/atl");
+  expect(screen.queryByText("Atlanta Atlanta Hawks")).toBeNull();
 });
