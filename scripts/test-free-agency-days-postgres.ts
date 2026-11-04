@@ -155,6 +155,20 @@ for (const [migration, fixture] of phases) {
     }
   }
   sql(`Migration ${migration}`, file(`scripts/migrations/${migration}`));
+  if (migration === "031_free_agency_market_read.sql") {
+    // Run this fixture below once its 035 availability and 056 image dependencies exist.
+    continue;
+  }
+  if (migration === "035_roster_releases.sql") {
+    sql(
+      "Market image contract 056",
+      file("scripts/migrations/056_free_agency_player_headshots.sql")
+    );
+    sql(
+      "Market read with 035/056 dependencies",
+      assertions + file("tests/infrastructure/supabase/freeAgencyMarketRead.postgres.sql")
+    );
+  }
   sql(fixture, assertions + file(`tests/infrastructure/supabase/${fixture}`));
   if (migration === "036_roster_release_salary_coverage.sql") {
     sql(

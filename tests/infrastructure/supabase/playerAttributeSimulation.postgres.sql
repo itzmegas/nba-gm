@@ -4,6 +4,13 @@ INSERT INTO auth.users(id) VALUES ('90000000-0000-4000-8000-000000000001');
 INSERT INTO public.teams(id, nba_id, name, city, abbreviation, base_rating) VALUES
   ('91000000-0000-4000-8000-000000000001', 901, 'Attribute Home', 'Attribute', 'ATH', 75),
   ('91000000-0000-4000-8000-000000000002', 902, 'Attribute Away', 'Attribute', 'ATA', 75);
+-- Daily advancement now qualifies completed schedules against the full NBA league.
+UPDATE public.teams SET conference=CASE WHEN nba_id IN (901,1001) THEN 'East' ELSE 'West' END;
+INSERT INTO public.teams(id,nba_id,name,city,abbreviation,conference)
+SELECT ('91000000-0000-4000-8001-'||lpad(n::text,12,'0'))::uuid,
+  9100+n,'Synthetic '||n,'Test','X'||n,
+  CASE WHEN n<=13 THEN 'East' ELSE 'West' END
+FROM generate_series(1,26) n;
 INSERT INTO public.players(id, first_name, last_name, full_name, position, is_active) VALUES
   ('92000000-0000-4000-8000-000000000001', 'Home', 'One', 'Home One', 'G', true),
   ('92000000-0000-4000-8000-000000000002', 'Home', 'Two', 'Home Two', 'C', true),
@@ -37,6 +44,11 @@ INSERT INTO public.league_standings(game_id, team_id) VALUES
   ('93000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000002'),
   ('93000000-0000-4000-8000-000000000002', '91000000-0000-4000-8000-000000000001'),
   ('93000000-0000-4000-8000-000000000002', '91000000-0000-4000-8000-000000000002');
+
+INSERT INTO public.league_standings(game_id,team_id)
+SELECT g.id,t.id FROM public.games g CROSS JOIN public.teams t
+WHERE g.id IN ('93000000-0000-4000-8000-000000000001','93000000-0000-4000-8000-000000000002')
+ON CONFLICT DO NOTHING;
 
 DO $$
 DECLARE
@@ -112,7 +124,8 @@ BEGIN
       AND player_id IN ('92000000-0000-4000-8000-000000000001','92000000-0000-4000-8000-000000000002');
   PERFORM * FROM public.advance_simulation_day('93000000-0000-4000-8000-000000000002','2026-10-02');
   ASSERT (SELECT (home_score,away_score)=(initial_home,initial_away) FROM public.scheduled_games
-    WHERE game_id='93000000-0000-4000-8000-000000000002'), 'Completed results are never recalculated';
+    WHERE game_id='93000000-0000-4000-8000-000000000002'
+      AND game_date='2026-10-02'), 'Completed results are never recalculated';
   DELETE FROM public.game_player_attributes
     WHERE game_id='93000000-0000-4000-8000-000000000001'
       AND player_id='92000000-0000-4000-8000-000000000001';

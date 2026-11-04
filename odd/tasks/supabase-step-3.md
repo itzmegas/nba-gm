@@ -10,9 +10,9 @@ S4. "Fix any proposal defects locally without modifying the already-validated ba
 S5. "Do not deploy anything to production." Preserve baseline/legacy files, use synthetic disposable local data only, and keep proposals inactive. Checks: preservation hashes and local target/binding checks.
 
 ## Tasks
-- T1 [S1,S5] inline; inventory reported, independent exhaustiveness unproved; commit pending. Mapping trigger: complete dependency inventory exceeds bounded inline evidence.
-- T2 [S2,S3,S4,S5] inline; partial, SQL isolation/constraints pass, two existing PostgreSQL suites fail and denied-anon runtime proof unavailable; commit pending. Risk: item 2 (security probes), item 1 (constraint rehearsal only).
-- T3 [S1-S5] inline; report complete, independent verification partial, Needs your decision; commit pending. Route: no writer trigger; parent owns implementation. Mirror: odd/supabase-step-3/tasks.
+- T1 [S1,S5] inline; inventory reported, independent exhaustiveness unproved; commit `3cf4b3e`. Mapping trigger: complete dependency inventory exceeds bounded inline evidence.
+- T2 [S2,S3,S4,S5] inline; partial, SQL isolation/constraints pass, two existing PostgreSQL suites fail and denied-anon runtime proof unavailable; commit `3cf4b3e`. Risk: item 2 (security probes), item 1 (constraint rehearsal only).
+- T3 [S1-S5] inline; report complete, independent verification partial, Needs your decision; commit `3cf4b3e`. Route: no writer trigger; parent owns implementation. Mirror: odd/supabase-step-3/tasks.
 
 ## Log
 L1. Original request (verbatim):
@@ -71,3 +71,4 @@ Do not deploy anything to production.
 L2. Read required documents; Step 1 resolves to docs/SUPABASE_MIGRATION_RECONCILIATION_STEP_1.md. Clean starting worktree. Existing local container binds only 127.0.0.1:55322. No remote access planned. Baseline proposal runner already tests basic SQL isolation and NOT NULL refusal; expand coverage separately.
 L3. Local probes reproduce baseline anonymous leak (RED), corrected read isolation (GREEN), service access, final-schema trades, 30-team creation/promotion/materialization, historical seed, offseason/market/terminal simulation. Full public hashes preserved. No proposal defect demonstrated; proposals remain unchanged. Two attempts at denied anonymous RPC execution crashed local PostgreSQL; no further retry. Eight initial legacy suites passed; follow-up pending-offer suite passed, player-attributes failed at 15-team qualification guard. Free-agency-days failed at missing image identifiers. Typecheck passed; 1104 Vitest tests passed with four docs collection failures; Biome has existing manifest error. Details in docs/database/schema-verification-step-3.md.
 L4. Independent verifier PARTIAL; preserved all 73 protected files and confirmed rejected cross-owner insert/reassignment plus NULL update state invariants. Added those boundary regressions inline. No correction findings. No commit while required proof remains missing; no push/PR. Needs your decision: separately authorize/resolve local PostgreSQL crash, legacy fixture failures and Auth/PostgREST full-gameplay coverage before promotion. RDD remains clone-locally off.
+L5. The Step 3 local security/workflow probes and their partial-result report were committed as work unit `3cf4b3e` (`test(db): verify local correction compatibility`); no files from Step 3.1 are included in that commit.
