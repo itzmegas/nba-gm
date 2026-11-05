@@ -1,9 +1,18 @@
-# Modern contract trade compatibility — investigation and proposed correction
+# Modern contract trade compatibility — design and implementation status
 
-Status: design only; implementation and migration application are not authorized.
-Evidence reviewed: 2026-11-04. No production access, data changes, or test execution.
+**Status: implemented and locally validated; NO-GO for staging or production promotion.**
+Status reconciled: 2026-11-05. The correction is in
+`supabase/migrations/20261104190000_modern_contract_trade_compatibility.sql`.
+The [local validation report](modern-contract-trade-validation-report.md) records
+executed regression tests, migration replay, and remaining risks. This documentation
+update does not rerun those checks or authorize remote application.
 
-## Recommendation
+The sections below preserve the original 2026-11-04 investigation and design,
+including its proposed test matrix and acceptance checklist. They are historical
+requirements, not a current implementation backlog. For the environment strategy
+and next steps, see the [development and testing plan](development-testing-plan.md).
+
+## Original recommendation
 
 Add modern canonical contract evidence to the existing
 `execute_trade_transactional` contract-presence check through a new, independent
@@ -13,9 +22,9 @@ The existing TypeScript compatibility projection already supports canonical sala
 This corrects `Player contract is missing`; it does **not** make salary matching
 server-authoritative. Existing staging/production NO-GO conditions remain in force.
 
-## Scope and references
+## Original scope and references
 
-Investigation and design only. Preserve the validated baseline, historical
+The original investigation was design-only. Preserve the validated baseline, historical
 migrations, existing data, and separate security proposals. Do not weaken trade
 validation or fabricate missing contract values.
 
@@ -28,7 +37,7 @@ Required context:
 
 Source line references below describe the inspected revision and may move later.
 
-## Root cause and execution flow
+## Root cause before the correction and execution flow
 
 1. The trade page constructs player assets from roster compatibility contracts
    (`src/app/(protected)/games/[gameId]/dashboard/trades/page.tsx:96-165`).
@@ -44,15 +53,17 @@ Source line references below describe the inspected revision and may move later.
 5. `SupabaseTradeRepository` sends player/pick identifiers to the RPC, not the
    salary figures calculated in TypeScript
    (`src/infrastructure/repositories/SupabaseTradeRepository.ts:35-66`).
-6. The effective SQL function accepts contract evidence from `contracts` or
+6. Before the correction, the SQL function accepted contract evidence from `contracts` or
    `game_runtime_contracts`, but never `game_contract_agreements`. Canonical-only
-   players therefore raise `Player contract is missing`
+   players therefore raised `Player contract is missing`
    (`scripts/schema.sql:2381-2386`).
 
-The effective definition is `scripts/schema.sql:2321-2423`, mirrored in
+The pre-correction definition is `scripts/schema.sql:2321-2423`, mirrored in
 `supabase/migrations/20261102170000_reconcile_legacy_through_056.sql:907-1002`.
-The earlier definition in `scripts/schema.sql:845-940` is superseded.
-The expanded fixture documents the failure with 450 canonical-only players
+The compatibility migration supersedes it in the active chain; `scripts/schema.sql`
+remains an unchanged legacy bootstrap artifact. The still earlier definition in
+`scripts/schema.sql:845-940` is also superseded.
+Step 3.1 recorded the failure with 450 canonical-only players
 (`schema-verification-step-3-1.md:61-67`).
 
 ## Contract-source precedence
@@ -160,7 +171,8 @@ only if regression evidence reveals a concrete projection mismatch.
 The new migration must follow the active catch-up migration. It must remain
 separate from inactive proposals 057/058 and must not rewrite the validated
 baseline, historical migrations, or `scripts/schema.sql` bootstrap mirror.
-See `deployment-runbook.md:69-72,92-101`.
+See the runbook's [migration inventory](deployment-runbook.md#artifacts-and-regeneration)
+and [separate correction proposals](deployment-runbook.md#proposed-corrections-separate-future-work).
 
 For local acceptance, apply the new migration after loading the baseline in an
 isolated disposable database. Also test replay of the active migration chain plus
@@ -192,7 +204,7 @@ only inspect an error message. Successful operations must assert both teams'
 ownership, effective salaries, relevant history, unchanged immutable snapshots,
 and absence of artificial legacy contracts.
 
-## Implementation plan and acceptance criteria
+## Original implementation plan and acceptance criteria
 
 1. Reproduce the current canonical-only failure locally before implementation.
 2. Add the separate migration and focused SQL regression coverage.
@@ -202,7 +214,8 @@ and absence of artificial legacy contracts.
    repository's required `bun biome check` for changed supported files.
 5. Record results and unresolved gaps before any deployment decision.
 
-Acceptance requires:
+Original acceptance checklist (not a current progress tracker; recorded outcomes
+are in the [validation report](modern-contract-trade-validation-report.md)):
 
 - [ ] Canonical-only modern trades no longer fail with `Player contract is missing`.
 - [ ] Missing/excluded canonical evidence is not silently accepted.
@@ -217,8 +230,13 @@ Acceptance requires:
 
 ## Verification status and next step
 
-This is a source/document inspection report, not an executed migration proof.
-No tests were run for this proposal and no code, database state, baseline, or
-historical migration was changed. Implementation requires separate authorization.
-The independent Supabase security-runtime blocker and existing staging/production
-NO-GO remain unresolved.
+The original investigation did not execute tests or change database state. Subsequent
+implementation and local validation are recorded in the
+[validation report](modern-contract-trade-validation-report.md); the correction is
+no longer design-only. Those results do not prove live Auth/PostgREST behavior or
+SQL-side salary matching, hard caps, and roster limits. The independent Supabase
+security-runtime blocker and staging/production NO-GO remain unresolved.
+
+Next, follow the [development and testing plan](development-testing-plan.md) to
+prepare isolated integration coverage. Remote migrations and deployment remain
+separately authorized operations.
