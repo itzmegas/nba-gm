@@ -42,30 +42,34 @@ DO $$ BEGIN
 END $$;
 UPDATE games SET status='active' WHERE id='b7300000-0000-4000-8000-000000000001';
 CREATE TEMP TABLE canonical_before AS SELECT jsonb_agg(to_jsonb(a) ORDER BY id) value FROM game_contract_agreements a;
-CREATE TEMP TABLE trade_validation(passed boolean);
-GRANT ALL ON trade_validation TO authenticated;
 SET LOCAL request.jwt.claim.role='authenticated';
 SET LOCAL ROLE authenticated;
-DO $$ BEGIN
-PERFORM execute_trade_transactional('b7300000-0000-4000-8000-000000000001',
+SELECT execute_trade_transactional('b7300000-0000-4000-8000-000000000001',
  'b7100000-0000-4000-8000-000000000001','b7100000-0000-4000-8000-000000000002',
  '[{"asset_type":"player","asset_id":"b7200000-0000-4000-8000-000000000101","from_team_id":"b7100000-0000-4000-8000-000000000001"},
  {"asset_type":"player","asset_id":"b7200000-0000-4000-8000-000000000201","from_team_id":"b7100000-0000-4000-8000-000000000002"}]');
-INSERT INTO trade_validation VALUES (true);
-EXCEPTION WHEN raise_exception THEN
- IF SQLERRM<>'Player contract is missing' THEN RAISE; END IF;
- INSERT INTO trade_validation VALUES(false);
- RAISE WARNING 'FAIL: modern canonical-only trade rejected: %',SQLERRM;
-END $$;
 RESET ROLE;
 DO $$ BEGIN
- ASSERT (SELECT team_id=CASE WHEN (SELECT passed FROM trade_validation)
- THEN 'b7100000-0000-4000-8000-000000000002'::uuid ELSE 'b7100000-0000-4000-8000-000000000001'::uuid END FROM game_player_states
- WHERE player_id='b7200000-0000-4000-8000-000000000101'), 'outgoing trade ownership';
- ASSERT (SELECT team_id=CASE WHEN (SELECT passed FROM trade_validation)
- THEN 'b7100000-0000-4000-8000-000000000001'::uuid ELSE 'b7100000-0000-4000-8000-000000000002'::uuid END FROM game_player_states
- WHERE player_id='b7200000-0000-4000-8000-000000000201'), 'incoming trade ownership';
- ASSERT (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM game_contract_agreements a)=(SELECT value FROM canonical_before), 'trade preserves canonical terms';
+ ASSERT (SELECT team_id='b7100000-0000-4000-8000-000000000002' FROM game_player_states
+ WHERE player_id='b7200000-0000-4000-8000-000000000101'), 'canonical-only player transfers from current owner';
+ ASSERT (SELECT team_id='b7100000-0000-4000-8000-000000000001' FROM game_player_states
+ WHERE player_id='b7200000-0000-4000-8000-000000000201'), 'canonical-only player transfers to current owner';
+ ASSERT NOT EXISTS (SELECT 1 FROM contracts WHERE game_id='b7300000-0000-4000-8000-000000000001'), 'trade creates no legacy contracts';
+ASSERT (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM game_contract_agreements a)=(SELECT value FROM canonical_before), 'trade preserves canonical terms';
+END $$;
+SET LOCAL ROLE authenticated;
+SELECT execute_trade_transactional('b7300000-0000-4000-8000-000000000001',
+ 'b7100000-0000-4000-8000-000000000001','b7100000-0000-4000-8000-000000000002',
+ '[{"asset_type":"player","asset_id":"b7200000-0000-4000-8000-000000000101","from_team_id":"b7100000-0000-4000-8000-000000000002"},
+ {"asset_type":"player","asset_id":"b7200000-0000-4000-8000-000000000201","from_team_id":"b7100000-0000-4000-8000-000000000001"}]');
+RESET ROLE;
+DO $$ BEGIN
+ ASSERT (SELECT team_id='b7100000-0000-4000-8000-000000000001' FROM game_player_states
+ WHERE player_id='b7200000-0000-4000-8000-000000000101'), 'repeat trade uses updated roster ownership';
+ ASSERT (SELECT team_id='b7100000-0000-4000-8000-000000000002' FROM game_player_states
+ WHERE player_id='b7200000-0000-4000-8000-000000000201'), 'repeat trade returns player to current owner';
+ ASSERT NOT EXISTS (SELECT 1 FROM contracts WHERE game_id='b7300000-0000-4000-8000-000000000001'), 'repeat trade creates no legacy contracts';
+ ASSERT (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM game_contract_agreements a)=(SELECT value FROM canonical_before), 'repeat trade preserves canonical terms';
 END $$;
 SET LOCAL ROLE authenticated;
 SELECT release_roster_player('b7300000-0000-4000-8000-000000000001','b7200000-0000-4000-8000-000000000115',
@@ -122,5 +126,4 @@ END $$;
 RESET ROLE;
 SELECT 'PASS: corrected anonymous catalog and foreign owner read isolation';
 \endif
-DO $$ BEGIN ASSERT (SELECT passed FROM trade_validation), 'FAIL: modern canonical-only trade remains blocked'; END $$;
 ROLLBACK;
