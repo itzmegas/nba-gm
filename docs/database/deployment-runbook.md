@@ -3,6 +3,13 @@
 **Current decision: NO-GO for production adoption.** This branch prepares a local
 observed-state candidate, not a production deployment. See [Step 2 results](schema-verification-step-2.md).
 
+**Status reconciled: 2026-11-05.** The active chain now includes the locally
+validated modern-contract trade migration. See its [validation report](modern-contract-trade-validation-report.md)
+for four-file replay evidence; Step 2 records the earlier three-file baseline.
+Neither result establishes full Auth/PostgREST integration or deployment approval.
+See the [development and testing plan](development-testing-plan.md) for current
+evidence boundaries and the agreed next steps.
+
 ## Local-only quick path
 
 Requirements: Bun 1.3.13, Python 3, Docker, available ports 55320–55322.
@@ -68,7 +75,13 @@ unchanged; the application is not redirected to this rehearsal instance.
 
 Applied originals are immutable. The catch-up is still an unadopted candidate; its
 timestamp is a new local baseline identity, not a claim that legacy SQL ran remotely.
-The active chain contains **only** two recovered originals and the catch-up.
+The active chain in `supabase/migrations/` contains **four files**, in order:
+
+1. `20260206190001_initial_schema.sql` — recovered original.
+2. `20260206190014_enable_rls.sql` — recovered original.
+3. `20261102170000_reconcile_legacy_through_056.sql` — observed-state catch-up candidate.
+4. `20261104190000_modern_contract_trade_compatibility.sql` — locally validated trade correction.
+
 Do not put `supabase/proposals/` into the active chain or bulk-register legacy files.
 
 ## Required before any production adoption
