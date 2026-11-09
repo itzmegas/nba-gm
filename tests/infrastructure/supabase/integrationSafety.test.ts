@@ -62,6 +62,75 @@ describe("integration destination safety", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it("allows roster-state deletion only for the confirmed game and both fixture players", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const admin = createTestFetch(
+      url,
+      () => {},
+      request,
+      "admin",
+      "ae7fc204-f00c-4113-a7c5-438efa3d8ddd"
+    );
+    const owner = createTestFetch(url, () => {}, request, "owner");
+    const states = `${url}/rest/v1/game_player_states`;
+    const exact = `${states}?game_id=eq.ae7fc204-f00c-4113-a7c5-438efa3d8ddd&player_id=in.(${TEST_FIXTURE.playerIds.join(",")})`;
+
+    await admin(exact, { method: "DELETE" });
+    for (const target of [
+      `${states}?game_id=eq.11111111-1111-4111-8111-111111111111&player_id=in.(${TEST_FIXTURE.playerIds.join(",")})`,
+      `${states}?game_id=eq.ae7fc204-f00c-4113-a7c5-438efa3d8ddd&player_id=eq.${TEST_FIXTURE.playerIds[0]}`,
+      `${states}?game_id=eq.ae7fc204-f00c-4113-a7c5-438efa3d8ddd`,
+    ]) {
+      await expect(admin(target, { method: "DELETE" })).rejects.toThrow();
+    }
+    await expect(owner(exact, { method: "DELETE" })).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows canonical cleanup only for both fixed fixture rows in the confirmed game", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const safeFetch = createTestFetch(
+      url,
+      () => {},
+      request,
+      "admin",
+      "ae7fc204-f00c-4113-a7c5-438efa3d8ddd"
+    );
+    const game = "ae7fc204-f00c-4113-a7c5-438efa3d8ddd";
+    const agreements = TEST_FIXTURE.agreementIds.join(",");
+    const players = TEST_FIXTURE.playerIds.join(",");
+    for (const target of [
+      `${url}/rest/v1/game_contract_seasons?game_id=eq.${game}&agreement_id=in.(${agreements})`,
+      `${url}/rest/v1/game_contract_agreements?game_id=eq.${game}&id=in.(${agreements})`,
+      `${url}/rest/v1/game_contract_identities?game_id=eq.${game}&player_id=in.(${players})`,
+    ]) {
+      await safeFetch(target, { method: "DELETE" });
+    }
+    for (const target of [
+      `${url}/rest/v1/game_contract_seasons?game_id=eq.${game}&agreement_id=eq.${TEST_FIXTURE.agreementIds[0]}`,
+      `${url}/rest/v1/game_contract_agreements?game_id=eq.11111111-1111-4111-8111-111111111111&id=in.(${agreements})`,
+      `${url}/rest/v1/game_contract_identities?game_id=eq.${game}&player_id=in.(${players}),00000000-0000-4000-8000-000000000009`,
+    ]) {
+      await expect(safeFetch(target, { method: "DELETE" })).rejects.toThrow();
+    }
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it("allows deleting both fixture players together but rejects partial or foreign batches", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const safeFetch = createTestFetch(url, () => {}, request, "admin");
+    await safeFetch(`${url}/rest/v1/players?id=in.(${TEST_FIXTURE.playerIds.join(",")})`, {
+      method: "DELETE",
+    });
+    for (const target of [
+      `${url}/rest/v1/players?id=in.(${TEST_FIXTURE.playerIds[0]})`,
+      `${url}/rest/v1/players?id=in.(${TEST_FIXTURE.playerIds.join(",")},00000000-0000-4000-8000-000000000009)`,
+    ]) {
+      await expect(safeFetch(target, { method: "DELETE" })).rejects.toThrow();
+    }
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it("forces redirect rejection and logs only method, path and status", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("[]", { status: 200 }));
     const reports: string[] = [];
@@ -82,6 +151,29 @@ describe("integration destination safety", () => {
     expect(request).toHaveBeenCalledTimes(5);
   });
 
+  it("logs only a validated database error code, never the response message", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { code: "23503", message: "sensitive player and game details" },
+          { status: 400 }
+        )
+      );
+    const reports: string[] = [];
+    const safeFetch = createTestFetch(url, (line) => reports.push(line), request);
+    await safeFetch(`${url}/rest/v1/game_player_states`, {
+      method: "POST",
+      body: JSON.stringify({
+        game_id: "11111111-1111-4111-8111-111111111111",
+        player_id: TEST_FIXTURE.playerIds[0],
+        team_id: TEST_FIXTURE.teamId,
+      }),
+    });
+    expect(reports).toEqual(["HTTP POST /rest/v1/game_player_states 400", "HTTP error code 23503"]);
+    expect(reports.join(" ")).not.toContain("sensitive");
+  });
+
   it("uses table HEAD for PostgREST health and refuses the unnecessary OpenAPI root", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 200 }));
     const safeFetch = createTestFetch(url, () => {}, request);
@@ -98,6 +190,19 @@ describe("expanded roster and contract fixture safety", () => {
   const foreignPlayer = "00000000-0000-4000-8000-000000000009";
   const foreignTeam = "00000000-0000-4000-8000-000000000008";
   const foreignAgreement = "00000000-0000-4000-8000-000000000007";
+
+  it("binds cleanup to the current run rather than a historical game", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const bound = createTestFetch(url, () => {}, request, "admin", gameId);
+    const unbound = createTestFetch(url, () => {}, request, "admin");
+    const target = `${url}/rest/v1/game_player_states?game_id=eq.${gameId}&player_id=in.(${TEST_FIXTURE.playerIds.join(",")})`;
+    await bound(target, { method: "DELETE" });
+    await expect(unbound(target, { method: "DELETE" })).rejects.toThrow();
+    await expect(
+      bound(target.replace(gameId, "ae7fc204-f00c-4113-a7c5-438efa3d8ddd"), { method: "DELETE" })
+    ).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 
   const post = (safeFetch: ReturnType<typeof createTestFetch>, table: string, body: unknown) =>
     safeFetch(`${url}/rest/v1/${table}`, { method: "POST", body: JSON.stringify(body) });
@@ -121,7 +226,7 @@ describe("expanded roster and contract fixture safety", () => {
     await post(admin, "teams", { id: TEST_FIXTURE.teamId, nba_id: -900001 });
     await post(admin, "players", { id: playerOne, first_name: "Phase One", is_active: true });
     await post(owner, "games", { user_id: TEST_FIXTURE.ownerId });
-    await post(owner, "game_player_states", {
+    await post(admin, "game_player_states", {
       game_id: gameId,
       player_id: playerTwo,
       team_id: TEST_FIXTURE.teamId,
@@ -145,12 +250,6 @@ describe("expanded roster and contract fixture safety", () => {
       option_kind: "none",
       guarantee_kind: "guaranteed",
     });
-    await post(admin, "game_runtime_contracts", {
-      game_id: gameId,
-      player_id: playerTwo,
-      origin_kind: "simulated-agreement",
-      annual_salary: 3_000_000,
-    });
     // Route each rejection to the role allowed to write that table so only the
     // body identity, not the route, is what fails.
     for (const [table, body] of [
@@ -173,10 +272,10 @@ describe("expanded roster and contract fixture safety", () => {
       ["game_contract_seasons", { agreement_id: agreementOne, game_id: "not-a-uuid" }],
       ["game_runtime_contracts", { game_id: gameId, player_id: foreignPlayer }],
     ] as const) {
-      const writer = table === "games" || table === "game_player_states" ? owner : admin;
+      const writer = table === "games" ? owner : admin;
       await expect(post(writer, table, body)).rejects.toThrow();
     }
-    expect(request).toHaveBeenCalledTimes(8);
+    expect(request).toHaveBeenCalledTimes(7);
   });
 
   it("splits write routes by session role", async () => {
@@ -185,7 +284,7 @@ describe("expanded roster and contract fixture safety", () => {
     const owner = createTestFetch(url, () => {}, request, "owner");
     const reader = createTestFetch(url, () => {}, request, "reader");
     await post(owner, "games", { user_id: TEST_FIXTURE.ownerId });
-    await post(owner, "game_player_states", {
+    await post(admin, "game_player_states", {
       game_id: gameId,
       player_id: playerOne,
       team_id: TEST_FIXTURE.teamId,
@@ -198,6 +297,21 @@ describe("expanded roster and contract fixture safety", () => {
     ).rejects.toThrow();
     await expect(
       post(owner, "game_contract_agreements", validAgreement(playerOne, agreementOne))
+    ).rejects.toThrow();
+    await expect(
+      post(owner, "game_player_states", {
+        game_id: gameId,
+        player_id: playerOne,
+        team_id: TEST_FIXTURE.teamId,
+      })
+    ).rejects.toThrow();
+    await expect(
+      post(admin, "game_runtime_contracts", {
+        game_id: gameId,
+        player_id: playerTwo,
+        origin_kind: "simulated-agreement",
+        annual_salary: 3_000_000,
+      })
     ).rejects.toThrow();
     await expect(post(admin, "games", { user_id: TEST_FIXTURE.ownerId })).rejects.toThrow();
     await expect(post(reader, "games", { user_id: TEST_FIXTURE.ownerId })).rejects.toThrow();

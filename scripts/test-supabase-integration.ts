@@ -8,6 +8,7 @@ import { SupabaseGameContractRepository } from "@/infrastructure/contracts/Supab
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
 import { SupabaseGameRepository } from "@/infrastructure/repositories/SupabaseGameRepository";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
+import { cleanupTestGameRows } from "@/infrastructure/supabase/integrationCleanup";
 import {
   createTestFetch,
   type IntegrationRole,
@@ -43,6 +44,9 @@ async function main() {
   let teamCreated = false;
   let playersCreated = false;
   let cleanupFailed = false;
+  let workflowFailed = false;
+  let verificationFailed = false;
+  let createdGameId: string | undefined;
   const userSchema = z.object({
     id: z.uuid(),
     app_metadata: z.object({ courtside_test_fixture: z.literal("phase1-v1") }),
@@ -57,8 +61,9 @@ async function main() {
     "game_contract_identities",
     "game_contract_agreements",
     "game_contract_seasons",
-    "game_runtime_contracts",
   ] as const;
+  // game_contract_identities has no id column (composite game/player key).
+  const countColumn = (table: string) => (table === "game_contract_identities" ? "game_id" : "id");
   try {
     const authHealth = await createTestFetch(config.url, console.log)(
       `${config.url}/auth/v1/health`,
@@ -71,7 +76,9 @@ async function main() {
       "PostgREST health through anonymous SDK HEAD"
     );
     for (const table of tables) {
-      const result = await admin.from(table).select("id", { head: true, count: "exact" });
+      const result = await admin
+        .from(table)
+        .select(countColumn(table), { head: true, count: "exact" });
       check(!result.error && result.count === 0, `${table} starts empty`);
     }
     for (const id of [TEST_FIXTURE.ownerId, TEST_FIXTURE.otherId]) {
@@ -126,6 +133,15 @@ async function main() {
         status: GAME_STATUS.INITIALIZING,
       })
     );
+    createdGameId = game.id;
+    const runtimeBefore = await owner
+      .from("game_active_runtime_contracts")
+      .select("game_id", { head: true, count: "exact" })
+      .eq("game_id", game.id);
+    check(
+      !runtimeBefore.error && runtimeBefore.count === 0,
+      "owner-visible runtime contracts empty for new game"
+    );
     const persisted = gameSchema.parse(await repository.getById(game.id));
     check(
       persisted.id === game.id && persisted.userId === TEST_FIXTURE.ownerId,
@@ -164,23 +180,29 @@ async function main() {
     );
     playersCreated = true;
 
-    const stateRepository = new SupabasePlayerStateRepository(owner);
-    const rosterStates = await stateRepository.bulkCreateForGame(
-      game.id,
-      TEST_FIXTURE.playerIds.map((playerId) => ({
-        playerId,
-        teamId: TEST_FIXTURE.teamId,
-        morale: 50,
-        fatigue: 0,
-        isActive: true,
-        isInjured: false,
-      }))
-    );
+    // The database trigger intentionally rejects authenticated direct roster
+    // inserts; use the server-side fixture role, then exercise owner reads.
+    const rosterStates = await admin
+      .from("game_player_states")
+      .insert(
+        TEST_FIXTURE.playerIds.map((playerId) => ({
+          game_id: game.id,
+          player_id: playerId,
+          team_id: TEST_FIXTURE.teamId,
+          morale: 50,
+          fatigue: 0,
+          is_active: true,
+          is_injured: false,
+        }))
+      )
+      .select("id,player_id,team_id");
     check(
-      rosterStates.length === 2 &&
-        rosterStates.every((state) => state.teamId === TEST_FIXTURE.teamId),
-      "owner session writes roster states through repository"
+      !rosterStates.error &&
+        rosterStates.data?.length === 2 &&
+        rosterStates.data.every((state) => state.team_id === TEST_FIXTURE.teamId),
+      "server-side fixture setup inserts two roster states"
     );
+    const stateRepository = new SupabasePlayerStateRepository(owner);
     const roster = await stateRepository.getByGameAndTeam(game.id, TEST_FIXTURE.teamId);
     check(
       roster.length === 2 &&
@@ -240,19 +262,6 @@ async function main() {
         "insert canonical season fixture"
       );
     }
-    const runtimeContract = await admin.from("game_runtime_contracts").insert({
-      game_id: game.id,
-      player_id: TEST_FIXTURE.playerIds[1],
-      origin_kind: "simulated-agreement",
-      start_year: TEST_FIXTURE.seasonYear,
-      end_year: TEST_FIXTURE.seasonYear + 1,
-      annual_salary: 3_000_000,
-      is_player_option: false,
-      is_team_option: false,
-      is_guaranteed: true,
-    });
-    check(!runtimeContract.error, "insert simulated runtime contract fixture");
-
     const snapshotAgreements = await admin
       .from("game_contract_agreements")
       .select("*")
@@ -282,10 +291,12 @@ async function main() {
       first?.canonical?.agreement !== null &&
         first?.canonical?.agreement !== undefined &&
         first.simulated === null &&
-        second?.simulated !== null &&
-        second?.simulated?.annualSalary === 3_000_000 &&
-        second.canonical === null,
-      "canonical and runtime evidence split per player"
+        first.canonical.agreement.seasons[0]?.salaryAmount === 1_000_000 &&
+        second?.canonical?.agreement !== null &&
+        second?.canonical?.agreement !== undefined &&
+        second.simulated === null &&
+        second.canonical.agreement.seasons[0]?.salaryAmount === 2_000_000,
+      "canonical contract evidence and salary for both roster players"
     );
     check(
       (await gameContracts.getByTeam(game.id, TEST_FIXTURE.teamId)).length === 2,
@@ -297,8 +308,8 @@ async function main() {
     check(
       contracts.length === 2 &&
         firstContract?.salaryY1 === 1_000_000 &&
-        secondContract?.salaryY1 === 3_000_000,
-      "compatibility projection: canonical salary and runtime precedence"
+        secondContract?.salaryY1 === 2_000_000,
+      "compatibility projection: canonical salaries"
     );
 
     const agreementsAfter = await admin
@@ -335,7 +346,19 @@ async function main() {
       ["anonymous", anonymous],
     ] as const) {
       for (const table of isolationTables) {
-        const result = await client.from(table).select("id").eq("game_id", game.id);
+        const result = await client.from(table).select("game_id").eq("game_id", game.id);
+        if (
+          label === "anonymous" &&
+          [
+            "game_contract_identities",
+            "game_contract_agreements",
+            "game_contract_seasons",
+            "game_runtime_contracts",
+          ].includes(table)
+        ) {
+          check(result.error?.code === "42501", `anonymous ${table} access denied by table grant`);
+          continue;
+        }
         check(
           !result.error && (result.data?.length ?? 0) === 0,
           `${label} ${table} read isolation`
@@ -356,16 +379,54 @@ async function main() {
         .length === 0,
       "unrelated session contract repository isolation"
     );
+  } catch {
+    workflowFailed = true;
+    console.error("FAIL integration workflow; continuing bounded cleanup and verification");
   } finally {
+    if (createdGameId) {
+      try {
+        const currentGame = await admin
+          .from("games")
+          .select("user_id,selected_team_id,name")
+          .eq("id", createdGameId)
+          .single();
+        check(
+          !currentGame.error &&
+            currentGame.data?.user_id === TEST_FIXTURE.ownerId &&
+            currentGame.data.selected_team_id === TEST_FIXTURE.teamId &&
+            currentGame.data.name === "Courtside Phase 1 Synthetic Game",
+          "cleanup game fixture ownership"
+        );
+        const cleanupClient = createClient(config.url, config.serviceRoleKey, {
+          ...clientOptions("admin"),
+          global: {
+            fetch: createTestFetch(config.url, console.log, fetch, "admin", createdGameId),
+          },
+        });
+        await cleanupTestGameRows(cleanupClient, createdGameId);
+        console.log("PASS exact canonical children and roster removed before Auth cascade");
+      } catch {
+        cleanupFailed = true;
+        console.error("FAIL scoped game cleanup; dependent deletes skipped");
+      }
+    }
     for (const id of users.reverse()) {
+      if (cleanupFailed) break;
       try {
         const current = await admin.auth.admin.getUserById(id);
-        check(
-          !current.error && userSchema.parse(current.data.user).id === id,
-          "cleanup user ownership"
-        );
+        if (current.error || userSchema.parse(current.data.user).id !== id) {
+          cleanupFailed = true;
+          console.error("FAIL cleanup user ownership; no delete attempted");
+          continue;
+        }
+        console.log("PASS cleanup user ownership");
         const deleted = await admin.auth.admin.deleteUser(id);
-        check(!deleted.error, "delete only run-created fixture user (cascades game)");
+        if (deleted.error) {
+          cleanupFailed = true;
+          console.error("FAIL delete run-created fixture user");
+        } else {
+          console.log("PASS delete only run-created fixture user (cascades game)");
+        }
       } catch {
         cleanupFailed = true;
         console.error("FAIL fixture user cleanup; manual inspection required, no broad retry");
@@ -376,35 +437,100 @@ async function main() {
     if ((teamCreated || playersCreated) && !cleanupFailed) {
       if (playersCreated) {
         for (const [index, playerId] of TEST_FIXTURE.playerIds.entries()) {
-          const player = await admin.from("players").delete().eq("id", playerId);
-          check(!player.error, `delete only run-created synthetic player ${index + 1}`);
+          try {
+            const player = await admin.from("players").delete().eq("id", playerId);
+            if (player.error) {
+              cleanupFailed = true;
+              console.error(`FAIL delete run-created synthetic player ${index + 1}`);
+            } else {
+              console.log(`PASS delete only run-created synthetic player ${index + 1}`);
+            }
+          } catch {
+            cleanupFailed = true;
+            console.error(`FAIL delete run-created synthetic player ${index + 1}`);
+          }
         }
       }
-      const picks = await admin
-        .from("draft_picks")
-        .delete()
-        .eq("original_team_id", TEST_FIXTURE.teamId)
-        .gte("draft_year", 2026)
-        .lte("draft_year", 2032);
-      check(!picks.error, "delete only synthetic team picks for 2026–2032");
-      const team = await admin.from("teams").delete().eq("id", TEST_FIXTURE.teamId);
-      check(!team.error, "delete only run-created synthetic team");
+      if (!cleanupFailed) {
+        const picks = await admin
+          .from("draft_picks")
+          .delete()
+          .eq("original_team_id", TEST_FIXTURE.teamId)
+          .gte("draft_year", 2026)
+          .lte("draft_year", 2032);
+        if (picks.error) {
+          cleanupFailed = true;
+          console.error("FAIL delete synthetic team picks");
+        } else {
+          console.log("PASS delete only synthetic team picks for 2026–2032");
+        }
+      }
+      if (!cleanupFailed && teamCreated) {
+        const team = await admin.from("teams").delete().eq("id", TEST_FIXTURE.teamId);
+        if (team.error) {
+          cleanupFailed = true;
+          console.error("FAIL delete run-created synthetic team");
+        } else {
+          console.log("PASS delete only run-created synthetic team");
+        }
+      }
     }
-    check(!cleanupFailed, "fixture user cleanup complete");
+    if (!cleanupFailed) console.log("PASS fixture cleanup requests complete");
   }
   for (const table of tables) {
-    const result = await admin.from(table).select("id", { head: true, count: "exact" });
-    check(!result.error && result.count === 0, `${table} empty after fixture cleanup`);
+    try {
+      const result = await admin
+        .from(table)
+        .select(countColumn(table), { head: true, count: "exact" });
+      const empty = !result.error && result.count === 0;
+      console.log(`${empty ? "PASS" : "FAIL"} ${table} empty after fixture cleanup`);
+      verificationFailed ||= !empty;
+    } catch {
+      verificationFailed = true;
+      console.error(`FAIL ${table} final cleanup verification`);
+    }
   }
   for (const [label, id] of [
     ["owner", TEST_FIXTURE.ownerId],
     ["other", TEST_FIXTURE.otherId],
   ] as const) {
-    const result = await admin.auth.admin.getUserById(id);
-    check(result.error?.status === 404, `${label} fixture account absent after cleanup (404)`);
+    try {
+      const result = await admin.auth.admin.getUserById(id);
+      const absent = result.error?.status === 404;
+      console.log(
+        `${absent ? "PASS" : "FAIL"} ${label} fixture account absent after cleanup (404)`
+      );
+      verificationFailed ||= !absent;
+    } catch {
+      verificationFailed = true;
+      console.error(`FAIL ${label} fixture account final cleanup verification`);
+    }
+  }
+  if (createdGameId) {
+    try {
+      const runtimeAfterCleanup = await other
+        .from("game_active_runtime_contracts")
+        .select("game_id")
+        .eq("game_id", createdGameId);
+      const empty = !runtimeAfterCleanup.error && runtimeAfterCleanup.data.length === 0;
+      console.log(
+        `${empty ? "PASS" : "FAIL"} unrelated session sees no runtime contracts after game cleanup`
+      );
+      verificationFailed ||= !empty;
+    } catch {
+      verificationFailed = true;
+      console.error("FAIL runtime contract final cleanup verification");
+    }
+  }
+  if (workflowFailed || cleanupFailed || verificationFailed) {
+    process.exitCode = 1;
+    console.error(
+      "FAIL integration lifecycle; inspect bounded cleanup evidence; no sweep performed"
+    );
+    return;
   }
   console.log(
-    "PASS roster and contract HTTP integration; trades/free-agency/simulation/rejected-write rollback UNVERIFIED"
+    "PASS roster and contract HTTP integration; global game_runtime_contracts emptiness UNVERIFIED (TEST API grant); trades/free-agency/simulation/rejected-write rollback UNVERIFIED"
   );
 }
 

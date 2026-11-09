@@ -52,12 +52,12 @@ const INSERT_TABLES_BY_ROLE: Record<IntegrationRole, readonly string[]> = {
   admin: [
     "teams",
     "players",
+    "game_player_states",
     "game_contract_identities",
     "game_contract_agreements",
     "game_contract_seasons",
-    "game_runtime_contracts",
   ],
-  owner: ["games", "game_player_states"],
+  owner: ["games"],
   reader: [],
 };
 
@@ -120,9 +120,13 @@ export function createTestFetch(
   url: string,
   report: (line: string) => void,
   request: typeof fetch = fetch,
-  role: IntegrationRole = "admin"
+  role: IntegrationRole = "admin",
+  cleanupGameId?: string
 ) {
   if (url !== testUrl) throw new Error("Unexpected TEST destination");
+  if (cleanupGameId !== undefined && !z.uuid().safeParse(cleanupGameId).success) {
+    throw new Error("Invalid cleanup game binding");
+  }
   return async (input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
     const target = new URL(input instanceof Request ? input.url : String(input));
     const method = (
@@ -161,13 +165,42 @@ export function createTestFetch(
       role === "admin" &&
       method === "DELETE" &&
       path === "/rest/v1/players" &&
-      TEST_FIXTURE.playerIds.some((id) => target.searchParams.get("id") === `eq.${id}`);
+      (TEST_FIXTURE.playerIds.some((id) => target.searchParams.get("id") === `eq.${id}`) ||
+        target.searchParams.get("id") === `in.(${TEST_FIXTURE.playerIds.join(",")})`);
+    const deleteRosterStates =
+      role === "admin" &&
+      method === "DELETE" &&
+      path === "/rest/v1/game_player_states" &&
+      cleanupGameId !== undefined &&
+      target.searchParams.get("game_id") === `eq.${cleanupGameId}` &&
+      target.searchParams.get("player_id") === `in.(${TEST_FIXTURE.playerIds.join(",")})`;
+    const deleteCanonicalRows =
+      role === "admin" &&
+      method === "DELETE" &&
+      cleanupGameId !== undefined &&
+      target.searchParams.get("game_id") === `eq.${cleanupGameId}` &&
+      ((path === "/rest/v1/game_contract_seasons" &&
+        target.searchParams.get("agreement_id") ===
+          `in.(${TEST_FIXTURE.agreementIds.join(",")})`) ||
+        (path === "/rest/v1/game_contract_agreements" &&
+          target.searchParams.get("id") === `in.(${TEST_FIXTURE.agreementIds.join(",")})`) ||
+        (path === "/rest/v1/game_contract_identities" &&
+          target.searchParams.get("player_id") === `in.(${TEST_FIXTURE.playerIds.join(",")})`));
     if (
       target.origin !== url ||
       target.username ||
       target.password ||
       target.hash ||
-      !(read || auth || insert || deleteTeam || deletePicks || deletePlayer)
+      !(
+        read ||
+        auth ||
+        insert ||
+        deleteTeam ||
+        deletePicks ||
+        deletePlayer ||
+        deleteRosterStates ||
+        deleteCanonicalRows
+      )
     ) {
       throw new Error("Request is outside the authorized TEST fixture scope");
     }
@@ -180,6 +213,19 @@ export function createTestFetch(
         : AbortSignal.timeout(15_000),
     });
     report(`HTTP ${method} ${path} ${response.status}`);
+    if (!response.ok) {
+      const payload: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
+      const code =
+        typeof payload === "object" && payload !== null && "code" in payload
+          ? (payload as { code?: unknown }).code
+          : undefined;
+      if (typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)) {
+        report(`HTTP error code ${code}`);
+      }
+    }
     return response;
   };
 }
