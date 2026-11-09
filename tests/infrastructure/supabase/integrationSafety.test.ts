@@ -90,3 +90,154 @@ describe("integration destination safety", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("expanded roster and contract fixture safety", () => {
+  const [playerOne, playerTwo] = TEST_FIXTURE.playerIds;
+  const [agreementOne, agreementTwo] = TEST_FIXTURE.agreementIds;
+  const gameId = "11111111-1111-4111-8111-111111111111";
+  const foreignPlayer = "00000000-0000-4000-8000-000000000009";
+  const foreignTeam = "00000000-0000-4000-8000-000000000008";
+  const foreignAgreement = "00000000-0000-4000-8000-000000000007";
+
+  const post = (safeFetch: ReturnType<typeof createTestFetch>, table: string, body: unknown) =>
+    safeFetch(`${url}/rest/v1/${table}`, { method: "POST", body: JSON.stringify(body) });
+
+  const validAgreement = (playerId: string, agreementId: string) => ({
+    id: agreementId,
+    game_id: gameId,
+    player_id: playerId,
+    team_id: TEST_FIXTURE.teamId,
+    contract_type: "standard",
+    provenance_quality: "observed",
+    source_method: "basketball-reference-current-salary",
+    estimated: false,
+    cap_treatment: "standard-cap-and-matching",
+  });
+
+  it("rejects insert bodies outside the synthetic fixture identities before fetch", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("[]", { status: 201 }));
+    const admin = createTestFetch(url, () => {}, request);
+    const owner = createTestFetch(url, () => {}, request, "owner");
+    await post(admin, "teams", { id: TEST_FIXTURE.teamId, nba_id: -900001 });
+    await post(admin, "players", { id: playerOne, first_name: "Phase One", is_active: true });
+    await post(owner, "games", { user_id: TEST_FIXTURE.ownerId });
+    await post(owner, "game_player_states", {
+      game_id: gameId,
+      player_id: playerTwo,
+      team_id: TEST_FIXTURE.teamId,
+      morale: 50,
+    });
+    await post(admin, "game_contract_identities", {
+      game_id: gameId,
+      player_id: playerOne,
+      team_id: TEST_FIXTURE.teamId,
+      resolution_status: "observed-standard",
+      cap_treatment: "standard-cap-and-matching",
+    });
+    await post(admin, "game_contract_agreements", validAgreement(playerOne, agreementOne));
+    await post(admin, "game_contract_seasons", {
+      agreement_id: agreementOne,
+      game_id: gameId,
+      season_label: "2026-27",
+      start_year: 2026,
+      end_year: 2027,
+      salary_amount: 1_000_000,
+      option_kind: "none",
+      guarantee_kind: "guaranteed",
+    });
+    await post(admin, "game_runtime_contracts", {
+      game_id: gameId,
+      player_id: playerTwo,
+      origin_kind: "simulated-agreement",
+      annual_salary: 3_000_000,
+    });
+    // Route each rejection to the role allowed to write that table so only the
+    // body identity, not the route, is what fails.
+    for (const [table, body] of [
+      ["teams", { id: TEST_FIXTURE.teamId, nba_id: -900002 }],
+      ["teams", { id: foreignTeam, nba_id: -900001 }],
+      ["players", { id: playerOne, nba_id: 123456 }],
+      ["players", { id: playerOne, espn_id: 789 }],
+      ["players", { id: foreignPlayer }],
+      ["games", { user_id: TEST_FIXTURE.otherId }],
+      [
+        "game_player_states",
+        { game_id: gameId, player_id: foreignPlayer, team_id: TEST_FIXTURE.teamId },
+      ],
+      ["game_player_states", { game_id: gameId, player_id: playerOne, team_id: foreignTeam }],
+      ["game_player_states", { game_id: gameId, player_id: playerOne }],
+      ["game_contract_identities", { game_id: gameId, player_id: playerOne, team_id: foreignTeam }],
+      ["game_contract_agreements", validAgreement(foreignPlayer, agreementOne)],
+      ["game_contract_agreements", validAgreement(playerOne, foreignAgreement)],
+      ["game_contract_seasons", { agreement_id: foreignAgreement, game_id: gameId }],
+      ["game_contract_seasons", { agreement_id: agreementOne, game_id: "not-a-uuid" }],
+      ["game_runtime_contracts", { game_id: gameId, player_id: foreignPlayer }],
+    ] as const) {
+      const writer = table === "games" || table === "game_player_states" ? owner : admin;
+      await expect(post(writer, table, body)).rejects.toThrow();
+    }
+    expect(request).toHaveBeenCalledTimes(8);
+  });
+
+  it("splits write routes by session role", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("[]", { status: 201 }));
+    const admin = createTestFetch(url, () => {}, request, "admin");
+    const owner = createTestFetch(url, () => {}, request, "owner");
+    const reader = createTestFetch(url, () => {}, request, "reader");
+    await post(owner, "games", { user_id: TEST_FIXTURE.ownerId });
+    await post(owner, "game_player_states", {
+      game_id: gameId,
+      player_id: playerOne,
+      team_id: TEST_FIXTURE.teamId,
+    });
+    await post(admin, "teams", { id: TEST_FIXTURE.teamId, nba_id: -900001 });
+    await post(admin, "game_contract_agreements", validAgreement(playerOne, agreementTwo));
+    await reader(`${url}/auth/v1/token?grant_type=password`, { method: "POST", body: "{}" });
+    await expect(
+      post(owner, "teams", { id: TEST_FIXTURE.teamId, nba_id: -900001 })
+    ).rejects.toThrow();
+    await expect(
+      post(owner, "game_contract_agreements", validAgreement(playerOne, agreementOne))
+    ).rejects.toThrow();
+    await expect(post(admin, "games", { user_id: TEST_FIXTURE.ownerId })).rejects.toThrow();
+    await expect(post(reader, "games", { user_id: TEST_FIXTURE.ownerId })).rejects.toThrow();
+    await expect(
+      post(reader, "game_player_states", {
+        game_id: gameId,
+        player_id: playerOne,
+        team_id: TEST_FIXTURE.teamId,
+      })
+    ).rejects.toThrow();
+    await expect(
+      owner(`${url}/auth/v1/admin/users/${TEST_FIXTURE.ownerId}`, { method: "DELETE" })
+    ).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(5);
+  });
+
+  it("reads contract evidence relations and scopes player cleanup", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("[]", { status: 200 }));
+    const safeFetch = createTestFetch(url, () => {}, request);
+    for (const table of [
+      "players",
+      "game_player_states",
+      "game_contract_identities",
+      "game_contract_agreements",
+      "game_contract_seasons",
+      "game_runtime_contracts",
+      "game_active_runtime_contracts",
+      "contracts",
+    ]) {
+      await safeFetch(`${url}/rest/v1/${table}?select=id&game_id=eq.${gameId}`, { method: "GET" });
+    }
+    await safeFetch(`${url}/rest/v1/players?id=eq.${playerOne}`, { method: "DELETE" });
+    await safeFetch(`${url}/rest/v1/players?id=eq.${playerTwo}`, { method: "DELETE" });
+    await expect(
+      safeFetch(`${url}/rest/v1/players?id=eq.${foreignPlayer}`, { method: "DELETE" })
+    ).rejects.toThrow();
+    await expect(safeFetch(`${url}/rest/v1/players`, { method: "DELETE" })).rejects.toThrow();
+    await expect(
+      safeFetch(`${url}/rest/v1/players?id=eq.${playerOne}`, { method: "PATCH" })
+    ).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(10);
+  });
+});
