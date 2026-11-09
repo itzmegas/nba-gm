@@ -1,12 +1,44 @@
 import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
-import { cleanupTestGameRows } from "@/infrastructure/supabase/integrationCleanup";
+import {
+  cleanupTestGameRows,
+  cleanupTestTrade,
+} from "@/infrastructure/supabase/integrationCleanup";
 import { createTestFetch, TEST_PROJECT_REF } from "@/infrastructure/supabase/integrationSafety";
 
 const url = `https://${TEST_PROJECT_REF}.supabase.co`;
 const gameId = "11111111-1111-4111-8111-111111111111";
 
 describe("fixture cleanup dependency order", () => {
+  for (const failAt of [-1, 0, 1, 2, 3]) {
+    it(`cleans trade snapshots before history, stopping at ${failAt}`, async () => {
+      const tradeId = "f6000000-0000-4000-8000-000000000001";
+      const calls: string[] = [];
+      const request: typeof fetch = async (input, init) => {
+        const target = new URL(String(input));
+        calls.push(`${init?.method} ${target.pathname.split("/").at(-1)}`);
+        const failed = calls.length - 1 === failAt;
+        return new Response(null, {
+          status: failed && init?.method === "DELETE" ? 409 : init?.method === "DELETE" ? 204 : 200,
+          headers: { "content-range": failed ? "*/1" : "*/0" },
+        });
+      };
+      const client = createClient(url, "synthetic-key", {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { fetch: createTestFetch(url, () => {}, request, "admin", gameId, tradeId) },
+      });
+      if (failAt < 0) await cleanupTestTrade(client, gameId, tradeId);
+      else await expect(cleanupTestTrade(client, gameId, tradeId)).rejects.toThrow();
+      expect(calls).toEqual(
+        [
+          "DELETE trade_asset_snapshots",
+          "HEAD trade_asset_snapshots",
+          "DELETE executed_trades",
+          "HEAD executed_trades",
+        ].slice(0, failAt < 0 ? 4 : failAt + 1)
+      );
+    });
+  }
   for (const failure of [undefined, "delete", "count", "missing-count", "head-error"] as const) {
     it(`removes children first and stops on ${failure ?? "no failure"}`, async () => {
       const calls: string[] = [];

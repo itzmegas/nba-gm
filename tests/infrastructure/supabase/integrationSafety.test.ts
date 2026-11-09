@@ -191,6 +191,69 @@ describe("expanded roster and contract fixture safety", () => {
   const foreignTeam = "00000000-0000-4000-8000-000000000008";
   const foreignAgreement = "00000000-0000-4000-8000-000000000007";
 
+  it("binds trade child cleanup to the confirmed game and trade", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const tradeId = "f6000000-0000-4000-8000-000000000001";
+    const bound = createTestFetch(url, () => {}, request, "admin", gameId, tradeId);
+    const snapshots = `${url}/rest/v1/trade_asset_snapshots?executed_trade_id=eq.${tradeId}`;
+    const history = `${url}/rest/v1/executed_trades?id=eq.${tradeId}&game_id=eq.${gameId}`;
+    await bound(snapshots, { method: "DELETE" });
+    await bound(history, { method: "DELETE" });
+    for (const target of [
+      snapshots.replace(tradeId, foreignAgreement),
+      history.replace(gameId, foreignAgreement),
+      `${url}/rest/v1/executed_trades?id=eq.${tradeId}`,
+    ]) {
+      await expect(bound(target, { method: "DELETE" })).rejects.toThrow();
+    }
+    await expect(
+      createTestFetch(url, () => {}, request, "admin", gameId)(snapshots, { method: "DELETE" })
+    ).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows only the bound owner trade with exact synthetic assets", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json("synthetic-trade"));
+    const owner = createTestFetch(url, () => {}, request, "owner", gameId);
+    const body = {
+      p_game_id: gameId,
+      p_team_a_id: TEST_FIXTURE.teamId,
+      p_team_b_id: TEST_FIXTURE.otherTeamId,
+      p_assets: [
+        { asset_type: "player", asset_id: playerOne, from_team_id: TEST_FIXTURE.teamId },
+        { asset_type: "player", asset_id: playerTwo, from_team_id: TEST_FIXTURE.otherTeamId },
+      ],
+    };
+    const invoke = (client: ReturnType<typeof createTestFetch>, payload: unknown) =>
+      client(`${url}/rest/v1/rpc/execute_trade_transactional`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    await invoke(owner, body);
+    for (const payload of [
+      { ...body, p_game_id: foreignAgreement },
+      { ...body, p_team_b_id: foreignTeam },
+      { ...body, p_assets: [{ ...body.p_assets[0], asset_id: foreignPlayer }, body.p_assets[1]] },
+      { ...body, p_assets: [] },
+    ])
+      await expect(invoke(owner, payload)).rejects.toThrow();
+    for (const role of ["admin", "reader"] as const) {
+      await expect(
+        invoke(
+          createTestFetch(url, () => {}, request, role, gameId),
+          body
+        )
+      ).rejects.toThrow();
+    }
+    await expect(
+      invoke(
+        createTestFetch(url, () => {}, request, "owner"),
+        body
+      )
+    ).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it("binds cleanup to the current run rather than a historical game", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
     const bound = createTestFetch(url, () => {}, request, "admin", gameId);

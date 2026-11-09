@@ -4,12 +4,18 @@
 one server-side API use case. Do not rewrite the backend now.** This document
 records the agreed direction, not completed infrastructure work or deployment approval.
 
-**Phase 1 progress, 2026-11-06:** isolated TEST `wmtezjoitjmjynyvkyke` now has
-the four active migration payloads and two successful authorized Auth/game HTTP
-fixture lifecycles. See the [HTTP evidence and next slice](phase-1-http-smoke.md)
+**Phase 1 progress, 2026-11-09:** isolated TEST `wmtezjoitjmjynyvkyke` has
+the four active migration payloads, repeated Auth/game HTTP lifecycles,
+owner roster/canonical-contract reads, and a successful owner trade plus late
+business-rejection rollback through the real repository. Latest cleanup:
+eleven accessible tables empty and both synthetic Auth accounts absent (404).
+See the [HTTP evidence and remaining scope](phase-1-http-smoke.md)
 and [task log](../../odd/tasks/phase-1-supabase-integration.md). This supersedes
 the planned TEST status below, not the historical local Step 4 results. T5 and
-Phase 1 remain open; no further remote operation is authorized by this update.
+Phase 1 remain open for provider snapshots/materialization, free agency,
+simulation and populated runtime contracts. The user separately authorized
+necessary synthetic TEST HTTP cycles using existing `.env.test.local`; this
+document itself grants no remote authority or schema/grant changes.
 
 ## Current context
 

@@ -8,7 +8,11 @@ import { SupabaseGameContractRepository } from "@/infrastructure/contracts/Supab
 import { SupabaseContractRepository } from "@/infrastructure/repositories/SupabaseContractRepository";
 import { SupabaseGameRepository } from "@/infrastructure/repositories/SupabaseGameRepository";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
-import { cleanupTestGameRows } from "@/infrastructure/supabase/integrationCleanup";
+import { SupabaseTradeRepository } from "@/infrastructure/repositories/SupabaseTradeRepository";
+import {
+  cleanupTestGameRows,
+  cleanupTestTrade,
+} from "@/infrastructure/supabase/integrationCleanup";
 import {
   createTestFetch,
   type IntegrationRole,
@@ -28,13 +32,31 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+  if (process.argv.slice(3).some((value) => value !== "--trades")) {
+    console.error(
+      "FAIL usage: bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke [--trades]; dedicated config not read"
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const testTrades = process.argv.includes("--trades");
   const config = readIntegrationConfig(
     parseEnv(await readFile(".env.test.local", "utf8")),
     process.argv[2]
   );
+  let createdGameId: string | undefined;
   const clientOptions = (role: IntegrationRole) => ({
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: { fetch: createTestFetch(config.url, console.log, fetch, role) },
+    global: {
+      fetch: (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
+        createTestFetch(
+          config.url,
+          console.log,
+          fetch,
+          role,
+          role === "owner" && testTrades ? createdGameId : undefined
+        )(input, init),
+    },
   });
   const admin = createClient(config.url, config.serviceRoleKey, clientOptions("admin"));
   const owner = createClient(config.url, config.publishableKey, clientOptions("owner"));
@@ -42,11 +64,11 @@ async function main() {
   const anonymous = createClient(config.url, config.publishableKey, clientOptions("reader"));
   const users: string[] = [];
   let teamCreated = false;
+  let otherTeamCreated = false;
   let playersCreated = false;
   let cleanupFailed = false;
   let workflowFailed = false;
   let verificationFailed = false;
-  let createdGameId: string | undefined;
   const userSchema = z.object({
     id: z.uuid(),
     app_metadata: z.object({ courtside_test_fixture: z.literal("phase1-v1") }),
@@ -61,6 +83,8 @@ async function main() {
     "game_contract_identities",
     "game_contract_agreements",
     "game_contract_seasons",
+    "executed_trades",
+    "trade_asset_snapshots",
   ] as const;
   // game_contract_identities has no id column (composite game/player key).
   const countColumn = (table: string) => (table === "game_contract_identities" ? "game_id" : "id");
@@ -120,6 +144,24 @@ async function main() {
       "team identity"
     );
     teamCreated = true;
+    if (testTrades) {
+      const secondTeam = await admin
+        .from("teams")
+        .insert({
+          id: TEST_FIXTURE.otherTeamId,
+          nba_id: -900002,
+          name: "Synthetic Trade Team",
+          city: "Fixture City",
+          abbreviation: "TS2",
+        })
+        .select("id")
+        .single();
+      check(
+        !secondTeam.error && secondTeam.data?.id === TEST_FIXTURE.otherTeamId,
+        "insert second synthetic trade team"
+      );
+      otherTeamCreated = true;
+    }
 
     const repository = new SupabaseGameRepository(owner);
     const game = gameSchema.parse(
@@ -159,7 +201,10 @@ async function main() {
       .from("game_pick_inventory")
       .select("id", { head: true, count: "exact" })
       .eq("game_id", game.id);
-    check(!picks.error && picks.count === 14, "game trigger persisted 14 synthetic picks");
+    check(
+      !picks.error && picks.count === (testTrades ? 28 : 14),
+      "game trigger persisted synthetic picks for fixture teams"
+    );
 
     const insertedPlayers = await admin
       .from("players")
@@ -185,10 +230,10 @@ async function main() {
     const rosterStates = await admin
       .from("game_player_states")
       .insert(
-        TEST_FIXTURE.playerIds.map((playerId) => ({
+        TEST_FIXTURE.playerIds.map((playerId, index) => ({
           game_id: game.id,
           player_id: playerId,
-          team_id: TEST_FIXTURE.teamId,
+          team_id: testTrades && index === 1 ? TEST_FIXTURE.otherTeamId : TEST_FIXTURE.teamId,
           morale: 50,
           fatigue: 0,
           is_active: true,
@@ -199,11 +244,23 @@ async function main() {
     check(
       !rosterStates.error &&
         rosterStates.data?.length === 2 &&
-        rosterStates.data.every((state) => state.team_id === TEST_FIXTURE.teamId),
+        rosterStates.data.every(
+          (state) =>
+            state.team_id ===
+            (testTrades && state.player_id === TEST_FIXTURE.playerIds[1]
+              ? TEST_FIXTURE.otherTeamId
+              : TEST_FIXTURE.teamId)
+        ),
       "server-side fixture setup inserts two roster states"
     );
     const stateRepository = new SupabasePlayerStateRepository(owner);
-    const roster = await stateRepository.getByGameAndTeam(game.id, TEST_FIXTURE.teamId);
+    const roster = (
+      await Promise.all(
+        (testTrades ? [TEST_FIXTURE.teamId, TEST_FIXTURE.otherTeamId] : [TEST_FIXTURE.teamId]).map(
+          (teamId) => stateRepository.getByGameAndTeam(game.id, teamId)
+        )
+      )
+    ).flat();
     check(
       roster.length === 2 &&
         TEST_FIXTURE.playerIds.every((playerId) =>
@@ -216,7 +273,7 @@ async function main() {
       identity: {
         game_id: game.id,
         player_id: playerId,
-        team_id: TEST_FIXTURE.teamId,
+        team_id: testTrades && index === 1 ? TEST_FIXTURE.otherTeamId : TEST_FIXTURE.teamId,
         resolution_status: "observed-standard",
         contract_type: "standard",
         provenance_quality: "observed",
@@ -228,7 +285,7 @@ async function main() {
         id: TEST_FIXTURE.agreementIds[index],
         game_id: game.id,
         player_id: playerId,
-        team_id: TEST_FIXTURE.teamId,
+        team_id: testTrades && index === 1 ? TEST_FIXTURE.otherTeamId : TEST_FIXTURE.teamId,
         start_season_label: "2026-27",
         end_season_label: "2026-27",
         contract_type: "standard",
@@ -299,7 +356,7 @@ async function main() {
       "canonical contract evidence and salary for both roster players"
     );
     check(
-      (await gameContracts.getByTeam(game.id, TEST_FIXTURE.teamId)).length === 2,
+      (await gameContracts.getByTeam(game.id, TEST_FIXTURE.teamId)).length === (testTrades ? 1 : 2),
       "team-scoped effective contract read"
     );
     const contracts = await new SupabaseContractRepository(owner).getAll(game.id);
@@ -333,6 +390,109 @@ async function main() {
       .select("id", { head: true, count: "exact" })
       .eq("game_id", game.id);
     check(!legacyContracts.error && legacyContracts.count === 0, "no legacy contracts row created");
+
+    if (testTrades) {
+      check(firstContract && secondContract, "trade fixture contracts available");
+      const tradeRepository = new SupabaseTradeRepository(owner);
+      const packageA = {
+        teamId: TEST_FIXTURE.teamId,
+        teamName: "Synthetic Test Team",
+        outgoingAssets: [{ type: "player" as const, contract: firstContract }],
+        incomingAssets: [],
+      };
+      const packageB = {
+        teamId: TEST_FIXTURE.otherTeamId,
+        teamName: "Synthetic Trade Team",
+        outgoingAssets: [{ type: "player" as const, contract: secondContract }],
+        incomingAssets: [],
+      };
+      check(
+        (await tradeRepository.getHistory(game.id)).length === 0,
+        "trade history initially empty"
+      );
+      const executed = await tradeRepository.execute(
+        game.id,
+        TEST_FIXTURE.teamId,
+        TEST_FIXTURE.otherTeamId,
+        packageA,
+        packageB
+      );
+      check(
+        executed.assets.length === 2 &&
+          executed.assets.every(
+            (asset) => asset.assetType === "player" && asset.fromTeamId !== asset.toTeamId
+          ),
+        "owner repository executes canonical-only player trade with two snapshots"
+      );
+      const readStates = async () => {
+        const result = await admin
+          .from("game_player_states")
+          .select("*")
+          .eq("game_id", game.id)
+          .order("player_id");
+        check(!result.error && result.data?.length === 2, "read persisted trade roster");
+        return result.data;
+      };
+      const statesBefore = await readStates();
+      check(
+        statesBefore.some(
+          (state) =>
+            state.player_id === TEST_FIXTURE.playerIds[0] &&
+            state.team_id === TEST_FIXTURE.otherTeamId
+        ) &&
+          statesBefore.some(
+            (state) =>
+              state.player_id === TEST_FIXTURE.playerIds[1] && state.team_id === TEST_FIXTURE.teamId
+          ),
+        "persisted player ownership exchanged"
+      );
+      const historyBefore = JSON.stringify(await tradeRepository.getHistory(game.id));
+      let rejected = false;
+      try {
+        await tradeRepository.execute(
+          game.id,
+          TEST_FIXTURE.teamId,
+          TEST_FIXTURE.otherTeamId,
+          { ...packageA, outgoingAssets: [{ type: "player", contract: secondContract }] },
+          { ...packageB, outgoingAssets: [{ type: "pick", pickId: TEST_FIXTURE.absentPickId }] }
+        );
+      } catch (error) {
+        rejected =
+          error instanceof Error && error.message === "Draft pick ownership is stale or invalid";
+      }
+      check(
+        rejected,
+        "owner business rejection after first valid player asset (not denied-role probe)"
+      );
+      check(
+        JSON.stringify(await readStates()) === JSON.stringify(statesBefore),
+        "rejected trade rolls back roster ownership and timestamps"
+      );
+      check(
+        JSON.stringify(await tradeRepository.getHistory(game.id)) === historyBefore,
+        "rejected trade rolls back history and asset snapshots"
+      );
+      const canonicalAfterTrade = await admin
+        .from("game_contract_agreements")
+        .select("*")
+        .eq("game_id", game.id)
+        .order("id");
+      const seasonsAfterTrade = await admin
+        .from("game_contract_seasons")
+        .select("*")
+        .eq("game_id", game.id)
+        .order("id");
+      check(
+        !canonicalAfterTrade.error &&
+          !seasonsAfterTrade.error &&
+          JSON.stringify([canonicalAfterTrade.data, seasonsAfterTrade.data]) === canonicalSnapshot,
+        "canonical evidence unchanged by successful and rejected trades"
+      );
+      check(
+        (await new SupabaseTradeRepository(other).getHistory(game.id)).length === 0,
+        "unrelated session trade history isolation"
+      );
+    }
 
     const isolationTables = [
       "game_player_states",
@@ -397,6 +557,40 @@ async function main() {
             currentGame.data.name === "Courtside Phase 1 Synthetic Game",
           "cleanup game fixture ownership"
         );
+        if (testTrades) {
+          const history = await new SupabaseTradeRepository(admin).getHistory(createdGameId);
+          check(
+            history.length <= 1 &&
+              history.every(
+                (trade) =>
+                  trade.teamAId === TEST_FIXTURE.teamId &&
+                  trade.teamBId === TEST_FIXTURE.otherTeamId &&
+                  trade.assets.length === 2 &&
+                  trade.assets.every(
+                    (asset) =>
+                      asset.assetType === "player" &&
+                      TEST_FIXTURE.playerIds.some((id) => id === asset.assetId)
+                  )
+              ),
+            "cleanup trade fixture identity"
+          );
+          for (const trade of history) {
+            const tradeCleanupClient = createClient(config.url, config.serviceRoleKey, {
+              ...clientOptions("admin"),
+              global: {
+                fetch: createTestFetch(
+                  config.url,
+                  console.log,
+                  fetch,
+                  "admin",
+                  createdGameId,
+                  trade.id
+                ),
+              },
+            });
+            await cleanupTestTrade(tradeCleanupClient, createdGameId, trade.id);
+          }
+        }
         const cleanupClient = createClient(config.url, config.serviceRoleKey, {
           ...clientOptions("admin"),
           global: {
@@ -474,6 +668,23 @@ async function main() {
           console.log("PASS delete only run-created synthetic team");
         }
       }
+      if (!cleanupFailed && otherTeamCreated) {
+        const picks = await admin
+          .from("draft_picks")
+          .delete()
+          .eq("original_team_id", TEST_FIXTURE.otherTeamId)
+          .gte("draft_year", 2026)
+          .lte("draft_year", 2032);
+        if (picks.error) {
+          cleanupFailed = true;
+          console.error("FAIL delete second fixture team picks");
+        } else {
+          console.log("PASS delete only second fixture team picks");
+          const team = await admin.from("teams").delete().eq("id", TEST_FIXTURE.otherTeamId);
+          cleanupFailed ||= Boolean(team.error);
+          console.log(`${team.error ? "FAIL" : "PASS"} delete only second fixture team`);
+        }
+      }
     }
     if (!cleanupFailed) console.log("PASS fixture cleanup requests complete");
   }
@@ -530,8 +741,12 @@ async function main() {
     return;
   }
   console.log(
-    "PASS roster and contract HTTP integration; global game_runtime_contracts emptiness UNVERIFIED (TEST API grant); trades/free-agency/simulation/rejected-write rollback UNVERIFIED"
+    "PASS roster and contract HTTP integration; global game_runtime_contracts emptiness UNVERIFIED (TEST API grant); free-agency/simulation/runtime creation UNVERIFIED"
   );
+  if (testTrades)
+    console.log(
+      "PASS owner trade and rejected-write rollback HTTP slice; free-agency/simulation/runtime creation UNVERIFIED"
+    );
 }
 
 main().catch(() => {

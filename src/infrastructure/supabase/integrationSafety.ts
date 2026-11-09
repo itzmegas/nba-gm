@@ -7,6 +7,8 @@ export const TEST_FIXTURE = {
   ownerId: "f1000000-0000-4000-8000-000000000001",
   otherId: "f1000000-0000-4000-8000-000000000002",
   teamId: "f2000000-0000-4000-8000-000000000001",
+  otherTeamId: "f2000000-0000-4000-8000-000000000002",
+  absentPickId: "f5000000-0000-4000-8000-000000000001",
   seasonYear: 2026,
   playerIds: ["f3000000-0000-4000-8000-000000000001", "f3000000-0000-4000-8000-000000000002"],
   agreementIds: ["f4000000-0000-4000-8000-000000000001", "f4000000-0000-4000-8000-000000000002"],
@@ -44,6 +46,8 @@ const READ_TABLES = [
   "game_contract_seasons",
   "game_runtime_contracts",
   "game_active_runtime_contracts",
+  "executed_trades",
+  "trade_asset_snapshots",
 ];
 
 // Canonical contract fixtures have no authenticated INSERT policy; only the
@@ -65,6 +69,8 @@ const isFixturePlayer = (value: unknown) =>
   TEST_FIXTURE.playerIds.some((playerId) => playerId === value);
 const isFixtureAgreement = (value: unknown) =>
   TEST_FIXTURE.agreementIds.some((agreementId) => agreementId === value);
+const isFixtureTeam = (value: unknown) =>
+  value === TEST_FIXTURE.teamId || value === TEST_FIXTURE.otherTeamId;
 
 // Insert bodies must stay inside the synthetic fixture identities: no real NBA
 // or ESPN ids, no foreign players/agreements/teams, and a UUID game reference.
@@ -83,7 +89,10 @@ function fixtureBodyViolation(table: string, body: unknown): boolean {
     const gameUuid = z.uuid().safeParse(insert.game_id);
     switch (table) {
       case "teams":
-        return insert.id !== TEST_FIXTURE.teamId || insert.nba_id !== -900001;
+        return !(
+          (insert.id === TEST_FIXTURE.teamId && insert.nba_id === -900001) ||
+          (insert.id === TEST_FIXTURE.otherTeamId && insert.nba_id === -900002)
+        );
       case "games":
         return insert.user_id !== TEST_FIXTURE.ownerId;
       case "players":
@@ -95,15 +104,13 @@ function fixtureBodyViolation(table: string, body: unknown): boolean {
       case "game_player_states":
       case "game_contract_identities":
         return (
-          !isFixturePlayer(insert.player_id) ||
-          insert.team_id !== TEST_FIXTURE.teamId ||
-          !gameUuid.success
+          !isFixturePlayer(insert.player_id) || !isFixtureTeam(insert.team_id) || !gameUuid.success
         );
       case "game_contract_agreements":
         return (
           !isFixtureAgreement(insert.id) ||
           !isFixturePlayer(insert.player_id) ||
-          insert.team_id !== TEST_FIXTURE.teamId ||
+          !isFixtureTeam(insert.team_id) ||
           !gameUuid.success
         );
       case "game_contract_seasons":
@@ -121,11 +128,18 @@ export function createTestFetch(
   report: (line: string) => void,
   request: typeof fetch = fetch,
   role: IntegrationRole = "admin",
-  cleanupGameId?: string
+  cleanupGameId?: string,
+  cleanupTradeId?: string
 ) {
   if (url !== testUrl) throw new Error("Unexpected TEST destination");
   if (cleanupGameId !== undefined && !z.uuid().safeParse(cleanupGameId).success) {
     throw new Error("Invalid cleanup game binding");
+  }
+  if (
+    cleanupTradeId !== undefined &&
+    (!cleanupGameId || !z.uuid().safeParse(cleanupTradeId).success)
+  ) {
+    throw new Error("Invalid cleanup trade binding");
   }
   return async (input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
     const target = new URL(input instanceof Request ? input.url : String(input));
@@ -150,16 +164,57 @@ export function createTestFetch(
       table !== undefined &&
       INSERT_TABLES_BY_ROLE[role].includes(table) &&
       !fixtureBodyViolation(table, init?.body);
+    let trade = false;
+    if (
+      role === "owner" &&
+      cleanupGameId &&
+      method === "POST" &&
+      path === "/rest/v1/rpc/execute_trade_transactional" &&
+      typeof init?.body === "string"
+    ) {
+      try {
+        const parsed = z
+          .strictObject({
+            p_game_id: z.literal(cleanupGameId),
+            p_team_a_id: z.literal(TEST_FIXTURE.teamId),
+            p_team_b_id: z.literal(TEST_FIXTURE.otherTeamId),
+            p_assets: z
+              .array(
+                z.strictObject({
+                  asset_type: z.enum(["player", "pick"]),
+                  asset_id: z.uuid(),
+                  from_team_id: z.enum([TEST_FIXTURE.teamId, TEST_FIXTURE.otherTeamId]),
+                })
+              )
+              .length(2),
+          })
+          .parse(JSON.parse(init.body));
+        trade =
+          parsed.p_assets.every((asset) =>
+            asset.asset_type === "player"
+              ? isFixturePlayer(asset.asset_id)
+              : asset.asset_id === TEST_FIXTURE.absentPickId
+          ) &&
+          new Set(parsed.p_assets.map((asset) => asset.from_team_id)).size === 2 &&
+          new Set(parsed.p_assets.map((asset) => asset.asset_id)).size === 2;
+      } catch {
+        trade = false;
+      }
+    }
     const deleteTeam =
       role === "admin" &&
       method === "DELETE" &&
       path === "/rest/v1/teams" &&
-      target.searchParams.get("id") === `eq.${TEST_FIXTURE.teamId}`;
+      [TEST_FIXTURE.teamId, TEST_FIXTURE.otherTeamId].some(
+        (id) => target.searchParams.get("id") === `eq.${id}`
+      );
     const deletePicks =
       role === "admin" &&
       method === "DELETE" &&
       path === "/rest/v1/draft_picks" &&
-      target.searchParams.get("original_team_id") === `eq.${TEST_FIXTURE.teamId}` &&
+      [TEST_FIXTURE.teamId, TEST_FIXTURE.otherTeamId].some(
+        (id) => target.searchParams.get("original_team_id") === `eq.${id}`
+      ) &&
       target.searchParams.getAll("draft_year").sort().join(",") === "gte.2026,lte.2032";
     const deletePlayer =
       role === "admin" &&
@@ -186,6 +241,15 @@ export function createTestFetch(
           target.searchParams.get("id") === `in.(${TEST_FIXTURE.agreementIds.join(",")})`) ||
         (path === "/rest/v1/game_contract_identities" &&
           target.searchParams.get("player_id") === `in.(${TEST_FIXTURE.playerIds.join(",")})`));
+    const deleteTrade =
+      role === "admin" &&
+      method === "DELETE" &&
+      cleanupTradeId !== undefined &&
+      ((path === "/rest/v1/trade_asset_snapshots" &&
+        target.searchParams.get("executed_trade_id") === `eq.${cleanupTradeId}`) ||
+        (path === "/rest/v1/executed_trades" &&
+          target.searchParams.get("id") === `eq.${cleanupTradeId}` &&
+          target.searchParams.get("game_id") === `eq.${cleanupGameId}`));
     if (
       target.origin !== url ||
       target.username ||
@@ -195,6 +259,8 @@ export function createTestFetch(
         read ||
         auth ||
         insert ||
+        trade ||
+        deleteTrade ||
         deleteTeam ||
         deletePicks ||
         deletePlayer ||

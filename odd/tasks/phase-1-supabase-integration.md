@@ -24,10 +24,23 @@ Delivery: ask-on-risk; no publishing. Runner: Bun/Vitest and Biome; SQL checks c
 - [x] T4 — S5–S6, S8–S11; inline (no writer trigger); minimal deterministic fixture runner/guards and two explicitly authorized remote lifecycles PASS; local RED/GREEN and TypeScript/Biome PASS; no players/contracts/provider snapshots yet (expand under T5); evidence in L7–L8; commit: dce6ba1 (guards) and b3ba23d (runner).
 - [ ] T5 — S7–S11; inline (no writer trigger); initial real Auth/repository game create/read/isolation PASS twice; roster/contracts/trades/free-agency/simulation and rejected-write rollback remain UNVERIFIED; expanded fixtures/remote operations need scoped authorization; evidence in L8; commit: docs unit for T5a, pending for the rest.
   - [x] T5a — Reconcile historical HTTP evidence and locally review initial runner/guards; prepare the bounded roster/canonical/runtime fixture specification; evidence in L9; commit: docs unit.
-  - [ ] T5b — Local implementation complete: expanded fixtures, per-role route and insert-body guard regressions (RED/GREEN), owner/admin repository assertions and bounded cleanup with in-runner Auth 404; evidence in L10; commit: 63afef5 (guard) plus the runner/docs unit. Remote lifecycle authorization still pending.
-  - [ ] T5c — Execute authorized roster/contracts HTTP slice and record persisted state, access matrix and cleanup; remaining T5 workflows stay open.
+  - [x] T5b — Expanded fixture/role guards and FK-safe per-run cleanup verified locally and via HTTP; evidence L10/L20; commits 63afef5, 648f903, ec5d74d.
+  - [x] T5c — Authorized roster/canonical contract HTTP slice PASS; accessible cleanup/isolation PASS; evidence L20; commit ec5d74d. Runtime creation remains outside this proof.
+  - [x] T5d — S5–S11; inline (no writer trigger): second team, owner trade and late business-rejection rollback HTTP PASS; exact trade-child cleanup PASS. Baseline ec5d74d. Risk: item 2 (fixture guard/destructive cleanup); independent offline verification and bounded correction PASS; commit pending. No denied-role RPC invocation.
+  - [ ] T5e — Remaining Phase 1: provider snapshots/materialization, free agency, simulation and populated runtime creation/precedence; UNVERIFIED, no schema/grant changes authorized.
 
 ## Log
+
+### L21 — Commit and start next Phase 1 goal (2026-11-09)
+
+- User: "Bueno. Hace el commit por favor de esto y pasemos a iniciar el goal de la fase 1".
+- Committed prior verified behavior, tests and evidence as `ec5d74d` (`fix(test): make Phase 1 HTTP fixture cleanup repeatable`); clean tree observed. The coherent recovery unit exceeds the advisory size; no code compression or unrelated split. No push or PR.
+- Next unit T5d: authenticated owner trade and transactional rollback. Local mapping found `executed_trades.game_id` and trade snapshot FKs are `ON DELETE RESTRICT`: explicit snapshot/history cleanup must precede the prior game cleanup. No remote trade attempted before implementing/testing these guards.
+- Observed RED: bound owner trade guard regression failed before implementation. GREEN: 67 tests across seven focused suites, TypeScript/Biome. Independent offline verifier found changed missing-confirmation text; one correction restored exact baseline diagnostic and added three public-process argument tests; limited recheck PASS. No security/runtime PASS inferred from offline tests.
+- PASS authorized command `bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke --trades`, exit 0: two synthetic teams, two players/canonical agreements, 28 generated picks. Owner repository RPC success 200, two player snapshots and persisted exchanged ownership. Second owner call sends a valid player then a reserved nonexistent pick: expected business rejection 400; roster rows/timestamps, trade history and asset snapshots identical before/after. Canonical agreements/seasons unchanged; unrelated trade-history read empty. No unauthorized-role RPC was invoked.
+- PASS cleanup: exact snapshots/history deleted first with zero-count checks, followed by canonical/roster/Auth/static fixture cleanup. Eleven accessible tables empty, both Auth IDs 404. No DEV/schema/grant/SQL/history changes, publishing or runtime-contract writes.
+- Repeated expanded HTTP lifecycle unchanged: second exit 0 with all trade/rollback assertions and complete eleven-table/two-Auth cleanup. This establishes repeatability for this slice only.
+- Final complete suite in isolated no-secret scratch: 1132 tests passed, 141 suites passed; same four documentation CJS suites failed with "No test suite found". Focused checks, compiler/Biome and diff checks PASS; full suite is not reported as PASS. Remaining whole Phase 1 goals remain UNVERIFIED, not completed by this slice.
 
 ### L20 — Resumed authorization and runner cleanup/runtime slice (2026-11-09)
 

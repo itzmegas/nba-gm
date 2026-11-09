@@ -12,6 +12,11 @@ Owner runtime view was empty for the new game; unrelated runtime reads were
 empty and anonymous access was denied (401/42501). Populated runtime creation,
 precedence, and global runtime-table emptiness remain UNVERIFIED.
 
+**Latest expanded cycle: owner trade and rejected-write rollback PASS.** The
+`--trades` lifecycle exited 0, exchanged two synthetic players through the real
+repository and proved rollback of a late business rejection. Eleven accessible
+tables ended empty and both Auth fixtures returned 404. See the trade slice below.
+
 The user authorized necessary synthetic Phase 1 HTTP cycles on the existing TEST
 using `.env.test.local`, including exact fixture cleanup, without confirmation per
 cycle. No DEV, schema, grants, migrations, resets or denied-RPC crash probe.
@@ -254,3 +259,41 @@ to `resolve_free_agency_offer` and `resolve_due_free_agency_market`. Canonical
 snapshot materialization instead requires 30 team versions and does not create
 runtime contracts. Do not bypass grants or repeat the known denied-RPC probe.
 The current two-player canonical fixture cannot prove populated runtime behavior.
+
+### Trade and rejected-write rollback slice
+
+Run the expanded slice only against the same authorized TEST target:
+
+```sh
+bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke --trades
+```
+
+The optional `--trades` adds fixed synthetic team
+`f2000000-0000-4000-8000-000000000002` (`nba_id=-900002`), splits the two
+players/canonical agreements across the teams and expects 28 generated picks.
+Only the owner session may invoke `execute_trade_transactional`, bound to the
+current game, both synthetic teams and exactly two fixed synthetic assets.
+First exchange the players via `SupabaseTradeRepository`; then send a valid
+player followed by a reserved absent synthetic pick
+`f5000000-0000-4000-8000-000000000001`. The second call must reject with a
+business ownership error and leave roster rows (including timestamps), trade
+history and asset snapshots unchanged. This is not a denied-role RPC test;
+unrelated/anonymous sessions never invoke an RPC.
+
+Trade snapshots and history have RESTRICT FKs. Cleanup validates the run-owned
+game and exact trade metadata, deletes only its snapshots and trade history
+with zero-count checks before canonical/roster/Auth cleanup, then removes both
+teams' synthetic picks and teams. Preflight/final checks cover eleven accessible
+tables and both Auth accounts. No new schema/grants/runtime-contract writes.
+Observed 2026-11-09: command exited 0. Owner trade RPC returned 200; both player
+owners exchanged and two snapshots persisted. Second owner RPC returned 400 for
+the expected absent-pick business error, with byte-identical roster timestamps
+and values and unchanged history/snapshots afterward. Canonical rows remained
+unchanged; unrelated trade history was empty. Scoped snapshot/history, canonical,
+roster, Auth and static cleanup succeeded; eleven final table counts zero, both
+Auth IDs 404. No denied-role RPC test was run. This does not prove authoritative
+SQL cap/roster validation, free agency, simulation or runtime creation.
+The same expanded command succeeded a second time with complete cleanup,
+establishing repeatability for this slice. Local verification: 70 focused tests;
+full suite 1132 tests passed but four known documentation CJS suites have no
+Vitest suite and cause exit 1. TypeScript, Biome and diff checks passed.
