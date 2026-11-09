@@ -80,7 +80,7 @@ in the server-side Bun script; it is not a browser configuration.
 ## Run after explicit lifecycle approval
 
 ```sh
-bun run --no-env-file test tests/infrastructure/supabase/integrationSafety.test.ts tests/infrastructure/repositories/SupabaseGameRepository.test.ts
+bun run --no-env-file test tests/infrastructure/supabase/integrationSafety.test.ts tests/infrastructure/repositories/SupabaseGameRepository.test.ts tests/infrastructure/repositories/SupabasePlayerStateRepository.test.ts tests/infrastructure/contracts/SupabaseGameContractRepository.test.ts tests/infrastructure/repositories/SupabaseContractRepository.test.ts
 bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke
 bun biome check
 ```
@@ -88,9 +88,12 @@ bun biome check
 Run the remote command twice only if repeat-run creation/deletion is authorized.
 A second successful run establishes repeatability, not broader gameplay coverage.
 
-Preflight requires empty `games`, `teams`, `draft_picks`, `game_pick_inventory`
-and both fixture account IDs absent. Existing accounts are never adopted or
-overwritten. Successful cleanup verifies all four application tables are empty.
+Preflight requires ten empty tables (`games`, `teams`, `draft_picks`,
+`game_pick_inventory`, `players`, `game_player_states`, `game_contract_identities`,
+`game_contract_agreements`, `game_contract_seasons`, `game_runtime_contracts`) and
+both fixture account IDs absent. Existing accounts are never adopted or
+overwritten. Successful cleanup verifies all ten tables are empty and both
+fixture accounts return 404 inside the runner itself.
 
 Requests are restricted to the exact TEST origin and a small Auth/table allowlist.
 Cross-origin requests, redirects, RPC paths, schema operations, unfiltered deletes,
@@ -118,13 +121,13 @@ The progress and consent log is [the feature task](../../odd/tasks/phase-1-supab
 
 ## Next bounded slice — roster and modern contract projection
 
-**Prepared scope only; not implemented or remotely authorized.** Keep the initial
-runner unchanged until the expanded lifecycle and its local guard tests are ready.
-Do not repeat the completed smoke merely to reconfirm historical evidence.
+**Implemented locally and reviewed; NOT remotely authorized or executed yet.**
+Do not repeat the completed initial smoke merely to reconfirm historical evidence.
 
 Use two additional fixed synthetic players in the existing one-team/one-game
-lifecycle. Reserve IDs `f3000000-0000-4000-8000-000000000001` and
-`f3000000-0000-4000-8000-000000000002`; use no real NBA/provider identity.
+lifecycle. Reserved IDs `f3000000-0000-4000-8000-000000000001` and
+`f3000000-0000-4000-8000-000000000002`; agreements use fixed IDs
+`f4000000-0000-4000-8000-000000000001`/`…0002`; no real NBA/ESPN identity.
 
 | Fixture | Count | Purpose |
 | --- | ---: | --- |
@@ -135,41 +138,51 @@ lifecycle. Reserve IDs `f3000000-0000-4000-8000-000000000001` and
 | `game_contract_seasons` | 2 | One known 2026–27 salary per agreement: 1,000,000 and 2,000,000 |
 | `game_runtime_contracts` | 1 | Second player: 2026–27 simulated agreement at 3,000,000 |
 
-Owner-session assertions must use `SupabasePlayerStateRepository` for roster
+Owner-session assertions use `SupabasePlayerStateRepository` for roster
 creation/read, `SupabaseGameContractRepository` for canonical/effective reads,
-and `SupabaseContractRepository` for compatibility projection. Expect exactly
-two roster players; first salary 1,000,000 from canonical coverage and second
-3,000,000 from runtime precedence. Compare persisted canonical rows before/after
-reads; no legacy `contracts` row should be created. Static
+and `SupabaseContractRepository` for compatibility projection. The runner asserts
+exactly two roster players; first salary 1,000,000 from canonical coverage and
+second 3,000,000 from runtime precedence. Canonical agreement/season rows are
+snapshotted before and compared after reads; no legacy `contracts` row may be
+created (admin count stays zero for the game). Static
 `SupabasePlayerRepository.getByTeamId` is not the gameplay roster source.
 
-Use unrelated-user and anonymous sessions for direct table reads as well as
-applicable repository reads. Capture HTTP status and visible IDs per relation;
-repository exceptions/empty results alone do not prove isolation. Record broad
-baseline exposure as FAIL against an isolation expectation, not a reason to
-enable 057/058 or silently weaken assertions. No denied RPC calls are needed.
+Canonical identity/agreement/season and runtime rows have no authenticated INSERT
+policy; the server-side admin session sets them up, matching the real
+materialization boundary. The owner session writes only `games` (repository) and
+`game_player_states` (repository `bulkCreateForGame`), proving the owner write
+path that RLS actually grants.
 
-Before execution, extend preflight counts to every touched table, require both
-player IDs absent, validate fixture payloads and narrowly scope new write routes.
-The current fetch guard checks origin/method/path and delete filters, **not POST
-body identities or service-role versus owner-session privileges**. Its unit
-tests prove those implemented boundaries, not arbitrary fixture-write safety.
-Add local rejection tests for new payloads/routes before widening the allowlist.
+Isolation: unrelated-user and anonymous sessions read all five game-scoped
+relations directly (expect zero visible rows, no error) and via the roster and
+contract repositories (empty arrays). The runner records HTTP status per read.
+Static `players`/`teams` retain baseline public read; that exposure stays
+documented, not asserted as isolation. No denied RPC calls are needed or used.
 
-Cleanup must track confirmed creations, verify game-child cascades using HTTP,
-then delete only the two run-created static players and existing scoped picks/team.
-Verify all touched tables empty and both Auth IDs 404 in the runner itself.
-Do not adopt uncertain writes, sweep tables, or turn a cleanup failure into PASS.
-The existing runner's final empty-table checks do not themselves verify Auth 404;
-that was an additional historical check after cycle two.
+The fetch guard now enforces, beyond destination/route/method/redirect/timeout:
+per-role write routes (admin: team/players/canonical/runtime setup; owner: games
+and roster states; reader: none), POST body validation keeping every insert
+inside the synthetic fixture identities (no NBA/ESPN ids, no foreign
+players/agreements/teams, UUID game references, owner-only `games.user_id`), and
+player deletes scoped to the two fixture IDs. Unit tests cover each rejection.
+
+Preflight now requires ten empty tables (`games`, `teams`, `draft_picks`,
+`game_pick_inventory`, `players`, `game_player_states`, `game_contract_identities`,
+`game_contract_agreements`, `game_contract_seasons`, `game_runtime_contracts`) and
+both fixture account IDs absent; an empty `players` table doubles as the
+player-ID absence guard. Cleanup order: run-created Auth users first (their games
+cascade all game-scoped rows), then the two run-created static players — their
+canonical references are `ON DELETE RESTRICT` until the game cascade removes them
+— then the scoped 2026–2032 picks and the run-created team. Final in-runner
+checks: all ten tables count zero and both fixture accounts return 404.
 
 Provider snapshots/materialization, a second team and trades, free-agency offers,
 simulation, and rejected-write rollback are subsequent T5 increments. This small
 projection fixture does not establish provider acquisition/materialization or
 full gameplay. Each broader lifecycle needs its own exact authorization.
 
-Remote execution gate, once locally implemented/reviewed: request a single bounded
-expanded lifecycle on `wmtezjoitjmjynyvkyke`, explicitly reading only the existing
-`.env.test.local` TEST URL/public/service-role values, using in-memory synthetic
-password sessions, the listed fixture writes/reads and exact cleanup. No SQL,
+Remote execution gate: request a single bounded expanded lifecycle on
+`wmtezjoitjmjynyvkyke`, explicitly reading only the existing `.env.test.local`
+TEST URL/public/service-role values, using in-memory synthetic password
+sessions, the listed fixture writes/reads and exact cleanup. No SQL,
 migrations, history repair, DEV, configuration copy or automatic second cycle.
