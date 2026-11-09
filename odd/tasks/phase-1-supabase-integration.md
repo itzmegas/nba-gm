@@ -26,7 +26,7 @@ Delivery: ask-on-risk; no publishing. Runner: Bun/Vitest and Biome; SQL checks c
   - [x] T5a — Reconcile historical HTTP evidence and locally review initial runner/guards; prepare the bounded roster/canonical/runtime fixture specification; evidence in L9; commit: docs unit.
   - [x] T5b — Expanded fixture/role guards and FK-safe per-run cleanup verified locally and via HTTP; evidence L10/L20; commits 63afef5, 648f903, ec5d74d.
   - [x] T5c — Authorized roster/canonical contract HTTP slice PASS; accessible cleanup/isolation PASS; evidence L20; commit ec5d74d. Runtime creation remains outside this proof.
-  - [x] T5d — S5–S11; inline (no writer trigger): second team, owner trade and late business-rejection rollback HTTP PASS; exact trade-child cleanup PASS. Baseline ec5d74d. Risk: item 2 (fixture guard/destructive cleanup); independent offline verification and bounded correction PASS; commit pending. No denied-role RPC invocation.
+  - [x] T5d — S5–S11; inline (no writer trigger): second team, owner trade and late business-rejection rollback HTTP PASS; exact trade-child cleanup PASS. Baseline ec5d74d. Risk: item 2 (fixture guard/destructive cleanup); independent offline verification and bounded correction PASS; commit 015ae39. No denied-role RPC invocation.
   - [ ] T5e — Remaining Phase 1: provider snapshots/materialization, free agency, simulation and populated runtime creation/precedence; UNVERIFIED, no schema/grant changes authorized.
 
 ## Log
