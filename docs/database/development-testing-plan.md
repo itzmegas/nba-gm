@@ -4,6 +4,13 @@
 one server-side API use case. Do not rewrite the backend now.** This document
 records the agreed direction, not completed infrastructure work or deployment approval.
 
+**Phase 1 progress, 2026-11-06:** isolated TEST `wmtezjoitjmjynyvkyke` now has
+the four active migration payloads and two successful authorized Auth/game HTTP
+fixture lifecycles. See the [HTTP evidence and next slice](phase-1-http-smoke.md)
+and [task log](../../odd/tasks/phase-1-supabase-integration.md). This supersedes
+the planned TEST status below, not the historical local Step 4 results. T5 and
+Phase 1 remain open; no further remote operation is authorized by this update.
+
 ## Current context
 
 The owner reports that the existing hosted project is development-only: one account
@@ -36,7 +43,7 @@ test environment is a separate task, not a release-readiness claim.
 | Environment | Purpose | Status |
 |---|---|---|
 | Existing hosted Supabase: DEV | Manual development and exploratory test games | Existing; contents reported by owner, not re-inspected here |
-| Separate hosted Supabase: TEST | Repeatable Auth/API integration and approved migration rehearsals | Planned, subject to quota and explicit provisioning approval |
+| Separate hosted Supabase: TEST | Repeatable Auth/API integration and approved migration rehearsals | Available: `wmtezjoitjmjynyvkyke`; initial HTTP slice PASS twice; expanded workflows pending |
 | Local Vitest and disposable PostgreSQL | Fast application/domain checks and SQL regressions | Existing tooling; no new execution is claimed here |
 | Full local Supabase or CI stack | Additional integration coverage without a permanent cloud test project | Deferred; requires compatible runtime review |
 

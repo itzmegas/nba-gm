@@ -7,6 +7,10 @@ observed-state candidate, not a production deployment. See [Step 2 results](sche
 validated modern-contract trade migration. See its [validation report](modern-contract-trade-validation-report.md)
 for four-file replay evidence; Step 2 records the earlier three-file baseline.
 Neither result establishes full Auth/PostgREST integration or deployment approval.
+Subsequent [hosted TEST HTTP evidence](phase-1-http-smoke.md) establishes only
+the initial Auth/game slice. TEST already has these four payloads; migration
+history was deliberately not registered or repaired. Do not replay this chain
+against its existing schema or infer permission to repair history.
 See the [development and testing plan](development-testing-plan.md) for current
 evidence boundaries and the agreed next steps.
 
