@@ -14,6 +14,10 @@ import {
   cleanupTestTrade,
 } from "@/infrastructure/supabase/integrationCleanup";
 import {
+  FREE_AGENCY_TABLES,
+  FreeAgencyFixture,
+} from "@/infrastructure/supabase/integrationFreeAgency";
+import {
   createTestFetch,
   type IntegrationRole,
   readIntegrationConfig,
@@ -32,14 +36,21 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  if (process.argv.slice(3).some((value) => value !== "--trades")) {
+  if (
+    process.argv.slice(3).some((value) => !["--trades", "--free-agency"].includes(value)) ||
+    (process.argv.includes("--trades") && process.argv.includes("--free-agency"))
+  ) {
     console.error(
-      "FAIL usage: bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke [--trades]; dedicated config not read"
+      process.argv.includes("--free-agency")
+        ? "FAIL usage: bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke [--trades | --free-agency]; dedicated config not read"
+        : "FAIL usage: bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke [--trades]; dedicated config not read"
     );
     process.exitCode = 1;
     return;
   }
   const testTrades = process.argv.includes("--trades");
+  const testFreeAgency = process.argv.includes("--free-agency");
+  let freeAgency: FreeAgencyFixture | undefined;
   const config = readIntegrationConfig(
     parseEnv(await readFile(".env.test.local", "utf8")),
     process.argv[2]
@@ -49,13 +60,15 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: {
       fetch: (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
-        createTestFetch(
-          config.url,
-          console.log,
-          fetch,
-          role,
-          role === "owner" && testTrades ? createdGameId : undefined
-        )(input, init),
+        (freeAgency
+          ? freeAgency.createFetch(config.url, console.log, fetch, role)
+          : createTestFetch(
+              config.url,
+              console.log,
+              fetch,
+              role,
+              role === "owner" && testTrades ? createdGameId : undefined
+            ))(input, init),
     },
   });
   const admin = createClient(config.url, config.serviceRoleKey, clientOptions("admin"));
@@ -85,9 +98,19 @@ async function main() {
     "game_contract_seasons",
     "executed_trades",
     "trade_asset_snapshots",
+    ...(testFreeAgency ? FREE_AGENCY_TABLES : []),
   ] as const;
   // game_contract_identities has no id column (composite game/player key).
-  const countColumn = (table: string) => (table === "game_contract_identities" ? "game_id" : "id");
+  const countColumn = (table: string) =>
+    table === "current_contract_source_snapshots"
+      ? "team"
+      : [
+            "game_contract_identities",
+            "game_contract_materializations",
+            "game_contract_provenance",
+          ].includes(table)
+        ? "game_id"
+        : "id";
   try {
     const authHealth = await createTestFetch(config.url, console.log)(
       `${config.url}/auth/v1/health`,
@@ -176,6 +199,7 @@ async function main() {
       })
     );
     createdGameId = game.id;
+    if (testFreeAgency) freeAgency = new FreeAgencyFixture(game.id);
     const runtimeBefore = await owner
       .from("game_active_runtime_contracts")
       .select("game_id", { head: true, count: "exact" })
@@ -305,20 +329,22 @@ async function main() {
         guarantee_kind: "guaranteed",
       },
     }));
-    for (const { identity, agreement, season } of canonicalFixture) {
-      check(
-        !(await admin.from("game_contract_identities").insert(identity)).error,
-        "insert canonical identity fixture"
-      );
-      check(
-        !(await admin.from("game_contract_agreements").insert(agreement)).error,
-        "insert canonical agreement fixture"
-      );
-      check(
-        !(await admin.from("game_contract_seasons").insert(season)).error,
-        "insert canonical season fixture"
-      );
-    }
+    if (freeAgency) await freeAgency.materialize(admin);
+    else
+      for (const { identity, agreement, season } of canonicalFixture) {
+        check(
+          !(await admin.from("game_contract_identities").insert(identity)).error,
+          "insert canonical identity fixture"
+        );
+        check(
+          !(await admin.from("game_contract_agreements").insert(agreement)).error,
+          "insert canonical agreement fixture"
+        );
+        check(
+          !(await admin.from("game_contract_seasons").insert(season)).error,
+          "insert canonical season fixture"
+        );
+      }
     const snapshotAgreements = await admin
       .from("game_contract_agreements")
       .select("*")
@@ -494,6 +520,25 @@ async function main() {
       );
     }
 
+    if (freeAgency) {
+      await freeAgency.exercise(admin, owner, [other, anonymous]);
+      const preservedAgreements = await admin
+        .from("game_contract_agreements")
+        .select("*")
+        .eq("game_id", game.id)
+        .order("id");
+      const preservedSeasons = await admin
+        .from("game_contract_seasons")
+        .select("*")
+        .eq("game_id", game.id)
+        .order("id");
+      check(
+        !preservedAgreements.error &&
+          !preservedSeasons.error &&
+          JSON.stringify([preservedAgreements.data, preservedSeasons.data]) === canonicalSnapshot,
+        "canonical snapshots unchanged by free agency and simulation"
+      );
+    }
     const isolationTables = [
       "game_player_states",
       "game_contract_identities",
@@ -591,14 +636,17 @@ async function main() {
             await cleanupTestTrade(tradeCleanupClient, createdGameId, trade.id);
           }
         }
-        const cleanupClient = createClient(config.url, config.serviceRoleKey, {
-          ...clientOptions("admin"),
-          global: {
-            fetch: createTestFetch(config.url, console.log, fetch, "admin", createdGameId),
-          },
-        });
-        await cleanupTestGameRows(cleanupClient, createdGameId);
-        console.log("PASS exact canonical children and roster removed before Auth cascade");
+        if (freeAgency) await freeAgency.cleanupGame(admin, owner);
+        else {
+          const cleanupClient = createClient(config.url, config.serviceRoleKey, {
+            ...clientOptions("admin"),
+            global: {
+              fetch: createTestFetch(config.url, console.log, fetch, "admin", createdGameId),
+            },
+          });
+          await cleanupTestGameRows(cleanupClient, createdGameId);
+          console.log("PASS exact canonical children and roster removed before Auth cascade");
+        }
       } catch {
         cleanupFailed = true;
         console.error("FAIL scoped game cleanup; dependent deletes skipped");
@@ -740,9 +788,14 @@ async function main() {
     );
     return;
   }
-  console.log(
-    "PASS roster and contract HTTP integration; global game_runtime_contracts emptiness UNVERIFIED (TEST API grant); free-agency/simulation/runtime creation UNVERIFIED"
-  );
+  if (testFreeAgency)
+    console.log(
+      "PASS synthetic source/materialization, owner free-agency offer, one-day simulation and runtime projection HTTP slice; global runtime-table contents and full game simulation remain UNVERIFIED"
+    );
+  else
+    console.log(
+      "PASS roster and contract HTTP integration; global game_runtime_contracts emptiness UNVERIFIED (TEST API grant); free-agency/simulation/runtime creation UNVERIFIED"
+    );
   if (testTrades)
     console.log(
       "PASS owner trade and rejected-write rollback HTTP slice; free-agency/simulation/runtime creation UNVERIFIED"

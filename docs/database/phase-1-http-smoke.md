@@ -1,5 +1,54 @@
 # Phase 1 HTTP smoke: synthetic Auth and repository game access
 
+## Latest slice: synthetic free agency and simulation (2026-11-09)
+
+**PASS: three complete authorized `--free-agency` HTTP cycles.** This supersedes
+the older populated-runtime and provider-materialization limitations below.
+
+```sh
+bun run --no-env-file scripts/test-supabase-integration.ts wmtezjoitjmjynyvkyke --free-agency
+```
+
+Use either `--trades` or `--free-agency`, not both. The default mode is unchanged.
+Obtain target-bound authorization before executing any fixture lifecycle.
+
+| Check | Observed result |
+| --- | --- |
+| Synthetic provider cache | All 30 canonical source-team keys initially absent; repository reserve/store/read round-trips, 31 fictional salary records; no provider fetch or real player IDs |
+| Materialization | Existing service-role RPC creates two canonical agreements; replay returns `already-materialized`, still two agreements |
+| Availability | Existing enrollment RPC creates the third synthetic player's teamless state; owner activates the prepared game |
+| Offer | Owner market returns minimum 2,449,421 and payroll 3,000,000; repository submit/list persists one offer due 2026-10-02 |
+| Simulation | Owner `advance_simulation_day` advances 2026-10-01 to 2026-10-02; date persists and the internal resolver accepts the offer |
+| Runtime | Accepted offer links the effective simulated contract; owner effective and compatibility repositories expose its salary; canonical rows remain byte-identical |
+| Isolation | Unrelated/anonymous offer and runtime reads return empty or table-grant denial; no denied-role RPC is called |
+| Cleanup | Seventeen accessible tables empty, both Auth IDs 404; owner runtime view empty after exact game deletion, before owner deletion |
+
+The first attempt stopped before fixture creation because provenance has no `id`
+column. Its counter now uses `game_id`; all three subsequent complete cycles exited 0.
+The final cycle used the corrected Request-method guard. Final isolated checks:
+1,191 tests across 143 Vitest files, TypeScript, and Biome PASS; the four standalone
+prototype files also passed (13 tests). Independent offline verification found a
+Request-method bypass and unknown-option diagnostic drift; one correction batch
+resolved both, and the bounded recheck passed all 55 regression cases. Missing,
+wrong-project and unknown-option diagnostics match the baseline byte-for-byte.
+
+The explicitly authorized teardown uses the existing administrative role to return
+only the run-created game to `initializing`, delete canonical children and the
+materialization header while its parent exists, then delete that exact game
+**before** the Auth accounts. Runtime/offer rows cascade without runtime-table DML
+grants. Captured source pointers are deleted by key **and version**, then only the
+captured version IDs are deleted. Any failure stops dependent deletion; there is
+no reset, sweep, permission change or direct resolver invocation.
+
+Limits: this verifies the materialization RPC with explicit synthetic crosswalks,
+not live provider acquisition or the complete `useCreateGame` orchestrator. The
+simulation check is one no-fixture day and offer resolution, not a played match,
+playoffs or a full season. Global runtime-table contents remain UNVERIFIED because
+service-role SELECT is denied. Existing unsafe policies and the historical
+denied-RPC crash remain outside this proof; proposals 057/058 stay inactive.
+
+## Earlier slices (historical evidence)
+
 **PASS: two authorized complete HTTP cycles on 2026-11-06.** This is the first
 integration slice, not complete Phase 1 or security clearance. The four active
 migrations are installed on TEST. Do not reset or replay them before this test.

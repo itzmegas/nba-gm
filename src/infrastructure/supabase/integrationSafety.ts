@@ -48,6 +48,12 @@ const READ_TABLES = [
   "game_active_runtime_contracts",
   "executed_trades",
   "trade_asset_snapshots",
+  "contract_source_snapshot_versions",
+  "current_contract_source_snapshots",
+  "game_contract_materializations",
+  "game_contract_provenance",
+  "free_agency_availability_enrollments",
+  "free_agency_pending_offers",
 ];
 
 // Canonical contract fixtures have no authenticated INSERT policy; only the
