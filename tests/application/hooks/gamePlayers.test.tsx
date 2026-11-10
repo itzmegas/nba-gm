@@ -4,7 +4,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useGamePlayers } from "@/application/hooks/players/useGamePlayers";
-import { useExecuteTrade } from "@/application/hooks/trades/useTrades";
+import { useExecuteTrade, useSimulateTrade } from "@/application/hooks/trades/useTrades";
 import { TradeEngine } from "@/application/services/TradeEngine";
 import type { GamePlayerContractState } from "@/domain/contracts/GameContract";
 import type { Contract } from "@/domain/entities/Contract";
@@ -15,6 +15,7 @@ import { SupabaseContractRepository } from "@/infrastructure/repositories/Supaba
 import { SupabasePlayerRatingsRepository } from "@/infrastructure/repositories/SupabasePlayerRatingsRepository";
 import { SupabasePlayerRepository } from "@/infrastructure/repositories/SupabasePlayerRepository";
 import { SupabasePlayerStateRepository } from "@/infrastructure/repositories/SupabasePlayerStateRepository";
+import * as tradeHttp from "@/infrastructure/trades/executeHttpTrade";
 
 vi.mock("@/infrastructure/supabase/client", () => ({ createClient: () => ({}) }));
 afterEach(() => {
@@ -127,7 +128,9 @@ it("invalidates the global directory after a successful trade", async () => {
   const { wrapper, client } = setup();
   const key = ["games", gameId, "players", 2026];
   client.setQueryData(key, []);
-  vi.spyOn(TradeEngine.prototype, "executeTrade").mockResolvedValue({ success: true });
+  const execute = vi
+    .spyOn(tradeHttp, "executeHttpTrade")
+    .mockResolvedValue({ success: true, tradeId: gameId });
   const { result } = renderHook(() => useExecuteTrade(), { wrapper });
   const packageA = { teamId: "a", teamName: "A", outgoingAssets: [], incomingAssets: [] };
   await result.current.mutateAsync({
@@ -139,4 +142,27 @@ it("invalidates the global directory after a successful trade", async () => {
     seasonYear: 2026,
   });
   expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  expect(execute).toHaveBeenCalledExactlyOnceWith(gameId, packageA, { ...packageA, teamId: "b" });
+});
+
+it("preserves client preview without executing an HTTP operation", async () => {
+  const { wrapper } = setup();
+  const http = vi.spyOn(tradeHttp, "executeHttpTrade");
+  const preview = vi.spyOn(TradeEngine.prototype, "simulateTrade");
+  const snapshot = { contracts: [], rosterSize: 12 };
+  const pack = {
+    teamId: "a",
+    teamName: "A",
+    outgoingAssets: [{ type: "pick" as const, pickId: "p" }],
+    incomingAssets: [],
+  };
+  const other = { ...pack, teamId: "b" };
+  const { result } = renderHook(
+    () => useSimulateTrade(gameId, snapshot, snapshot, pack, other, 2026),
+    { wrapper }
+  );
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.isValid).toBe(true);
+  expect(preview).toHaveBeenCalledWith(gameId, snapshot, snapshot, pack, other, 2026);
+  expect(http).not.toHaveBeenCalled();
 });

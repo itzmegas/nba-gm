@@ -3,6 +3,7 @@ import { TradeEngine } from "@/application/services/TradeEngine";
 import type { TradePackage, TradeTeamSnapshot } from "@/domain/entities/Trade";
 import { SupabaseTradeRepository } from "@/infrastructure/repositories/SupabaseTradeRepository";
 import { createClient } from "@/infrastructure/supabase/client";
+import { executeHttpTrade } from "@/infrastructure/trades/executeHttpTrade";
 
 const getTradeEngine = () => {
   const supabase = createClient();
@@ -44,11 +45,8 @@ export function useExecuteTrade() {
   return useMutation({
     mutationFn: async ({
       gameId,
-      teamA,
-      teamB,
       packageA,
       packageB,
-      seasonYear,
     }: {
       gameId: string;
       teamA: TradeTeamSnapshot;
@@ -57,9 +55,9 @@ export function useExecuteTrade() {
       packageB: TradePackage;
       seasonYear: number;
     }) => {
-      const engine = getTradeEngine();
-      return engine.executeTrade(gameId, teamA, teamB, packageA, packageB, true, seasonYear);
+      return executeHttpTrade(gameId, packageA, packageB);
     },
+    retry: false,
     onSuccess: async (result, variables) => {
       if (!result.success) return;
       const { gameId, packageA, packageB } = variables;
