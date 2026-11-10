@@ -1,0 +1,344 @@
+# Hard cap evidence and design implications
+
+Research date: 2026-11-10.
+Status: Evidence record and design proposal. The CBA trigger table was verified directly; this is not an implementation specification or a complete CBA audit.
+
+NBA hard caps are triggered team restrictions, not universal spending ceilings. Keep annual league thresholds separate from each team's hard-cap status. A game's financial state must remain usable without a live external provider.
+
+## Verified annual thresholds
+
+The NBA's official release, dated June 30, 2026, announces the following **2026-27** amounts, effective July 1, 2026:
+
+| Threshold | USD |
+| --- | ---: |
+| Minimum team salary | 148,465,000 |
+| Salary cap | 164,961,000 |
+| Luxury tax | 200,428,000 |
+| First apron | 209,015,000 |
+| Second apron | 221,686,000 |
+
+Source: [NBA sets salary cap for 2026-27 season](https://www.nba.com/news/nba-salary-cap-2026-27-season).
+
+These are league-wide thresholds, not proof that a particular team has activated a hard cap. Do not apply them to another season.
+
+## Hard-cap mechanics: corroborated secondary evidence
+
+[Eric Pincus's 2025-26 apron tracker](https://sportsbusinessclassroom.com/nba-2025-26-apron-tracker/), inspected during this research and marked updated March 6, 2026, explains that:
+
+- The NBA operates a soft cap: teams need permitted exceptions to exceed the salary cap.
+- Certain operations impose a hard spending limit at the first or second apron.
+- A team above an apron cannot use a tool that would impose that ceiling unless the transaction satisfies the applicable limit.
+- Having no hard cap does not waive other contract, exception, trade, tax, or apron restrictions.
+
+Examples described by that source, **not an exhaustive implementation table**:
+
+| Operation or tool | Hard-cap level described |
+| --- | --- |
+| Non-Taxpayer Mid-Level Exception | First apron |
+| Bi-Annual Exception | First apron |
+| Acquiring a player via sign-and-trade | First apron |
+| Taxpayer Mid-Level Exception | Second apron |
+
+The source also describes trade-related triggers and lists team statuses with triggering transactions. The primary-source verification below supersedes this introductory list where qualifications apply. Do not implement a simplified Reddit example as a complete rule.
+
+The tracker is a candidate for initial team-state evidence, not an existing application integration or an official NBA source. Its 2025-26 team statuses must not be reused as 2026-27 statuses or as an earlier historical snapshot.
+
+## Primary-source CBA verification
+
+The [NBPA CBA page](https://nbpa.com/cba) links the [official 2023 NBA-NBPA CBA PDF](https://imgix.cosmicjs.com/25da5eb0-15eb-11ee-b5b3-fbd321202bdf-Final-2023-NBA-Collective-Bargaining-Agreement-6-28-23.pdf). The NBPA identifies July 1, 2023 as its effective date, with a term through 2029-30 and an opt-out after 2028-29.
+
+The PDF was downloaded and its text extracted directly with `pdftotext -layout` during this research. The citations below use **printed page numbers**, not PDF viewer offsets. Temporary research files were removed; no PDF copy was added to the repository.
+
+### Enumerated triggers
+
+Article VII, **Section 2(e)(4), pp. 190-191**, contains the Transaction Restrictions Table. Row letters below are the CBA's identifiers. These are rule categories, not a claim that the game supports them.
+
+| Row | Transaction | Applicable ceiling | Definition or qualification |
+| --- | --- | --- | --- |
+| A | Signs or acquires a player using the Bi-Annual Exception | First apron | Section 6(d), pp. 235-236. Acquisition by assignment is available from 2024-25. |
+| B | Signs or acquires a player using the Non-Taxpayer MLE | First apron | Section 6(e), pp. 236-237; qualifying use can be reclassified under Section 6(f)(5). Acquisition by assignment is available from 2024-25. |
+| C | Acquires a player on a sign-and-trade contract | First apron | Refers to Section 8(e)(1). This row concerns the receiving team. |
+| D | Signs during the regular season a player whose previous contract was terminated during that same regular season and whose salary under that contract exceeded that year's Non-Taxpayer MLE | First apron | The text does not limit this to the signing team's former player or require a negotiated buyout. |
+| E | Acquires a player using an Expanded TPE | First apron | Section 6(j)(1)(iv), p. 241. |
+| F | Acquires a player using a Standard TPE after the applicable regular-season boundary | First apron | Timing windows are specified below; Section 6(j)(1)(i), p. 240, defines the exception. |
+| G | Acquires a player using a Transition TPE | First apron | Historical only: Section 6(j)(1)(iii), p. 241, permits this exception only during 2023-24. |
+| H | Acquires a player using an Aggregated Standard TPE | Second apron | Section 6(j)(1)(ii), p. 240. Aggregates two or more outgoing contracts for simultaneous replacement acquisitions. |
+| I | Pays cash to another team in connection with a trade | Second apron | Refers to Section 8(a); receiving cash alone is not the operation described in this row. |
+| J | Acquires a player using a TPE in respect of a player contract signed and traded under Section 8(e)(1) | Second apron | Refers to TPEs under Section 6(j)(1)(i)-(iv); aggregation is not a condition stated by row J. |
+| K | Signs a player using the Taxpayer MLE | Second apron | Section 6(f), pp. 237-238. |
+
+**Row F timing:** the Standard TPE is used (i) after the end of the regular season in which it arose; or (ii), if it arose between the day after one regular season ends and the day before the next begins, after the end of that following regular season. Neither every use of a Standard TPE nor merely counting outgoing players identifies the applicable trigger.
+
+### Enforcement and salary definition
+
+- **Immediate and continuing ceiling:** Section 2(e)(2)(i), p. 187, prohibits a listed transaction if the resulting Apron Team Salary would exceed its applicable ceiling. Completing the transaction prohibits exceeding that ceiling for the remainder of the salary-cap year. The operative text is "may not, for the remainder of such Salary Cap Year" have Apron Team Salary above that level.
+- **Apron Team Salary is not ordinary payroll:** Section 2(e)(1), pp. 186-187, adjusts Team Salary. Among other adjustments, it adds otherwise excluded performance bonuses and removes specified free-agent amounts, exception amounts, and incomplete-roster cap holds. Its referenced salary rules still need an implementation-level breakdown.
+- **Additional restrictions after Taxpayer MLE use:** Section 2(e)(2)(iii)(B), pp. 188-189, prohibits subsequent transactions in rows A-F during the same salary-cap year from 2024-25 onward. A single stored ceiling cannot encode every eligibility restriction.
+
+### Timing and qualifications that affect the state model
+
+1. **Following-year restrictions:** Section 2(e)(2)(ii), p. 188, applies additional next-year tests to rows E-J between the day after the end of the regular season and the end of its salary-cap year. A qualifying transaction can constrain the subsequent year's Apron Team Salary through the end of that subsequent year.
+2. **Offseason projection assumptions:** Section 2(e)(3), p. 189, assumes team/player options are exercised, early termination options are not exercised, no further transactions occur, and specified higher-max outcomes apply. It assumes next-year cap/apron amounts equal current-year amounts for this test. These assumptions are not a forecast of the ultimately announced thresholds.
+3. **Historical transition:** Section 2(e)(5), p. 191, exempts rows F-J transactions during 2023-24 from imposing their ceiling for the remainder of 2023-24 by virtue of those transactions alone. Do not apply that exemption to later seasons or ignore the separate following-year rules.
+4. **MLE reclassification:** Section 6(f)(5), p. 238, permits qualifying NTMLE signings to be deemed Taxpayer MLE use when another otherwise-permitted transaction causes Apron Team Salary to exceed the first apron. Conditions include no NTMLE acquisitions by assignment, contracts of at most two seasons, and combined first-year salary plus unlikely bonuses within the Taxpayer MLE amount. The remaining NTMLE availability is then extinguished. Therefore, an irrevocable first-apron flag for every initial NTMLE use would be incorrect.
+
+Preserve the triggering operation, effective exception classification, affected salary-cap year(s), and provenance. A derived current ceiling is useful but insufficient as the sole authoritative record. A legitimate MLE reclassification must not erase an independent first-apron restriction.
+
+## Sources inspected and their limitations
+
+| Source | Observation | Limitation |
+| --- | --- | --- |
+| [Basketball Reference contracts summary](https://www.basketball-reference.com/contracts/) | Displays team salary totals and the season salary cap. | The inspected page did not establish individual team hard-cap status. |
+| [Basketball Reference Boston payroll](https://www.basketball-reference.com/contracts/BOS.html) | Displays salaries, options, guarantees, and salary cap; states salaries are updated monthly. | Payroll totals alone cannot establish which hard-cap triggers were used. No explicit team hard-cap status was found on this inspected page; this is not a site-wide absence claim. |
+| [Tailend 2023 CBA reader](https://tailend.app/nba/cba) | Accessible reader identifying Article VII sections on thresholds, exceptions, and trades. | Retrieved content did not provide the full operative clauses needed for a complete trigger audit. Tailend is a third-party reader. |
+| [Reddit explanation supplied by the user](https://www.reddit.com/r/nba/comments/1mnhm6t/hard_cap_i_need_help_with_an_explanation_on_this/) | User supplied comments explaining soft cap, apron triggers, and exceptions. | Research lead, not authoritative rule text; the full thread was not independently retrieved. |
+| [Reddit salary-cap post supplied by the user](https://www.reddit.com/r/nba/comments/1uk2weg/the_nba_announced_today_that_the_salary_cap_for/) | Attempted retrieval returned no usable content. | Its amounts, date, and underlying attribution were not verified. Use the official release above instead. |
+
+CBA references supplied in the discussion: [Article VII, Section 2(a)(1)](https://tailend.app/nba/cba#/VII/2/a/1) and [Article VII, Section 6](https://tailend.app/nba/cba#/VII/6). These links are pointers for further research, not a claim that every relevant clause has been reviewed.
+
+## Existing local behavior
+
+- `src/domain/entities/Trade.ts` represents `hardCapLimit` as an optional number in `TradeTeamSnapshot`.
+- `src/domain/services/TradeValidator.ts` checks the post-trade salary against the limit only when `hardCapLimit !== undefined`. An absent value therefore skips the check; it does not distinguish missing evidence from confirmed absence of a hard cap.
+- `docs/database/modern-contract-trade-validation-report.md`, under "Remaining risks and unverified items", describes the older RPC's missing salary matching, hard-cap, and roster checks. It does not describe the latest boundary: `supabase/migrations/20261110100000_authoritative_trade_boundary.sql:84-87` rejects every player trade with `HARD_CAP_UNKNOWN`. The compatibility RPC delegates to that boundary at lines 108-114. This blocks unsafe player transfers; it does not implement complete financial validation.
+- `src/application/contracts/materializeModernGameContracts.ts` acquires Basketball Reference contract snapshots and the official NBA G League two-way tracker. Its contract snapshot TTL defaults to 24 hours, and it enables stale fallback.
+- `src/application/contracts/getFreshContractSnapshot.ts` permits stale fallback only with a previous cached value, an enabled fallback option, and the recognized `ContractSnapshotSourceUnavailableError`. Missing usable contract snapshots can prevent materialization; they do not automatically create an explicit team hard-cap state.
+
+Contract and roster acquisition does not by itself establish an authoritative team hard-cap feed.
+
+## Static comparison with supported game operations
+
+Mapped on 2026-11-10, from local application code and ordered migration definitions, **not from a deployed database**. "Not found" below means not found in the mapped active transaction paths, not an exhaustive proof of repository-wide absence. No runtime tests were executed for this comparison.
+
+| CBA rows or operation | Observed game capability | Hard-cap coverage or gap |
+| --- | --- | --- |
+| A, B, K: BAE / NTMLE / Taxpayer MLE | Free-agency offers and their resolution exist, but no named-exception selection or consumption was found. | Current legality uses cap room or minimum-salary rules, not these exception classifications or triggers. |
+| C: receiving a sign-and-trade | No dedicated sign-and-trade flow found; all player trade assets are rejected by the latest authoritative RPC. | No mapped sign-and-trade trigger; blocking player trades is not support for this operation. |
+| D: signing a qualifying released player | Releases and subsequent teamless-player offer/signing paths exist. | Release history and salary charges exist, but no assessment of row D's prior-contract salary and same-regular-season timing was found. |
+| E, F, H, J: Expanded / timed Standard / Aggregated / sign-and-trade-related TPE use | Player/pick trade payloads exist; no explicit TPE inventory, classification, or use was found. Player transfers are blocked. | Do not infer a supported TPE merely because the older domain validator calculates salary matching. |
+| G: Transition TPE | No mapped tool; historical 2023-24-only rule. | Not a tool to add for a 2026-27 scenario. |
+| I: sending cash in a trade | Trade command and RPC asset types are player or pick, not cash. | No mapped cash-transfer operation or trigger. |
+| Pick-only trades | Latest RPC supports validated pick transfers. | Ownership and transferability checks exist; this is not a player-salary mutation. |
+| Release | Authoritative release records history, removes roster membership, and preserves salary charges. | Release alone does not activate a listed hard cap; later qualifying signing is a separate assessment. |
+
+### Evidence locators and boundaries
+
+- **Trade entry:** `src/infrastructure/trades/SupabaseTradeTransaction.ts:27-37` calls `execute_trade_authoritative`. The migration `20261110100000_authoritative_trade_boundary.sql:23-24` locks the owned game, lines 53-59 restrict asset types, lines 84-87 reject players, lines 89-100 transfer validated picks, and lines 108-114 route the old RPC name through the new boundary. The parent independently read this migration in full.
+- **Legacy domain preview:** `src/domain/services/TradeValidator.ts:27-52,121-124,128-200` computes matching, roster checks, and an optional numerical hard cap. It does not establish authoritative persisted trigger state or make player transfers executable through the latest RPC.
+- **Offer submission:** `src/infrastructure/freeAgency/SupabaseFreeAgencyRepository.ts:249-260` calls `submit_free_agency_offer`. Its source definition in `supabase/migrations/20261102170000_reconcile_legacy_through_056.sql:3123-3133` checks candidate/offer legality, cap room or minimum salary, roster size, and the supported season, without named MLE/BAE or hard-cap classification.
+- **Actual signing resolution:** the same migration's `advance_simulation_day` wrapper at lines 544-569 invokes the due-market resolver. `resolve_due_free_agency_market` at lines 2520-2559 selects and assesses due offers; `resolve_free_agency_offer` at lines 2561-2605 rechecks legality, creates the runtime contract, assigns the player, accepts the winning offer, and rejects competing pending offers. Both resolution paths lock the owned game; the individual resolver also locks the offer.
+- **Financial assessment:** that migration's lines 726-767 assess cap room/minimum salary and roster size, without a hard-cap or row D check. Lines 1194-1220 compute current-season payroll using canonical, runtime, and legacy contract sources plus release charges. This does not establish CBA Apron Team Salary support.
+- **Season scope:** the financial context rejects game years other than 2026 at line 1167; assessment and submission require 2026-27 at lines 748-750 and 3127-3133. Do not generalize this implementation to arbitrary seasons.
+- **Release history:** the same migration records `game_roster_releases` salary-by-year history at lines 2494-2502; the charge helper sums that history at lines 1345-1353. Charge accounting is not evidence that the later signing applies row D.
+- **Definition precedence:** the mapped later migrations `20261104190000_modern_contract_trade_compatibility.sql` and `20261110100000_authoritative_trade_boundary.sql` change trade behavior; no replacement free-agency submission, release, or resolution definition was found there.
+- **Season rollover:** `src/application/hooks/simulation/useAdvanceRange.ts:58-83` advances the simulation and stops on season completion. That inspected application path does not establish persisted hard-cap carry-forward or reset behavior. Exact rollover handling remains unverified.
+
+### Recommended implementation boundary, not authorization
+
+Do not add all unavailable NBA transaction tools just to implement hard-cap checks. First settle the initial state evidence and missing-data policy, then define persisted trigger provenance and season rules. Any future implementation should gate existing offer **resolution**, not only submission or previews, and preserve the current player-trade rejection until its full salary, roster, matching, and hard-cap proof is available.
+
+Release charges must remain in the effective financial context; hard-cap calculations additionally require the CBA's Apron Team Salary adjustments. Existing locks are useful coordination points, not proof that missing rules have already been implemented.
+
+## Proposed source-independent model
+
+This section records the direction discussed, not authorization to implement it.
+
+Separate three concerns:
+
+1. **Versioned initial dataset:** real/imported or fictional/authored teams, players, contracts, and initial financial conditions, with provenance and an effective date.
+2. **Season rules:** salary floor, salary cap, luxury tax, apron amounts, and versioned transaction rules, independent of team names and data providers.
+3. **Game-owned state:** an initial copy that evolves through the game's authoritative transactions, not through continuous synchronization with real-world transactions.
+
+Represent team hard-cap status per game, team, and season:
+
+| Proposed status | Meaning |
+| --- | --- |
+| `unknown` | Evidence is insufficient to establish the applicable restriction. |
+| `none` | Absence of an active hard cap is established for the initial scenario or current game state. Other financial rules still apply. |
+| `first_apron` | The first-apron ceiling applies, using that season's rules. |
+| `second_apron` | The second-apron ceiling applies, using that season's rules. |
+
+Record the evidence or triggering operation separately from the status. Do not infer status solely from payroll. Where multiple active restrictions apply, enforce the stricter ceiling.
+
+### Authority and transitions
+
+- Initial real-world status needs dated evidence; missing evidence must not silently become `none`.
+- A fictional scenario can explicitly define `none` as its starting condition without making any claim about actual NBA teams.
+- An operation that activates a restriction must validate and persist that restriction in the same authoritative transaction as its financial effects.
+- An ordinary trade, release, or signing does not automatically remove an existing restriction. Lowering payroll does not clear it.
+- A season transition must establish the new season's state according to its rules; neither carrying forward nor clearing restrictions should be an accidental default.
+- A provider outage must not erase an already established game state.
+
+### Availability and fallback
+
+Use a previously validated, versioned local dataset when live acquisition is unavailable, exposing its date and provenance. A cache or snapshot is not a new independent source, and its existence does not establish redistribution rights.
+
+If no usable NBA dataset exists, an explicitly selected fictional scenario can keep the game playable. Never silently replace missing NBA facts with invented values. If initial hard-cap evidence is absent for all teams, a strict real-world scenario could have all teams marked `unknown`; apply the operation-scoped policy below rather than blocking the entire game.
+
+### Approved financial uncertainty policy
+
+Approved by the user on 2026-11-10: missing evidence must block only operations whose financial legality cannot be demonstrated, not the entire game. This approval concerns design, not implementation.
+
+- Keep hard-cap knowledge and salary-calculation completeness separate. A known ceiling does not imply a complete salary calculation; a complete salary calculation does not establish which ceiling applies.
+- Do not substitute `none` for `unknown`, or zero for missing financial inputs.
+- Read-only screens and unaffected operations remain available. A read-only preview must distinguish a proven legal result from unavailable financial proof.
+- Evaluate each mutation against its affected teams, salary-cap years, required inputs, and rules. Reject it when required proof is missing; do not reject unrelated operations merely because some other team's state is unknown.
+- Reassess pending financial actions at actual execution, including free-agency offer resolution, not only at submission or in the UI. Preserve atomicity: a rejected execution must not partially apply a contract, ownership transfer, or trigger.
+- Release is not automatically exempt: demonstrate its relevant financial effects and retained charges before declaring it safe. Existing player-trade rejection remains unchanged by this design approval.
+- Apply the same missing-evidence policy to existing games. This does not authorize a backfill, reset, invented historical state, or a change to any stored game.
+
+The exact user-facing messages and any handling of rejected pending offers remain to be designed. This policy does not require every nonfinancial action to consult an external data source.
+
+## Apron Team Salary input design
+
+This is a design breakdown of the directly verified Section 2(e)(1), pp. 186-187, plus a bounded static input map. It is not an implemented calculator. The starting point is CBA **Team Salary**, not the current application's payroll total. Existing contract and release-charge data can contribute to that starting point but do not prove it is complete.
+
+| CBA item | Adjustment to Team Salary | Reference within Article VII unless stated otherwise |
+| --- | --- | --- |
+| (i) | Add performance bonuses excluded from Salary under the referenced rule. | Section 3(d) |
+| (ii) | Add the specified salary attributable to contracts signed by free agents with zero or one year of service. | Section 2(d)(1)(i)(F) |
+| (iii) | Add applicable grievance-related compensation amounts that could be added under the referenced Team Salary rule. | Section 4(a)(1)(iii), pp. 212-216; see verification below. |
+| (iv) | Subtract the specified Free Agent Amounts. | Section 4(a)(2) |
+| (v) | Add, for each restricted free agent, the greater of salary plus unlikely bonuses in an outstanding qualifying/max qualifying offer or in a First Refusal Exercise Notice. | Section 2(e)(1)(v); Article XI, Section 5(g) |
+| (vi) | Subtract the specified amounts for unsigned first-round picks. | Section 4(a)(4) |
+| (vii) | Add any outstanding Required Tender amount for a first-round pick. | Section 2(e)(1)(vii) |
+| (viii) | Subtract exception amounts deemed included in Team Salary. | Sections 4(a)(7), 6(n)(2) |
+| (ix) | Add salary temporarily excluded for contracts signed using the Second Round Pick Exception from July 1 through July 30. | Section 4(l), p. 225; see verification below. |
+| (x) | Subtract incomplete-roster cap holds added to Team Salary. | Section 4(f) |
+
+These are adjustments to a defined baseline: do not apply them blindly to payroll, add the same bonus twice, or subtract a hold that the baseline never included. Detailed cross-referenced rules still need review before claiming a complete numeric computation.
+
+### Reusable inputs and missing proof
+
+| Input group | Available in inspected models | Missing proof for complete calculation |
+| --- | --- | --- |
+| Contract salary and retained charges | Seasonal canonical salaries, runtime contracts, contract classifications, and release salary-by-year records. | Complete CBA Team Salary derivation and support for every applicable adjustment; nullable or estimated salary is not proof of an exact amount. |
+| Bonuses | Snapshot provenance may contain notes. | `ContractSeasonSnapshot` and `GameContractSeason` have no typed bonus amount/classification fields. Notes alone are not a validated calculation input. |
+| Service-year adjustment | Materialization reads years of experience; a minimum-salary schedule exists. | The inspected contract inputs do not establish the complete referenced adjustment and its applicability for each contract. |
+| Restricted free agents | Offseason ledger and evidence hooks exist. | No typed QO/MQO or First Refusal Exercise Notice amounts were demonstrated in the mapped models. |
+| Picks and tenders | Pick identity, draft year/round, ownership, protection, and transferability. | The mapped pick data does not establish salary holds or outstanding required tender amounts. |
+| Exceptions, exclusions, roster holds | Contract cap-treatment classifications and an aggregate hold input exist. | The mapped fields do not establish the distinct CBA amounts and applicability needed for all adjustments. |
+
+Evidence: `src/domain/contracts/ContractSnapshot.ts:20-41`; `src/domain/contracts/GameContract.ts:23-57`; `src/application/contracts/materializeModernGameContracts.ts:275-295`; `src/infrastructure/repositories/SupabaseOffseasonContractRepository.ts:26-35,74-88`; `src/domain/entities/Trade.ts:13-28`; `src/domain/services/SalaryCapCalculator.ts:7-22`. The parent spot-checked the contract snapshot fields; the rest is a bounded exploration handoff, not a repository-wide absence claim.
+
+### Minimum calculation contract
+
+- Reuse the effective-contract and retained-charge sources. For each applicable team and salary-cap year, derive a baseline and an explicit breakdown of adjustments with evidence. Financial ownership comes from the game, not the latest external roster.
+- Distinguish complete from incomplete calculation. When required amounts or applicability cannot be established, expose the missing inputs; do not present a partial subtotal as a legally valid Apron Team Salary.
+- Zero and not-applicable require evidence. In an authored fictional scenario, explicit absence of bonuses or tenders can supply that evidence; absence of an imported field cannot.
+- Keep threshold provenance separate from salary completeness. `getSalaryCapThresholds` currently projects all thresholds by 10% annually from 2024 (`src/domain/constants/nba-rules.ts:48-60`); that policy is not a season-specific official dataset. Real-world published values and simulation projections must be identified separately.
+- Preserve the salary-cap year explicitly. The inspected `enter_offseason` function only records entry for the current season (`supabase/migrations/20261102170000_reconcile_legacy_through_056.sql:878-904`); it does not increment the year or reset financial restrictions. A future rollover must account for the following-year restrictions described above.
+
+## Referenced salary rules: additional primary-source findings
+
+The official PDF was retrieved again for this pass, and the following findings were checked against its extracted text. Page numbers remain printed pages. These explain the previously unresolved references; they do not establish that the application has the necessary source data.
+
+| Rule | Verified meaning | Calculation implication |
+| --- | --- | --- |
+| VII Section 4(a)(1), pp. 211-212 | Team Salary includes active-player salaries and applicable former-player salaries. Waived-contract salary remains included, with allocation changed when the team elects a qualifying written stretch treatment. | Retained release charges are relevant, but their existence does not prove CBA-compliant allocation or a complete baseline. Preserve the allocation and its basis by salary-cap year. |
+| VII Section 4(a)(1)(iii), pp. 212-216 | Compensation grievance awards and settlements affect Team Salary. The current/future-year dispute rule initially includes 50% of the disputed amount and adjusts after resolution; other timing cases are separately addressed. | Apron adjustment (iii) is not another ordinary release charge. Need dispute amounts, affected seasons, resolution, and amounts already included. Do not apply a blanket 50% formula to every case. |
+| VII Section 2(d)(1)(i)(F), pp. 180-181 | For the specified zero-/one-service-year free-agent Standard NBA Contracts, the relevant amount is the positive difference between the two-year-service minimum and attributed contract salary. Termination can require proration; specified Two-Way conversions and 10-day transitions are included. | Service years alone do not establish the adjustment. Contract origin, salary attribution, applicable minimum scale, dates, and conversion/termination facts are required. |
+| VII Section 3(d), pp. 207-208 | Performance-bonus inclusion in Salary generally depends on the prior-season performance test, with exceptions and dispute procedures. | Apron Salary adds excluded performance bonuses, not bonuses already included in the baseline. A contract salary plus unclassified notes does not prove the correct total. |
+| VII Section 4(a)(2)-(8), pp. 216-217 | Team Salary includes specified free-agent/QO/notice amounts, outstanding offer sheets, unsigned first-round pick amounts, incomplete-roster holds, exception amounts, and other specified additions. | Baseline components must be identified before apron-specific deductions or replacements. A roster payroll sum is not a substitute. |
+| VII Section 4(d), pp. 217-219 | Free Agent Amounts vary by veteran free-agent classification, prior salary and other conditions, with minimum/maximum constraints. | The apron deduction cannot be computed from an undifferentiated count of free agents or from a single arbitrary hold. |
+| VII Section 4(e)(1), p. 219 | An unsigned first-round pick ordinarily enters Team Salary at 120% of the applicable Rookie Scale Amount, subject to the following exceptions. | Apron adjustment (vi) removes the specified unsigned-pick amount; (vii) adds the outstanding Required Tender amount. A future tradeable draft pick is not itself evidence of either amount. |
+| VII Section 4(f), pp. 220-221 | Between July 1 and the day before the regular season begins, a qualifying count below 12 creates an incomplete-roster hold: missing places times the zero-service-year minimum. Its player count includes specified free agents, offer sheets, and unsigned first-round picks. | This is not simply 12 minus active roster size. Apron adjustment (x) removes this hold when it was included in the baseline. |
+| VII Section 4(l), p. 225 | From July 1 through July 30, a contract signed pursuant to the Second Round Pick Exception is excluded from Team Salary until July 31, subject to Article II, Section 15. | Apron adjustment (ix) adds back that temporarily excluded salary. This is a date- and exception-specific adjustment, not a general salary exclusion. |
+
+The researcher also identified a legacy-contract qualification in VII Section 3(j), p. 211. Its scope must be checked when classifying contracts entered before the CBA effective date; do not infer the applicable salary-determination rule from the calculation season alone.
+
+### Consequence for real-world input evidence
+
+Two distinct evidence packages are needed:
+
+1. **Restriction evidence:** team, salary-cap year, explicit status, trigger and date, including any following-year effect or permitted MLE reclassification. A restricted team's known trigger does not prove that every other independent trigger is absent.
+2. **Amount evidence:** season/team-scoped salary components, applicable adjustments, and their completeness. A source that lists first-/second-apron status does not necessarily supply complete Apron Team Salary.
+
+For a real-world exact calculation, missing bonus, grievance, tender, offer, or applicability data is not automatically zero. For an authored fictional dataset, those components may be explicitly defined as absent, provided the scenario is identified as authored rather than factual NBA history.
+
+## Initial team evidence: source comparison
+
+Public pages were inspected on **2026-11-10**. The date of retrieval is not an assertion that their contents describe a particular earlier simulation date. No team-status dataset was imported or accepted as authoritative.
+
+| Candidate | Observed evidence | Acceptance limitation |
+| --- | --- | --- |
+| [Hoops Rumors 2026/27 tracker](https://www.hoopsrumors.com/2026/07/nba-teams-with-hard-caps-for-2026-27.html) | Explicitly lists all 30 teams: 21 first-apron, 4 second-apron, and 5 under an explicit "No hard cap" heading. Lists triggering operations for restricted teams and the official 2026-27 apron amounts. Parent read the page directly. | A secondary live tracker, not a frozen historical record. It displays July 10, 2026 publication metadata while saying it will be updated throughout the year; comments show corrections after publication. No complete transaction-by-transaction corroboration was performed. |
+| [Sports Business Classroom 2026-27 tracker](https://sportsbusinessclassroom.com/nba-2026-27-apron-tracker/) | Researcher observed 19 first-apron, 9 second-apron, and 2 unrestricted teams. Its body used the prior season's apron amounts, $195.945m/$207.824m, despite the 2026-27 heading. | Material disagreement with Hoops Rumors and an internal season/amount inconsistency. Not accepted as corroboration until reconciled. |
+| [Spotrac 2026-27 apron tracker](https://www.spotrac.com/nba/apron/_/year/2026) | Provides apron/payroll context. | Retrieved text did not establish auditable per-team triggering operations. Missing or blank rendered indicators are not proof of `none`. |
+| [NBA official 2026-27 announcement](https://www.nba.com/news/nba-salary-cap-2026-27-season) | Authoritative league thresholds, effective July 1, 2026. | Does not establish individual teams' active restrictions. |
+
+Examples of the source conflict: Hoops Rumors lists Boston at the first apron and Houston at the second, while the inspected SBC classification differs. These are conflicting source claims, not accepted team states. Payroll below an apron cannot resolve the disagreement.
+
+### User-selected start scenarios
+
+Product direction confirmed on 2026-11-10: offer both "Comenzar hoy" and "Comenzar al inicio de la temporada". The selected mode determines the initial scenario; there is no single universal cutoff for all new games. This is design approval, not implementation authorization.
+
+| Requested mode | Scenario requirement | Financial evidence implication |
+| --- | --- | --- |
+| "Comenzar al inicio de la temporada" | A fixed, versioned season-start snapshot. The precise boundary/date for each season still needs definition. | Use rosters, contracts, retained charges, and restrictions effective at that boundary, including relevant prior-year carry-forward. Never attach a current tracker list to an earlier calendar date. |
+| "Comenzar hoy" | A snapshot representing the selected current real-world date, with an explicit cutoff and data freshness. | Financial restrictions and salary components must reflect operations through that cutoff. A last-known older snapshot is not silently equivalent to today's data. |
+
+Both modes use the same rules and game-owned transaction engine. Once initialized, a save diverges from the real world; subsequent provider updates must not rewrite it. A fictional scenario supplies authored rather than imported initial facts; it is not a hidden fallback for missing NBA history.
+
+The design should identify the selected mode, scenario version, simulation date, and actual evidence cutoff separately. If no suitable snapshot exists, retain the approved operation-scoped uncertainty policy where usable game data exists, and report any scenario-level unavailability explicitly. Do not promise exact current or historical coverage from the mere presence of a date selector.
+
+**Current UI boundary:** `src/components/games/CreateGameForm.tsx:86-92` passes the selected era's fixed `initialSimulationDate`; its era selector is at lines 141-175. `src/application/hooks/games/useCreateGame.ts:71-75` refreshes modern rosters without a start-mode argument. These inspected paths do not implement the two requested scenario modes. A changed calendar date alone would not supply a historical or current snapshot.
+
+Nonfinancial scenario alignment (for example, completed games and standings for a start-today scenario) is a related design dependency, not something implemented or verified by this hard-cap investigation.
+
+### Proposed evidence admission rules
+
+- Establish the effective date/cutoff for the selected start mode and match roster, contracts, restrictions, and financial components to that same scenario. `useCreateGame` accepts `simulationDate` and refreshes modern rosters (`src/application/hooks/games/useCreateGame.ts:9-15,60-75`); this alone does not establish alignment of all imported inputs.
+- Store source URL, retrieval date, effective date, season, team, supported assertion, and corroboration/conflict status. A publication timestamp is not a substitute for an effective date.
+- Use secondary trackers as leads for a manually checked initial snapshot. Confirm triggering operations and relevant exception treatment; a signing announcement alone may not establish which exception was used.
+- Accept `none` only when evidence explicitly supports absence of applicable restrictions at the scenario cutoff, including relevant prior-year transactions. Do not infer it from omission or a salary total.
+- Mark unresolved team assertions `unknown`; mark unresolved salary calculations incomplete. Preserve each uncertainty independently under the approved operation-scoped policy.
+- Do not silently choose one tracker by majority vote, current payroll, or apparent freshness. Do not use a live current list as a past-season-start snapshot without dated corroboration.
+- Once initialized, a game evolves from its saved state. Later real-world transactions or tracker corrections are not automatically applied to that game's history. A provider outage does not erase accepted data.
+
+**Current conclusion:** official league thresholds and the CBA rules have primary-source evidence. Initial per-team status and exact salary inputs still lack an accepted, date-aligned complete dataset. The inspected trackers improve coverage but do not close that gap.
+
+## Approved playable-realism boundary and session handoff
+
+Confirmed by the user on 2026-11-10. The objective is a coherent, playable approximation of the NBA, not complete real-world equivalence. Separate imported facts, explicitly authored scenario assumptions, and the game's rules. The same rules should support real and fictional teams; complete NBA data is not a prerequisite for authoring a fictional scenario.
+
+- **Unreported bonuses are absent in the game scenario.** Their absence must not block operations. This is an approved simulation assumption, not evidence that the actual contracts contain no bonuses. Preserve known bonuses and avoid counting amounts already included in published salary twice.
+- This narrowly qualifies the earlier missing-input policy for unreported bonuses. It does not authorize inventing hard-cap status, treating other unknown financial amounts as zero, or resolving conflicting trackers arbitrarily. Other consequential missing financial proof remains subject to the operation-scoped policy.
+- Non-crucial details may be completed through disclosed, consistent scenario assumptions. Specific defaults beyond unreported bonuses remain to be designed; this is not blanket permission to fabricate NBA history.
+- Keep a coherent effective cutoff and freeze the selected scenario version when creating a game. Later real-world movements do not update existing saves.
+
+### Basketball Reference follow-up
+
+Public pages inspected on 2026-11-10:
+
+| Source | Verified contribution | Remaining limitation |
+| --- | --- | --- |
+| [Boston payroll](https://www.basketball-reference.com/contracts/BOS.html) | Seasonal salaries, options and guarantees; explicitly says salaries are updated monthly. | Site-wide last-update metadata does not establish financial coverage through a daily cutoff. |
+| [Boston 2026-27 transactions](https://www.basketball-reference.com/teams/BOS/2027_transactions.html) | Dated moves; explicitly says current-season transactions are updated regularly, but not daily. Robinson's July 6 signing is listed as multiyear. | That entry does not identify NTMLE use; a matching salary amount is not proof of exception use. No all-team completeness audit was performed. |
+| [Boston schedule/results](https://www.basketball-reference.com/teams/BOS/2027_games.html) | Dates, ET start times, scores, cumulative records and NBA Cup markers. | Exact cutoff treatment, postponements and league-wide coverage still need validation. |
+| [Salary cap history](https://www.basketball-reference.com/contracts/salary-cap-history.html) | User-provided screenshot shows Year, Salary Cap and inflation-adjusted 2025 Dollars; 1998-99 nominal cap is $30,000,000. | Automated text retrieval did not expose table rows. Use nominal Salary Cap, not inflation-adjusted dollars; historical apron and team restrictions need separate evidence. |
+| [1998-99 season](https://www.basketball-reference.com/leagues/NBA_1999.html) | User supplied this destination from the history table. | Not independently inspected in this follow-up; a season page alone does not establish an opening-day snapshot. |
+| [Historical standings](https://www.basketball-reference.com/friv/standings.fcgi) | Linked by Basketball Reference as standings for historical dates. | Tool output and whether the selected day is inclusive remain unverified. |
+
+The [official October 20 opening-rosters article](https://www.nba.com/news/nba-rosters-set-for-2026-27-regular-season) was read directly: it links live team roster pages rather than embedding frozen player lists. Its publication date does not establish historical roster content.
+
+### Next-session entry point
+
+Continue design and public-source research only; no implementation, schema changes, existing-game backfill, or TEST access is authorized.
+
+1. Validate historical standings date semantics and roster reconstruction coverage in Basketball Reference. Treat it as a candidate main source, not proof of every financial fact.
+2. Settle the proposed time boundary: New York midnight on the official opening date, or New York midnight on the creation date for start-today. These exact boundaries remain proposals, not approved product requirements. Resolve games in progress at midnight without importing post-cutoff results into a midnight state or simulating already-started real games again.
+3. Design freshness and availability per component, allowing disclosed approximation without mixing effective dates. Reconcile results and standings from the same included games.
+4. Reconcile hard-cap claims through dated completed transactions and exception evidence. SBC's retrieved 2026-27 page uses prior-season apron amounts; exclude it as a coherent 2026-27 dataset, but do not infer that Hoops Rumors is thereby correct. All 30 initial team states remain unvalidated.
+5. Define any further authored simplifications explicitly, then finish remaining financial rules and source-rights review proportionately to the game's scope.
+
+## Open work before implementation
+
+- Complete implementation-level salary/eligibility design and resolve the remaining season-rollover evidence gap; the static operation mapping above is not runtime verification.
+- Finish transaction-specific computation cases and exception eligibility, including grievance allocation variants, contract-era classification, and referenced exemptions. Sections 4(a)(1)(iii) and 4(l) now have identified primary-source meanings, but this remains short of a complete numeric validator.
+- Define each season's start boundary and start-today freshness/availability policy, then validate dated datasets for the selected mode, reconciling the tracker conflict above. Both start modes are requested; neither candidate dataset has yet been accepted. Do not infer `none` from omission in a list.
+- Define user-facing diagnostics and pending-offer outcomes for the approved operation-scoped uncertainty policy; any existing-game backfill still requires a separate design.
+- Define the authored fictional dataset and offline fallback scope separately from NBA imports.
+- Review source access and redistribution terms before publishing real-world datasets or assets.
+
+No code, schema, or remote TEST operation was performed for this evidence record. Saving this document does not authorize implementation or HTTP testing.
