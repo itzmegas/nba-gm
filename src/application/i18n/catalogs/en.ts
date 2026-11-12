@@ -620,6 +620,12 @@ export const en = {
     createNewSimulation: "Create new simulation",
     selectFranchiseDescription: "Select a franchise and start your career as a General Manager.",
     configuration: "Game configuration",
+    settings: "Settings",
+    startDate: "Start date",
+    startToday: "Today",
+    startSeason: "Season start",
+    startCutoffDescription:
+      "Both modes start at midnight in New York. Today includes only games completed before that cutoff.",
     optionalName: "Choose an optional name to identify this simulation universe.",
     gameNamePlaceholder: "My NBA game",
     startEra: "Starting era",

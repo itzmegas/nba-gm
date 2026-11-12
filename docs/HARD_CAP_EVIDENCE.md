@@ -24,6 +24,14 @@ This is Boston-only approval, not validation of all 30 teams, resolution of conf
 
 Implementation was authorized subsequently. Track scope and observed checks in `odd/tasks/boston-financial-core.md`. No remote database application is authorized by this document.
 
+### Approved modern start settings and daily cutoff
+
+The new-game page will expose a Settings section for the modern era, offering only **Today** and **Season start**. Fantasy draft and disabling the salary cap remain future ideas, not this implementation's scope. Historical-era creation must retain its existing behavior.
+
+The user approved **00:00 America/New_York** as the Today cutoff: use New York's local calendar date at creation time, with that date's actual midnight UTC offset. Include only games completed before the cutoff; a game still in progress is not a completed result, even if its scheduled date precedes the cutoff. Season start retains the approved official opening-date midnight boundary. Neither mode authorizes updating existing saves.
+
+Implementation status: the isolated selector and cutoff calculation are tested, but are not connected to game creation. Current modern creation fetches live rosters; its schedule is synthetic, not an imported NBA schedule/results snapshot. Dated modern scenarios and actual-results initialization are not available in the mapped paths. Do not present changing `simulationDate` alone as successful implementation of these start modes.
+
 ## Verified annual thresholds
 
 The NBA's official release, dated June 30, 2026, announces the following **2026-27** amounts, effective July 1, 2026:

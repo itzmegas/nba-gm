@@ -641,6 +641,12 @@ export const es: Messages = {
     selectFranchiseDescription:
       "Seleccioná la franquicia y empezá tu carrera como General Manager.",
     configuration: "Configuración de partida",
+    settings: "Configuración",
+    startDate: "Fecha de inicio",
+    startToday: "Hoy",
+    startSeason: "Inicio de temporada",
+    startCutoffDescription:
+      "Ambas opciones comienzan a medianoche en Nueva York. Hoy incluye solo los partidos finalizados antes de ese corte.",
     optionalName: "Elegí un nombre opcional para identificar este universo de simulación.",
     gameNamePlaceholder: "Mi partida NBA",
     startEra: "Era de inicio",
