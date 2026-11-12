@@ -1,9 +1,28 @@
 # Hard cap evidence and design implications
 
-Research dates: 2026-11-10–2026-11-12. Latest handoff: individual guarantees are now reported; preserve the evidence and pause further research pending the user's next direction. Complete opening-cutoff financial certification remains unresolved.
+Research dates: 2026-11-10–2026-11-12. Latest decision: close Boston research for now and proceed with the approved playable approximation below. Complete opening-cutoff financial certification remains unresolved; it is not required to author this approximate scenario.
 Status: Evidence record and design proposal. The CBA trigger table was verified directly; this is not an implementation specification or a complete CBA audit.
 
 NBA hard caps are triggered team restrictions, not universal spending ceilings. Keep annual league thresholds separate from each team's hard-cap status. A game's financial state must remain usable without a live external provider.
+
+## Approved Boston playable approximation — November 12
+
+The user accepted closing this research for now and implementing a coherent playable scenario. This decision supersedes the earlier research handoff and missing-input policy only for the bounded initial assumptions below; historical findings remain evidence, not a certified complete NBA ledger.
+
+| Initial Boston 2026-27 scenario component | Treatment |
+| --- | --- |
+| Hard-cap ceiling | First apron: $209,015,000, supported by the dated reporting below. |
+| Supported 14 standard salary rows | $198,722,406; retain individual amounts, not a permanently fixed payroll total. |
+| Unproven minor residual charges from initial cuts | Omit as an explicit game-scenario assumption, not a factual finding of zero NBA liability. |
+| Known salaries, bonuses and retained charges | Preserve and count once according to their applicable treatment. Known Exhibit 10 affiliation bonuses remain excluded as explained below. |
+| Missing salary for an active standard contract | Never silently replace with zero; excluding an active player's salary would grant free roster value. |
+| Obligations generated after initialization | Preserve under the game's rules; the initial omission policy does not erase guaranteed salary when a player is released inside the game. |
+
+The resulting initial threshold difference is **approximately $10,292,594**, not certified NBA legal spending room and not ordinary salary-cap room. Signings remain subject to the game's other applicable eligibility rules. This approval closes exhaustive research of minor initial residual charges; investigate material missing salary amounts rather than ranking players by fame. Future evidence may produce a new scenario version without silently rewriting existing saves.
+
+This is Boston-only approval, not validation of all 30 teams, resolution of conflicting team trackers, or permission to infer an unrestricted status elsewhere. The approved opening boundary remains October 20 at midnight America/New_York. The existing October 15/live-refresh creation path is not that historical snapshot. Bind the approximation to an explicit initial scenario before enforcing it in new games; do not backfill existing games.
+
+Implementation was authorized subsequently. Track scope and observed checks in `odd/tasks/boston-financial-core.md`. No remote database application is authorized by this document.
 
 ## Verified annual thresholds
 
