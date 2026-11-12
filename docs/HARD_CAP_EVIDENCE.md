@@ -1,6 +1,6 @@
 # Hard cap evidence and design implications
 
-Research date: 2026-11-10.
+Research dates: 2026-11-10–2026-11-12. Latest handoff: individual guarantees are now reported; preserve the evidence and pause further research pending the user's next direction. Complete opening-cutoff financial certification remains unresolved.
 Status: Evidence record and design proposal. The CBA trigger table was verified directly; this is not an implementation specification or a complete CBA audit.
 
 NBA hard caps are triggered team restrictions, not universal spending ceilings. Keep annual league thresholds separate from each team's hard-cap status. A game's financial state must remain usable without a live external provider.
@@ -275,7 +275,7 @@ Product direction confirmed on 2026-11-10: offer both "Comenzar hoy" and "Comenz
 
 | Requested mode | Scenario requirement | Financial evidence implication |
 | --- | --- | --- |
-| "Comenzar al inicio de la temporada" | A fixed, versioned season-start snapshot. The precise boundary/date for each season still needs definition. | Use rosters, contracts, retained charges, and restrictions effective at that boundary, including relevant prior-year carry-forward. Never attach a current tracker list to an earlier calendar date. |
+| "Comenzar al inicio de la temporada" | A fixed, versioned snapshot at 00:00 America/New_York on each season's official NBA opening date, approved on 2026-11-11. For 2026-27: October 20, not October 15 or the team's first game. | Use rosters, contracts, retained charges, and restrictions effective at that boundary, including relevant prior-year carry-forward. Never attach a current tracker list to an earlier calendar date. |
 | "Comenzar hoy" | A snapshot representing the selected current real-world date, with an explicit cutoff and data freshness. | Financial restrictions and salary components must reflect operations through that cutoff. A last-known older snapshot is not silently equivalent to today's data. |
 
 Both modes use the same rules and game-owned transaction engine. Once initialized, a save diverges from the real world; subsequent provider updates must not rewrite it. A fictional scenario supplies authored rather than imported initial facts; it is not a hidden fallback for missing NBA history.
@@ -322,23 +322,103 @@ Public pages inspected on 2026-11-10:
 
 The [official October 20 opening-rosters article](https://www.nba.com/news/nba-rosters-set-for-2026-27-regular-season) was read directly: it links live team roster pages rather than embedding frozen player lists. Its publication date does not establish historical roster content.
 
-### Next-session entry point
+## Boston pilot: opening-cutoff reconciliation
 
-Continue design and public-source research only; no implementation, schema changes, existing-game backfill, or TEST access is authorized.
+Research observed on **2026-11-11–2026-11-12**. The approved cutoff is **2026-10-20T00:00:00-04:00 (2026-10-20T04:00:00Z)**. Use the official league opening date separately for each season. The exact cutoff for "Comenzar hoy" remains unapproved. These decisions supersede earlier proposals in this record; they do not authorize implementation.
 
-1. Validate historical standings date semantics and roster reconstruction coverage in Basketball Reference. Treat it as a candidate main source, not proof of every financial fact.
-2. Settle the proposed time boundary: New York midnight on the official opening date, or New York midnight on the creation date for start-today. These exact boundaries remain proposals, not approved product requirements. Resolve games in progress at midnight without importing post-cutoff results into a midnight state or simulating already-started real games again.
-3. Design freshness and availability per component, allowing disclosed approximation without mixing effective dates. Reconcile results and standings from the same included games.
-4. Reconcile hard-cap claims through dated completed transactions and exception evidence. SBC's retrieved 2026-27 page uses prior-season apron amounts; exclude it as a coherent 2026-27 dataset, but do not infer that Hoops Rumors is thereby correct. All 30 initial team states remain unvalidated.
-5. Define any further authored simplifications explicitly, then finish remaining financial rules and source-rights review proportionately to the game's scope.
+**Outcome:** historical evidence supports the candidate roster and the 14 standard salary rows. First-apron restriction evidence includes reporting outside Hoops Rumors. The November 12 follow-up found individual reports of zero guarantees for all six camp cuts, expired legacy stretch allocations, and an explicit CBA exclusion for Exhibit 10 affiliation bonuses. A complete cutoff-specific retained-charge ledger and Apron Team Salary are still not established; the reported guarantees are not a blanket zero-charge assumption.
+
+### Existing pilot and acquisition provenance
+
+Prior explicitly authorized TEST observations, retained in Engram #3339, concern game `1e8ee51f-4d50-4a81-abed-b1df88b83756`: active Boston modern game, created November 11, with simulation date October 15. Its roster matched 14 standard players plus three two-way players; its 14 standard salary rows totaled **$198,722,406**. Salary snapshots were observed November 11, not October 20. The pilot remains unchanged; its calendar date is not evidence of historical coverage.
+
+The creation flow uses current ESPN rosters, Basketball Reference contract snapshots, and NBA G League two-way classification, not `nba_api` roster acquisition (Engram #3328 and #3339). Williams, Mitchell, and Carter are intentionally excluded from the standard-salary subtotal; missing standard agreement rows for those players are not three missing standard contracts. This research pass did not access TEST.
+
+### Evidence matrix
+
+Publication, archive capture, observation, and effective dates are distinct. An archived page preserves a source version, not an independent financial source or automatic proof of continuity through the cutoff.
+
+| Component | Evidence and source | Date and scope | Conflict or missing proof | Verdict |
+| --- | --- | --- | --- | --- |
+| Opening roster | [October 20 SI season guide](https://www.si.com/nba/celtics/onsi/2026-27-boston-celtics-season-guide-roster-schedule-storylines-and-key-dates-01m5cry2stzs), dated [B-Ref transactions](https://www.basketball-reference.com/teams/BOS/2027_transactions.html), and prior official two-way evidence. | Opening-day secondary list; transaction log observed November 11. | NBA's opening-rosters article links live roster pages. Publication on October 20 alone does not prove midnight state; the log is updated regularly, not daily. | Candidate 14 standard + 3 two-way composition supported; exact-cutoff completeness not independently certified. |
+| Williams / Mitchell | B-Ref records Amari Williams's two-way signing July 1 and Dillon Mitchell's August 5; prior NBA G League classification agrees. | Both dated before cutoff. | Current classification alone would not prove history; dated signings supply historical support. | Two-way classification supported at cutoff. |
+| Carter / camp cuts | B-Ref dates Carter's two-way signing and four cuts October 17; [official Celtics release](https://celtics.com/news/press-release-20261018-celtics-convert-devin-carter-to-two-way-contract) announces conversion and cuts of DeVries, McGlothan, Gray, and Uzan, not Grill. | Official publication October 18, 09:00 EDT, says "today"; re-read November 12. Carter previously signed an Exhibit 10 on September 14. | Exact effective day October 17/18 unresolved, but both precede cutoff. An earlier conversational summary incorrectly included Grill among these cuts. | Carter's pre-cutoff two-way status supported; preserve date discrepancy and corrected cut identities. |
+| Standard salary rows | [B-Ref archive](https://web.archive.org/web/20260902075646/https://www.basketball-reference.com/contracts/BOS.html) contains the same 14 current-season amounts as the observed November table. | Archive capture September 2, 07:56:46 UTC; not a cutoff-day ledger. | Continuity and applicable financial adjustments still require reconciliation. | Historical support for all 14 amounts, not full Apron Team Salary. |
+| Historical subtotal | [Celtics Crew article](https://web.archive.org/web/20261010155839/https://www.celticscrew.com/news/tatum-george-cap-sheet) reports $198,722,406. | Published October 7; captured October 10, 15:58:39 UTC. | Secondary source without itemized retained charges or demonstrated independent salary sourcing. | Matching subtotal existed before cutoff, not merely in November observations. |
+| George trade bonus | [Original Bobby Marks report](https://x.com/BobbyMarks42/status/2074223755321053584): "Paul George waived his $3.9M trade bonus, sources tell ESPN. His cap hit in Boston remains at $54.1M and $56.6M (P)". [Boston.com](https://www.boston.com/sports/boston-celtics/2026/07/06/celtics-paul-george-trade-bonus-report-comments/) and [B/R](https://bleacherreport.com/articles/25451826-paul-george-reportedly-waives-trade-bonus-updated-celtics-salary-cap-after-jaylen-brown-split) cite that report. | Report and articles dated July 6; original post retrieved November 11. Precise waiver execution time not established. | All repetitions share Marks as the source, not independent confirmations. No contract instrument inspected. Exact $54,126,380 comes from B-Ref; Marks rounds to $54.1m. | Waiver provenance closed at reported-fact level; not an authored zero or reliance on the unreported-bonus assumption. |
+| Retained / stretched charges | [July 9 Banton report](https://www.hoopsrumors.com/2026/07/celtics-to-waive-dalano-banton.html) describes non-guaranteed salary and no cap hit. Current [Capsheets](https://www.capsheets.com/boston-celtics-cap-sheet-2026-2027-season/) displays "Dead Money" as a dash. The November 12 matrices below add individual guarantee reports and legacy allocation end dates. | Banton report concerns his July 9 waiver; Capsheets observed November 11 with no demonstrated cutoff-specific timestamp. New individual records observed November 12. | Banton evidence covers him only. Individual guarantees now have reported figures, but no complete cutoff-specific charge ledger was obtained. | Improved individual evidence; no global zero accepted. |
+| Hard-cap trigger | [HR tracker](https://www.hoopsrumors.com/2026/07/nba-teams-with-hard-caps-for-2026-27.html) explicitly identifies Robinson's NTMLE. [CLNS / Bobby Manning](https://www.clnsmedia.com/celtics-sign-mitchell-robinson-and-mike-conley-to-begin-free-agency/) reports MLE, a three-year deal starting above $15m, and first-apron hard cap. [Archived Crew explanation](https://web.archive.org/web/20261010155830/https://www.celticscrew.com/news/hard-cap-explained) explicitly identifies full NTMLE. | CLNS published July 1 (reported agreement, not formal execution); Crew published October 6, captured October 10. [NBA signing coverage](https://www.nba.com/news/mitchell-robinson-celtics-free-agency-2026) confirms official July 6 signing and reported three-year deal. | NBA does not identify exception use. Separate publications do not prove independent underlying reporting. HR is live despite July 10 publication date; prior SBC conflict is not resolved by majority vote. | First-apron restriction supported by dated secondary reporting plus official signing evidence; not a primary exception-accounting record. |
+| Apron Team Salary / room | Official first apron $209,015,000; current Capsheets lists salaries and Apron Total at $198,722,406. | League threshold effective July 1; live team table observed November 11. | Retained charges and applicable adjustments at cutoff remain unclosed. Capsheets also lists $9,269,074 of free-agent holds separately; do not blindly add them to apron salary. | Exact cutoff Apron Team Salary unavailable. $10,292,594 is an arithmetic difference, not proven legal spending room. |
+| Cutoff-to-observation changes | Reviewed transaction log ends with October 17 entries. | Comparison interval October 20–November 11. | No complete dated daily financial ledger; absence of later entries is not proof of no changes. | No identified standard-row change, but complete historical continuity remains unproven. |
+
+Candidate standard roster: Jayson Tatum, Paul George, Derrick White, Mitchell Robinson, Sam Hauser, Payton Pritchard, Ron Harper Jr., Chris Cenac Jr., Hugo González, Luka Garza, Baylor Scheierman, Neemias Queta, Mike Conley, and Jordan Walsh. Two-way group: Amari Williams, Dillon Mitchell, and Devin Carter.
+
+The September B-Ref archive totals **$201,437,932**, including Uzan and DeVries at **$1,357,763 each**. Subtracting those two rows yields $198,722,406. This reconciles the table difference, not their retained charges after waiver. Its italic notation means **not fully guaranteed**, not necessarily zero guaranteed salary.
+
+Do not use the Crew articles' simplified payroll or training-camp explanations as CBA accounting authority. The Yahoo/MassLive July 1 Robinson article exposed metadata but not usable body text; its search snippet was not admitted as full-text corroboration. Public Spotrac retrieval did not establish a complete cutoff-specific ledger.
+
+### November 12 follow-up: reported camp-cut guarantees
+
+All SalarySwish records below were observed on **2026-11-12**. Their publication/update dates are unspecified; no historical archive capture was established. These are explicit retrospective contract records, not current team-total matches. Each reports **Guaranteed: $0 (0%)**. That supports an individual reported guarantee, not certification of every possible retained charge at the cutoff.
+
+| Player / source | Effective dates reported | Amount or applicability | Conflicts / missing proof | Verdict |
+| --- | --- | --- | --- | --- |
+| [Tucker DeVries](https://www.salaryswish.com/players/tucker-devries) | Waived October 17; January 10 guarantee condition marked unmet. | $0 guaranteed. | No dated historical guarantee schedule or contract instrument retrieved. | Individual zero guarantee reported; total retained charge not certified. |
+| [Milos Uzan](https://www.salaryswish.com/players/milos-uzan) | Signed July 14; waived October 17; [transaction history](https://www.salaryswish.com/transactions/players/milos-uzan) records clearance October 19. | $1,357,763 contract; $0 guaranteed; January 10 condition unmet; $91,000 Exhibit 10 bonus listed. Parent directly read the player record. | [Houston Athletics, June 25](https://uhcougars.com/news/2026/6/25/mens-basketball-milos-uzan-signs-with-boston-celtics), describes a non-guaranteed Exhibit 10 deal. An earlier announcement does not establish the execution date. No preserved historical terms retrieved. | Stronger individual reporting, not a complete cutoff accounting record. |
+| [Hayden Gray](https://www.salaryswish.com/players/hayden-gray) | Waived October 17; January 10 condition unmet. | $0 guaranteed; displayed salary/cap figures around $2,185,116; page reports one year of service. | Salary/service fields not independently reconciled; no historical guarantee instrument. | Record the reported guarantee separately from unverified salary fields. |
+| [Gabe McGlothan](https://www.salaryswish.com/players/gabe-mcglothan) | Waived October 17; January 10 condition unmet. | $0 guaranteed; page reports one year of service. | Contract value $2,185,128 differs from cap hit $2,185,116; no historical guarantee instrument. | Zero guarantee reported; salary-field discrepancy unresolved. |
+| [Caleb Grill](https://www.salaryswish.com/players/caleb-grill) | Player page: waived September 15. [Transaction history](https://www.salaryswish.com/transactions/players/caleb-grill): signed/placed on waivers September 14, cleared September 16. | $0 guaranteed. | Internal date inconsistency; no second Boston contract found. Neither the official October release nor the October 17 report lists him among those four cuts. | Zero guarantee reported; do not claim an exact waiver date from this record. |
+| [Hank Morgan](https://www.salaryswish.com/players/hank-morgan) | Signed and waived September 11. | $0 guaranteed. | [Hoops Rumors, September 11](https://www.hoopsrumors.com/2026/09/celtics-sign-waive-hank-morgan.html), calls Exhibit 10 status "almost certainly", not confirmed individual terms. | Zero guarantee reported; independent historical terms unavailable. |
+
+The [October 17 Hoops Rumors report](https://www.hoopsrumors.com/2026/10/celtics-waive-four-camp-invitees.html) names Gray, Uzan, McGlothan, and DeVries, agreeing with the official October 18 release. It reports conditional $91,000 affiliate bonuses, not retained guaranteed salaries. A bounded Wayback CDX request for the six player records timed out: historical capture availability remains **undetermined**, not absent. Spotrac historical financial detail was not accessible through the public retrieval; no login or paywall bypass was attempted.
+
+### Legacy allocations and Exhibit 10 treatment
+
+Public records below were observed **2026-11-12**. Undated live histories can support an explicit historical allocation, but their omissions do not establish a complete zero-charge ledger.
+
+| Component / source and publication | Effective amount or period | Conflict / missing proof | Verdict |
+| --- | --- | --- | --- |
+| Demetrius Jackson: [SalarySwish history](https://www.salaryswish.com/players/demetrius-jackson), undated; [CelticsBlog, July 15, 2017](https://www.celticsblog.com/2017/7/15/15976904/sources-boston-celtics-to-waive-point-guard-demetrius-jackson-semi-ojeleye). | $650,000 stretch over seven seasons, 2017-18 through 2023-24. Parent directly verified the allocation's final season. | Does not exclude other Boston obligations. | This allocation does not continue into 2026-27. |
+| Guerschon Yabusele: [SalarySwish history](https://www.salaryswish.com/players/guerschon-yabusele), undated; [Boston Sports Journal, July 16, 2019](https://www.bostonsportsjournal.com/2019/07/16/roster-reset-implications-celtics-stretching-guerschon-yabusele-final-open-roster-spot). | $3,117,240 stretched across 2019-20 through 2021-22. | Does not exclude other Boston obligations. | This allocation does not continue into 2026-27. |
+| JD Davison: [Hoops Rumors, July 24, 2025](https://www.hoopsrumors.com/2025/07/celtics-release-jd-davison.html). | Boston's 2025-26 option reported fully non-guaranteed. | No comprehensive subsequent Boston liability record retrieved. | No Boston 2026-27 carryover established; not a global absence finding. |
+| Justin Champagnie / other potential legacy obligations. | No continuing 2026-27 allocation established in the bounded search. | Complete historical waived-contract, settlement, and stretch inventory unavailable. | Unresolved, not an authored zero. |
+| [Capmath Boston table](https://capmath.com/nba/team/bos), publication unspecified. | Current text attributes approximately $2.8m of dead money to Banton. | Conflicts with the contemporaneous July 9 no-cap-hit report; no historical cutoff binding. | Amount not admitted and not evidence of prior-season carryover. |
+
+The official 2023 CBA PDF was retrieved and text-extracted **in memory**, without saving research files. The following are printed-page citations:
+
+| Rule | Verified text or meaning | Reconciliation consequence |
+| --- | --- | --- |
+| Article VII, Section 4(k), p. 225 | "Any amounts earned by a player pursuant to an Exhibit 10 Bonus shall be excluded from Team Salary." | Do not classify the affiliate bonus as retained guaranteed salary. |
+| Article VII, Section 2(e)(1)(i), p. 186 | Apron Team Salary adds Performance Bonuses excluded under Section 3(d). | This is not an automatic addback of the separately excluded Exhibit 10 affiliate bonus. |
+| Article II, Section 3(s)(i), pp. 22-24 | Exhibit 10 bonus eligibility requires pre-opening termination and specified NBAGL participation/service conditions, with stated qualifications. | Eligibility does not establish payment or fulfillment. This known bonus is not erased by the unreported-bonus assumption. |
+
+Reconcile without duplication: retain the $198,722,406 active-standard subtotal; investigate any retained obligations separately instead of retaining Uzan's and DeVries's full active rows; do not carry the expired Jackson/Yabusele allocations into 2026-27; and do not add excluded Exhibit 10 bonuses or subtract them from a baseline that never included them. Remaining applicable apron adjustments are not implicitly zero. The $10,292,594 threshold difference remains arithmetic, not accredited legal room.
+
+**Handoff decision, November 12:** the user requested documentation, memory preservation, and a documentation commit before giving the next direction. Pause additional research here. This does not approve new financial defaults, certify a complete snapshot, or authorize implementation or TEST access. Engram #3402 and #3403 preserve the research findings and recovery context.
+
+### `nba_api`: bounded utility, not historical admission
+
+Read upstream [`docs/ai_agents.md`](https://github.com/swar/nba_api/blob/master/docs/ai_agents.md) before inspecting [`CommonTeamRoster`](https://github.com/swar/nba_api/blob/master/src/nba_api/stats/endpoints/commonteamroster.py). The constructor sends TeamID, Season, and LeagueID; no as-of date filter exists. Its roster output has identities and biographical fields, not membership dates, contract classification, salaries, or hard-cap triggers. The documentation does not guarantee that `season` means opening-day membership. Use it for identity/roster cross-checks, not cutoff certification. No endpoint was executed or package installed.
+
+### Proposed component admission and next-session entry point
+
+Keep roster, active salaries, retained charges, and restriction knowledge independently assessable. For each assertion preserve source URL, publication, capture/observation, effective date or interval, and unresolved conflicts. A supported roster does not make the financial calculation complete. Unreported bonuses remain absent only by the approved scenario assumption; do not extend that assumption to other financial inputs. No component-admission implementation was authorized.
+
+Further work awaits the user's next direction. The following items are preserved as open questions, not instructions to continue researching now. No implementation, schema changes, existing-game backfill, or TEST access is authorized.
+
+1. Decide how to use the newly reported individual guarantees and bounded legacy findings in the playable scenario. Any further historical-ledger research or additional scenario assumptions require the next direction; no global zero has been adopted.
+2. Reconcile admitted active salaries, retained charges, and applicable apron adjustments without double counting. George's waiver now has traceable reporting; reopen only if contradictory evidence appears.
+3. Close the component matrix with supported facts, disclosed scenario assumptions, and missing proof separately. Do not certify a complete opening snapshot or spending margin while the calculation is incomplete.
+4. Keep start-today cutoff/freshness and historical standings semantics as separate unresolved design work. Reconcile results and standings from the same included games, including games in progress at midnight.
+5. Broader team validation, remaining financial rules, further authored simplifications, and source-rights review remain open. Boston's progress does not validate all 30 teams or resolve SBC's inconsistent season amounts.
 
 ## Open work before implementation
 
 - Complete implementation-level salary/eligibility design and resolve the remaining season-rollover evidence gap; the static operation mapping above is not runtime verification.
 - Finish transaction-specific computation cases and exception eligibility, including grievance allocation variants, contract-era classification, and referenced exemptions. Sections 4(a)(1)(iii) and 4(l) now have identified primary-source meanings, but this remains short of a complete numeric validator.
-- Define each season's start boundary and start-today freshness/availability policy, then validate dated datasets for the selected mode, reconciling the tracker conflict above. Both start modes are requested; neither candidate dataset has yet been accepted. Do not infer `none` from omission in a list.
+- Apply the approved official-opening-date midnight boundary for each season; define start-today cutoff/freshness separately. Validate dated datasets and reconcile tracker conflicts; no complete candidate financial dataset has been accepted. Do not infer `none` from omission in a list.
 - Define user-facing diagnostics and pending-offer outcomes for the approved operation-scoped uncertainty policy; any existing-game backfill still requires a separate design.
 - Define the authored fictional dataset and offline fallback scope separately from NBA imports.
 - Review source access and redistribution terms before publishing real-world datasets or assets.
 
-No code, schema, or remote TEST operation was performed for this evidence record. Saving this document does not authorize implementation or HTTP testing.
+This documentation update performed no code, schema, or TEST operation. Prior authorized pilot observations are explicitly identified above and were not repeated. Saving this document does not authorize implementation, existing-game correction, or further TEST access.
